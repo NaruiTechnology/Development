@@ -4,9 +4,42 @@ export interface ImageExtent {
   unit: string;
 }
 
-/** Round bar values per decade, largest first. Neighbouring steps differ by at
- * most 1.5x, so a Zoom change of 2x or more always changes the label instead of
- * snapping to the same coarse 1/2/5 value. */
+export interface FullFieldImageExtentSource {
+  x_origin: number;
+  x_end: number;
+  y_origin: number;
+  y_end: number;
+  scale_unit: string;
+  scanGeometry?: { enabled?: boolean; pixels?: [number, number] } | null;
+}
+
+export interface FullFieldImageExtentPixelSize {
+  source?: string | null;
+  x: number;
+  y: number;
+  unit: string;
+}
+
+export function fullCanvasImageExtent(
+  roi: FullFieldImageExtentSource,
+  globalPixelSize?: FullFieldImageExtentPixelSize | null,
+): ImageExtent | null {
+  if (globalPixelSize?.source === "scanGeometry" && roi.scanGeometry?.enabled) {
+    const pixels = roi.scanGeometry.pixels ?? [0, 0];
+    const x = Number(globalPixelSize.x) * Number(pixels[0]);
+    const y = Number(globalPixelSize.y) * Number(pixels[1]);
+    if (Number.isFinite(x) && Number.isFinite(y) && x > 0 && y > 0) {
+      return { x: Math.abs(x), y: Math.abs(y), unit: globalPixelSize.unit || roi.scale_unit };
+    }
+  }
+
+  const x = Math.abs(Number(roi.x_end) - Number(roi.x_origin));
+  const y = Math.abs(Number(roi.y_end) - Number(roi.y_origin));
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x <= 0 || y <= 0) return null;
+  return { x, y, unit: roi.scale_unit };
+}
+
+/** Readable bar values per decade, largest first. */
 const SCALE_STEPS = [8, 6, 5, 4, 3, 2, 1.5, 1];
 
 /** A readable scale occupying at most one quarter of the image width. */

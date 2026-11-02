@@ -1,7 +1,13 @@
+import { measuredFieldSpan } from "../lib/dimensionMeasurement";
+import { saveDimensionCalibration } from "../store/dimensionCalibrationSlice";
+import { saveDimensionCalibrationRemote } from "../lib/dimensionCalibrationApi";
+import { selectedEquipmentId } from "../lib/adminActivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
+  applyPersistedDimensionCalibration,
+  setScanGeometry,
   clearROISelection,
   clearSelectedTargetGrayPoint,
   finishROITargetGrayRun,
@@ -145,7 +151,7 @@ export function ROIEditor({
     roi.scanImageDataUrl !== null ||
     (roi.roiScanResultUrl !== null && roi.imageDataUrl === roi.roiScanResultUrl);
   const canvasTransforms =
-    showingLoadedFile || showingROIScan ? NO_CANVAS_TRANSFORMS : streamTransforms;
+    roi.calibration_enabled || showingLoadedFile || showingROIScan ? NO_CANVAS_TRANSFORMS : streamTransforms;
   const canvasOrientation = [
     canvasTransforms.xflip ? "scaleX(-1)" : "",
     canvasTransforms.yflip ? "scaleY(-1)" : "",
@@ -228,16 +234,7 @@ export function ROIEditor({
   const targetGrayLoopActiveRef = useRef(false);
   const targetGrayRunStatusRef = useRef(targetGrayRun.status);
   targetGrayRunStatusRef.current = targetGrayRun.status;
-  const [calibrationCorrection, setCalibrationCorrection] = useState<{
-    x1: string;
-    x2: string;
-    y1: string;
-    y2: string;
-  } | null>(null);
-  const [calibrationCorrectionBasis, setCalibrationCorrectionBasis] = useState<{
-    original: { x1: number; x2: number; y1: number; y2: number };
-    measured: { x1: number; x2: number; y1: number; y2: number };
-  } | null>(null);
+  const [calibrationCorrection, setCalibrationCorrection] = useState<{ axis: "x" | "y"; pixels: number; length: string } | null>(null);
   const [calibrationCorrectionError, setCalibrationCorrectionError] = useState<string | null>(null);
   const [ctrlCursor, setCtrlCursor] = useState<{ x: number; y: number; captured: boolean } | null>(null);
   const [suppressedBackgroundUrl, setSuppressedBackgroundUrl] = useState<string | null>(null);
@@ -732,7 +729,7 @@ export function ROIEditor({
   }
 
   function calibrationWorldPoint(point: { x: number; y: number }) {
-    return canvasPointToWorld(point, imageWorldBounds(roi), viewportBounds(roi, "draft"));
+    return { x: point.x / ROI_CANVAS_EDGE * (roi.x_end - roi.x_origin), y: point.y / ROI_CANVAS_EDGE * (roi.y_end - roi.y_origin) };
   }
 
   function rectFromPoints(a: { x: number; y: number }, b: { x: number; y: number }): ROIRequest {
@@ -1382,14 +1379,14 @@ export function ROIEditor({
 
       {(variant === "controls" || variant === "all") && (
         <>
-          {imageActionRow}
+          {!roi.calibration_enabled && imageActionRow}
 
           <div className="field">
             <label>{t("roi.scaleUnit")}</label>
             <select
               className="select"
               value={roi.scale_unit}
-              disabled
+              disabled={disabled || !roi.calibration_enabled}
               onChange={(e) => dispatch(updateROI({ scale_unit: e.target.value }))}
             >
               {UNITS.map((u) => (
@@ -1560,6 +1557,7 @@ export function ROIEditor({
               // Reserve Ctrl + right-click for target sampling.
               if (e.ctrlKey && imageRef.current) e.preventDefault();
             }}
+            onPointerCancel={() => setCalibrationLine(null)}
             onPointerDown={(e) => {
               if (e.button === 2) {
                 if (!e.ctrlKey) return;
@@ -1609,7 +1607,11 @@ export function ROIEditor({
                 if (!calibrationLine) return;
                 e.preventDefault();
                 setCalibrationLine((current) =>
-                  current ? { ...current, end: rawCanvasPoint(e) } : current
+                  current ? { ...current, end: (() => {
+                    const point = rawCanvasPoint(e);
+                    return Math.abs(point.x - current.start.x) >= Math.abs(point.y - current.start.y)
+                      ? { x: point.x, y: current.start.y } : { x: current.start.x, y: point.y };
+                  })() } : current
                 );
                 return;
               }
@@ -1640,31 +1642,15 @@ export function ROIEditor({
                 const line = calibrationLine;
                 if (!line) return;
                 e.preventDefault();
-                const end = rawCanvasPoint(e);
-                const startWorld = calibrationWorldPoint(line.start);
-                const endWorld = calibrationWorldPoint(end);
-                const deltaX = Math.abs(endWorld.x - startWorld.x);
-                const deltaY = Math.abs(endWorld.y - startWorld.y);
-                setCalibrationCorrection({
-                  x1: formatOneDecimal(startWorld.x),
-                  x2: formatOneDecimal(startWorld.x + deltaX),
-                  y1: formatOneDecimal(startWorld.y),
-                  y2: formatOneDecimal(startWorld.y + deltaY),
-                });
-                setCalibrationCorrectionBasis({
-                  original: {
-                    x1: roi.calibration_x_origin,
-                    x2: roi.calibration_x_end,
-                    y1: roi.calibration_y_origin,
-                    y2: roi.calibration_y_end,
-                  },
-                  measured: {
-                    x1: startWorld.x,
-                    x2: startWorld.x + deltaX,
-                    y1: startWorld.y,
-                    y2: startWorld.y + deltaY,
-                  },
-                });
+                const point = rawCanvasPoint(e);
+                const dx = Math.abs(point.x - line.start.x);
+                const dy = Math.abs(point.y - line.start.y);
+                const axis = dx >= dy ? "x" : "y";
+                const pixels = Math.max(dx, dy);
+                setCalibrationLine(null);
+                if (pixels < ROI_DRAG_THRESHOLD) return;
+                const span = axis === "x" ? roi.x_end - roi.x_origin : roi.y_end - roi.y_origin;
+                setCalibrationCorrection({ axis, pixels, length: (span * pixels / ROI_CANVAS_EDGE).toFixed(2) });
                 setCalibrationCorrectionError(null);
                 setCalibrationLine(null);
                 return;
@@ -2087,100 +2073,42 @@ export function ROIEditor({
       {calibrationCorrection && (
         <div className="modal-backdrop" role="presentation">
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="calibration-correction-title">
-            <div className="modal__header">
-              <h3 id="calibration-correction-title">Correct calibration values</h3>
-            </div>
+            <div className="modal__header"><h3 id="calibration-correction-title">Calibrate {calibrationCorrection.axis.toUpperCase()} length</h3></div>
             <div className="modal__body">
-              <p className="muted">Review the delta-derived coordinates before applying them.</p>
-              <div className="field-row">
-                <label className="field">
-                  <span>X1 ({unitLabel(roi.scale_unit)})</span>
-                  <input
-                    className="input"
-                    inputMode="decimal"
-                    value={calibrationCorrection.x1}
-                    onChange={(event) =>
-                      setCalibrationCorrection({ ...calibrationCorrection, x1: event.target.value })
-                    }
-                  />
-                </label>
-                <label className="field">
-                  <span>X2 ({unitLabel(roi.scale_unit)})</span>
-                  <input
-                    className="input"
-                    inputMode="decimal"
-                    value={calibrationCorrection.x2}
-                    onChange={(event) =>
-                      setCalibrationCorrection({ ...calibrationCorrection, x2: event.target.value })
-                    }
-                  />
-                </label>
-              </div>
-              <div className="field-row">
-                <label className="field">
-                  <span>Y1 ({unitLabel(roi.scale_unit)})</span>
-                  <input
-                    className="input"
-                    inputMode="decimal"
-                    value={calibrationCorrection.y1}
-                    onChange={(event) =>
-                      setCalibrationCorrection({ ...calibrationCorrection, y1: event.target.value })
-                    }
-                  />
-                </label>
-                <label className="field">
-                  <span>Y2 ({unitLabel(roi.scale_unit)})</span>
-                  <input
-                    className="input"
-                    inputMode="decimal"
-                    value={calibrationCorrection.y2}
-                    onChange={(event) =>
-                      setCalibrationCorrection({ ...calibrationCorrection, y2: event.target.value })
-                    }
-                  />
-                </label>
-              </div>
+              <label className="field">
+                <span>Texture length ({unitLabel(roi.scale_unit)})</span>
+                <input className="input" inputMode="decimal" value={calibrationCorrection.length}
+                  onChange={(event) => setCalibrationCorrection({ ...calibrationCorrection, length: event.target.value })} />
+              </label>
+              <p className="muted">The full field will be calculated from this measured texture. The other axis keeps its current length.</p>
               {calibrationCorrectionError && <div className="field-warning">{calibrationCorrectionError}</div>}
             </div>
-            <div className="modal__footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button type="button" className="btn btn--cancel" onClick={() => {
-                setCalibrationCorrection(null);
-                setCalibrationCorrectionBasis(null);
-              }}>
-                <Icon name="x" tone="danger" />
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => {
-                  const x1 = Number(calibrationCorrection.x1);
-                  const x2 = Number(calibrationCorrection.x2);
-                  const y1 = Number(calibrationCorrection.y1);
-                  const y2 = Number(calibrationCorrection.y2);
-                  if (![x1, x2, y1, y2].every(Number.isFinite)) {
-                    setCalibrationCorrectionError("Enter valid numeric X1, X2, Y1, and Y2 values.");
-                    return;
-                  }
-                  if (x2 <= x1 || y2 <= y1) {
-                    setCalibrationCorrectionError("X2 must be greater than X1 and Y2 must be greater than Y1.");
-                    return;
-                  }
-                  const basis = calibrationCorrectionBasis;
-                  if (!basis) return;
-                  dispatch(updateROI({
-                    calibration_x_origin: basis.original.x1 + (x1 - basis.measured.x1),
-                    calibration_x_end: basis.original.x2 + (x2 - basis.measured.x2),
-                    calibration_y_origin: basis.original.y1 + (y1 - basis.measured.y1),
-                    calibration_y_end: basis.original.y2 + (y2 - basis.measured.y2),
-                  }));
+            <div className="modal__footer">
+              <button className="btn btn--cancel" onClick={() => setCalibrationCorrection(null)}>Cancel</button>
+              <button className="btn btn--primary" onClick={() => {
+                try {
+                  const span = measuredFieldSpan(Number(calibrationCorrection.length), calibrationCorrection.pixels);
+                  const values = {
+                    x_origin: 0, y_origin: 0,
+                    x_end: calibrationCorrection.axis === "x" ? span : roi.x_end - roi.x_origin,
+                    y_end: calibrationCorrection.axis === "y" ? span : roi.y_end - roi.y_origin,
+                    viewport_x_start: 0, viewport_x_end: ROI_CANVAS_EDGE,
+                    viewport_y_start: 0, viewport_y_end: ROI_CANVAS_EDGE,
+                    scale_unit: roi.scale_unit,
+                    source: { kind: "manual" as const, set_at: new Date().toISOString() },
+                  };
+                  clearBitmapSelectionCache();
+                  dispatch(setScanGeometry(null));
+                  dispatch(saveDimensionCalibration(values));
+                  dispatch(applyPersistedDimensionCalibration(values));
+                  dispatch(updateROI({ imageBounds: null }));
+                  const equipmentId = selectedEquipmentId();
+                  if (equipmentId !== null) void saveDimensionCalibrationRemote(equipmentId, values);
                   setCalibrationCorrection(null);
-                  setCalibrationCorrectionBasis(null);
-                }}
-              >
-                <Icon name="check" tone="success" />
-                Apply
-              </button>
+                } catch (error) {
+                  setCalibrationCorrectionError((error as Error).message);
+                }
+              }}>Confirm length</button>
             </div>
           </div>
         </div>
@@ -2397,16 +2325,16 @@ function pointArrayBounds(points: Float32Array): { x0: number; x1: number; y0: n
 function calibrationXValueAt(roi: ROIState, canvasX: number) {
   return interpolateCanvasPosition(
     canvasX,
-    roi.calibration_x_origin,
-    roi.calibration_x_end
+    0,
+    roi.x_end - roi.x_origin
   );
 }
 
 function calibrationYValueAt(roi: ROIState, canvasY: number) {
   return interpolateCanvasPosition(
     canvasY,
-    roi.calibration_y_origin,
-    roi.calibration_y_end
+    0,
+    roi.y_end - roi.y_origin
   );
 }
 
@@ -2551,12 +2479,10 @@ function ROICalibrationAxisOverlay({
       ratio,
       major: i % 5 === 0,
       xLabel: `${formatOneDecimal(
-        roi.calibration_x_origin +
-          (roi.calibration_x_end - roi.calibration_x_origin) * ratio
+        (roi.x_end - roi.x_origin) * ratio
       )} ${unitLabel(roi.scale_unit)}`,
       yLabel: `${formatOneDecimal(
-        roi.calibration_y_origin +
-          (roi.calibration_y_end - roi.calibration_y_origin) * ratio
+        (roi.y_end - roi.y_origin) * ratio
       )} ${unitLabel(roi.scale_unit)}`,
       x: `${ratio * 100}%`,
       y: `${ratio * 100}%`,
@@ -2654,7 +2580,7 @@ function ROICalibrationAxisOverlay({
         }}
       >
         {t("roi.canvas.start", {
-          point: `(${formatOneDecimal(roi.calibration_x_origin)}, ${formatOneDecimal(roi.calibration_y_origin)})`,
+          point: `(${formatOneDecimal(0)}, ${formatOneDecimal(0)})`,
           unit: unitLabel(roi.scale_unit),
         })}
         {pixelSize && ` · ${t("canvas.meta.pixelSize")} ${formatPixelSize(pixelSize)}`}
@@ -2670,7 +2596,7 @@ function ROICalibrationAxisOverlay({
         }}
       >
         {t("roi.canvas.end", {
-          point: `(${formatOneDecimal(roi.calibration_x_end)}, ${formatOneDecimal(roi.calibration_y_end)})`,
+          point: `(${formatOneDecimal(roi.x_end - roi.x_origin)}, ${formatOneDecimal(roi.y_end - roi.y_origin)})`,
           unit: unitLabel(roi.scale_unit),
         })}
         {pixelSize && ` · ${t("canvas.meta.pixelSize")} ${formatPixelSize(pixelSize)}`}

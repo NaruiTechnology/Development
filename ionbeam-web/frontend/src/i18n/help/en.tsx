@@ -751,6 +751,19 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <strong>Practical rule of thumb:</strong> Raster is for
         coverage, vector is for selectivity.
       </div>
+
+      <h3>Mouse controls and shortcuts</h3>
+      <ul className="dwell-help__list">
+        <li><strong>Texture length — Ctrl + Shift + left drag:</strong> on the live scan image, press and hold the left mouse button, drag, then release. A 1 px red line follows the pointer. The transparent chip shows the calibrated length, X/Y pixel spans, and physical pixel size. On release, only the red line and its length remain. Without calibration, length is shown in pixels.</li>
+        <li><strong>Undo — Ctrl + Z (Cmd + Z on Mac):</strong> cancel a measurement being drawn or remove the latest measurement. When no measurements remain, undo removes the latest annotation. Measurements work while scanning and after Stop; the edit toolbox appears once scanning stops and an image remains.</li>
+        <li><strong>Hover:</strong> move over an image with target-gray sampling enabled to inspect the pixel gray value. In the ROI image editor, dragging also shows coordinates; hold Ctrl to inspect coordinates and locate ROI corners.</li>
+        <li><strong>Target gray — Ctrl + right-click:</strong> sample a pixel as the target gray level. On the live canvas, hold the right mouse button without Ctrl outside an ROI to show the sampling hint; release to dismiss it.</li>
+        <li><strong>Scan ROI — left drag:</strong> when ROI editing is enabled, drag empty image space to create a region, drag inside a region to move it, or drag a corner handle to resize it. Right-click a region to open its removal menu. Editing may be locked during a scan.</li>
+        <li><strong>ROI image editor:</strong> left-drag to create a rectangle. Hold Ctrl and drag a corner handle to resize it. In calibration mode, left-drag a texture horizontally or vertically and release to confirm the X or Y length; drag boundary or ruler handles to adjust calibration bounds.</li>
+        <li><strong>Annotations after Stop:</strong> choose Highlight or Comment and left-click the image to place it; choose Rectangle or Circle and left-drag to draw. Click an annotation to select it. Right-click an annotation to open Undo, Remove, or Clear. On an empty canvas area, right-click opens the edit menu when target-gray sampling is not intercepting the gesture.</li>
+        <li><strong>Contrast:</strong> drag the high/low handles beside the image to change the display range, or drag between them to shift the range. Double-click the contrast bar to restore Auto. Drag the gray-range slider handles to change the selected gray interval.</li>
+        <li><strong>Split images:</strong> left-click a pane to select it for editing. Mouse actions apply to that pane; texture measurement applies to the live scan canvas.</li>
+      </ul>
     </>
   ),
 

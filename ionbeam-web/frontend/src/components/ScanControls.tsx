@@ -250,6 +250,7 @@ export function ScanControls({
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const phase = useAppSelector((s) => s.scan.phase);
+  const streamRestarting = useAppSelector((s) => s.scan.streamRestarting);
   const errorMessage = useAppSelector((s) => s.scan.errorMessage);
   const raster = useAppSelector((s) => s.scan.raster);
   const rasterImageFrame = useAppSelector((s) => s.image.frame);
@@ -478,8 +479,13 @@ export function ScanControls({
   const busy = streaming || closing;
   // The panel is disabled while a scan runs to prevent parameter changes, but
   // Stop must remain available so an active scan can always be cancelled.
-  const stopAvailable = streaming || closing || infiniteScanActive || targetGrayRunning;
+  // Stop stays available while a live-scan handover (e.g. Parallel/Sequential
+  // switch) is between streams, so the button does not flicker.
+  const stopAvailable = streaming || closing || infiniteScanActive || targetGrayRunning || streamRestarting;
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
+  // The panel reads as disabled during a live-scan handover, but the handover
+  // itself must still be allowed to start the next stream.
+  const startBlocked = disabled && !streamRestarting;
 
   const clearInfiniteScanState = useCallback(() => {
     if (sequentialZoomTimerRef.current !== null) window.clearTimeout(sequentialZoomTimerRef.current);
@@ -647,7 +653,7 @@ export function ScanControls({
   }
 
   async function startRunRequest(repeatRegions = false, preserveCurrentFrame = false) {
-    if (disabled || scanHasErrors) return;
+    if (startBlocked || scanHasErrors) return;
     if (repeatRegions) runningParallelRegionsRef.current = parallelRegions;
     const allowed = await refreshScanPrivilege();
     if (!allowed) return;
@@ -824,7 +830,7 @@ export function ScanControls({
   }
 
   async function startInfiniteRequest(preserveCurrentFrame = false) {
-    if ((kind !== "raster" && kind !== "vector") || disabled || infiniteScanActiveRef.current || scanHasErrors) return;
+    if ((kind !== "raster" && kind !== "vector") || startBlocked || infiniteScanActiveRef.current || scanHasErrors) return;
     runningParallelRegionsRef.current = parallelRegions;
     // Production: a Live scan started with an ROI first scans the full frame.
     // The ROI is applied once that frame has been rendered (see the watcher
@@ -919,7 +925,10 @@ export function ScanControls({
         startInfiniteScanRun(parallelEntry, preserveCurrentFrame || isProduction || parallelEntry.initialFrame === null);
         return;
       }
-      const regions = effectiveScanRegions(scanRegionsNow, roiState.scan_zoom, roiState);
+      // While the ROI is deferred (Production) this pass is the plain full
+      // frame: Zoom belongs to the ROI, so it must not magnify the background
+      // canvas. The stored zoom is applied to the ROI by the follow-up restart.
+      const regions = effectiveScanRegions(scanRegionsNow, deferRegions ? 1 : roiState.scan_zoom, roiState);
       const activeIndex = roiState.active_scan_region ?? 0;
       const region = regions[Math.min(activeIndex, regions.length - 1)] ?? null;
       const selectedRegion = scanRegionsNow[Math.min(activeIndex, scanRegionsNow.length - 1)] ?? null;
@@ -1086,6 +1095,15 @@ export function ScanControls({
       return;
     }
     const liveEntry = infiniteScanRef.current;
+    if (infiniteScanActiveRef.current && deferredRegionsRef.current) {
+      // Production: the running stream is the full-frame pass and the ROI has
+      // not been applied yet. Only store the zoom; it is applied to the ROI
+      // region(s) when the deferred restart starts them. Pushing geometry now
+      // would zoom the full-scale background canvas instead.
+      zoomTrace("deferred ROI: zoom stored for the ROI restart", { zoom, generation });
+      dispatch(setScanZoom(zoom));
+      return;
+    }
     if (infiniteScanActiveRef.current) {
       const regions = effectiveScanRegions(roiState.scan_regions, zoom, roiState);
       const dacRegions = regions.map((region) => region ? worldSelectionToDacROI(region, roiState) : null);
@@ -1106,6 +1124,13 @@ export function ScanControls({
           return;
         }
         const entries = regionScanRepeatRef.current;
+        if (!entries.length) {
+          zoomTrace("sequential: queue empty after live mode handoff, restarting", {
+            zoom, generation, parallel: parallelRegions,
+          });
+          scheduleZoomRestart("infinite");
+          return;
+        }
         const customEntryIndex = entries.length === 2 && entries[0].compositeROIs ? 1 : 0;
         const combined = entries[customEntryIndex];
         if (entries.length === customEntryIndex + 1 && combined?.kind === "vector" &&
@@ -1747,7 +1772,7 @@ export function ScanControls({
 
   useEffect(() => {
     if (!pendingZoomRestart || (phase !== "idle" && phase !== "error")) return;
-    if (phase === "idle" && disabled && !zoomDisabled) return;
+    if (phase === "idle" && startBlocked && !zoomDisabled) return;
     setPendingZoomRestart(null);
     if (phase === "error" || zoomDisabled) {
       dispatch(setStreamRestarting(false));
@@ -1755,7 +1780,7 @@ export function ScanControls({
     }
     const restart = pendingZoomRestart === "infinite" ? startInfiniteRequest(true) : startRunRequest();
     void restart.finally(() => dispatch(setStreamRestarting(false)));
-  }, [disabled, pendingZoomRestart, phase, zoomDisabled]);
+  }, [disabled, pendingZoomRestart, phase, zoomDisabled, streamRestarting]);
 
   useEffect(() => {
     clearInfiniteScanState();

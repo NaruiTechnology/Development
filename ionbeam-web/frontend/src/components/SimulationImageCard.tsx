@@ -16,8 +16,10 @@ export function SimulationImageCard({
   lastScanImageUrl = null,
   onLoadLastScan,
   onImageChange,
+  calibration = false,
 }: {
   disabled: boolean;
+  calibration?: boolean;
   lastScanImageUrl?: string | null;
   onLoadLastScan?: () => void;
   onImageChange?: (imageUrl: string | null) => void;
@@ -27,8 +29,8 @@ export function SimulationImageCard({
   // Same rule as ScanControls: anything but an explicit IsProduction=false
   // (including defaults not loaded yet) counts as production.
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production !== false);
-  const [collapsed, setCollapsed] = useState(isProduction);
-  useEffect(() => setCollapsed(isProduction), [isProduction]);
+  const [collapsed, setCollapsed] = useState(calibration ? false : isProduction);
+  useEffect(() => setCollapsed(calibration ? false : isProduction), [isProduction, calibration]);
 
   return (
     <div className="card simulation-image-card">
@@ -52,7 +54,7 @@ export function SimulationImageCard({
           onLoadLastScan={onLoadLastScan}
           onImageChange={onImageChange}
         />
-        <p className="muted simulation-image-card__hint">
+        <p className="muted simulation-image-card__hint" hidden={calibration}>
           {t(usesHardware ? "simulation.image.hintHardware" : "simulation.image.hintSimulation")}
         </p>
       </div>

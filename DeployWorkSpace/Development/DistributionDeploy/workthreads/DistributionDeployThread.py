@@ -144,25 +144,57 @@ class DistributionDeployThread(WorkThread):
         self._queue = queue.Queue()
         actions = {key: value for action in self._config.Actions for key, value in action.items()}
         if "createDeployFolder" in actions:
-            required = ("stopLocalSystem", "createDeployFolder", "unzipDistribution", "programFpgaRam")
+            manifestRequired = self._truthy(
+                getattr(self._config, "Deployment", {}).get("RequireDistributionManifest", True))
+            required = ("stopLocalSystem", "provisionSecrets", "createDeployFolder", "unzipDistribution")
+            if manifestRequired:
+                required += ("verifyDistribution",)
             names = list(actions)
-            if (any(name not in actions or actions[name].get(Consts.SKIP, False)
-                    or actions[name].get(TRANSACTION_COMPLETE, False) for name in required)
-                    or [names.index(name) for name in required] != sorted(names.index(name) for name in required)):
-                self._workflowError = "clean deployment requires stop, recreate, extract, and FPGA verification in order; reset completion flags for a new run"
-                self._logger.error(self._workflowError)
-                return None
+            previous_index = -1
+            for name in required:
+                if name not in actions:
+                    self._workflowError = (
+                        "clean deployment requires stop, provision, recreate, "
+                        "extract, and verification in order; reset completion flags for a new run"
+                    )
+                    self._logger.error(self._workflowError)
+                    return None
+                config = actions[name]
+                if config.get(Consts.SKIP, False) or config.get(TRANSACTION_COMPLETE, False):
+                    self._workflowError = (
+                        "clean deployment requires stop, provision, recreate, "
+                        "extract, and verification to be fresh; reset completion flags for a new run"
+                    )
+                    self._logger.error(self._workflowError)
+                    return None
+                current_index = names.index(name)
+                if current_index < previous_index:
+                    self._workflowError = (
+                        "clean deployment requires stop, provision, recreate, "
+                        "extract, and verification in order; reset completion flags for a new run"
+                    )
+                    self._logger.error(self._workflowError)
+                    return None
+                previous_index = current_index
+
             # A clean replacement invalidates every old installation receipt.
             if any(value.get(TRANSACTION_COMPLETE, False) and not value.get(Consts.SKIP, False)
                    for value in actions.values()):
                 self._workflowError = "clean deployment cannot reuse completed installation states; reset completion flags"
                 self._logger.error(self._workflowError)
                 return None
-            for name in ("manageLocalSystem", "launchGlasgowService", "launchIonbeamWebBackend", "launchIonbeamWebFrontend"):
-                if name in actions and not actions[name].get(Consts.SKIP, False) and names.index(name) < names.index("programFpgaRam"):
-                    self._workflowError = "FPGA verification must precede service startup"
+
+            if "programFpgaRam" in actions and not actions["programFpgaRam"].get(Consts.SKIP, False):
+                fpga_index = names.index("programFpgaRam")
+                if "verifyDistribution" in actions and names.index("verifyDistribution") > fpga_index:
+                    self._workflowError = "verification must precede FPGA programming"
                     self._logger.error(self._workflowError)
                     return None
+                for name in ("manageLocalSystem", "launchGlasgowService", "launchIonbeamWebBackend", "launchIonbeamWebFrontend"):
+                    if name in actions and not actions[name].get(Consts.SKIP, False) and names.index(name) < fpga_index:
+                        self._workflowError = "FPGA verification must precede service startup"
+                        self._logger.error(self._workflowError)
+                        return None
         for action in self._config.Actions:
             for key, val in action.items():
                 actionConfig = val

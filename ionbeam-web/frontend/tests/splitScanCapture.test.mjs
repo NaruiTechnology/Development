@@ -85,6 +85,8 @@ test("Split captures running and stopped scans, preserves snapshots, and retains
         assert.ok(frames.size > 0, "the stopped-scan notification is still deferred");
       }
       assert.equal(notifications.filter(([, url]) => url).length, 0);
+      assert.equal(renderer.root.findAllByProps({ role: "toolbar" }).length > 0, !running,
+        "the edit toolbox appears for a stopped Live frame and stays hidden during scanning");
       const captured = captureRef.current();
       assert.equal(captured.kind, kind);
       assert.ok(captured.imageUrl.startsWith("data:image/png;base64,"));
