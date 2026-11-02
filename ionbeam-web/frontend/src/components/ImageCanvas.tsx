@@ -56,8 +56,8 @@ import {
 } from "../lib/displayLevels";
 import { LevelWedge } from "./LevelWedge";
 import { selectGlobalPixelSize } from "../store/selectors";
-import { formatPixelSize, pixelSizeFromExtent, scaleExtentFromPixelSize, selectionPixelSize } from "../lib/pixelSize";
-import { imageScale, type ImageExtent } from "../lib/imageScale";
+import { formatPixelSize, pixelSizeFromExtent, selectionPixelSize } from "../lib/pixelSize";
+import { fullCanvasImageExtent, imageScale, type ImageExtent } from "../lib/imageScale";
 import { ROI_CANVAS_EDGE } from "../lib/roiGeometry";
 import { clipPixelRect, stepTowardTargetGray } from "../lib/roiTargetGray";
 import { selectionCrop, worldSelectionToDacROI } from "../lib/bitmapVector";
@@ -1047,14 +1047,9 @@ export function ImageCanvas({
     (kind === "vector" || kind === "raster")
       ? selectionPixelSize(scanBasePixelSize, activeRegion, roi, scanEdge)
       : scanBasePixelSize;
-  // The scale follows the scanned area: the entire canvas when there is no ROI,
-  // otherwise the active ROI. Zoom shrinks that area in both cases, so the bar
-  // tracks it and matches the pixel size reported for the scan.
-  const fullFieldExtent: ImageExtent = globalPixelSize?.source === "scanGeometry" && roi.scanGeometry?.enabled
-    ? { x: globalPixelSize.x * roi.scanGeometry.pixels[0], y: globalPixelSize.y * roi.scanGeometry.pixels[1], unit: globalPixelSize.unit }
-    : { x: Math.abs(roi.x_end - roi.x_origin), y: Math.abs(roi.y_end - roi.y_origin), unit: roi.scale_unit };
-  const regionScaled = (kind === "vector" || kind === "raster") && (roi.scan_regions.length > 0 || roi.scan_zoom > 1);
-  const imageExtent: ImageExtent = (regionScaled ? scaleExtentFromPixelSize(pixelSize, scanEdge) : null) ?? fullFieldExtent;
+  // The scale bar describes the full canvas field and nothing else. Adding,
+  // moving or removing an ROI, and changing Zoom, must not change it.
+  const imageExtent = fullCanvasImageExtent(roi, globalPixelSize);
   imageExtentRef.current = imageExtent;
   const current = currentBeamPosition({
     kind,
