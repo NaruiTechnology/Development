@@ -925,7 +925,10 @@ export function ScanControls({
         startInfiniteScanRun(parallelEntry, preserveCurrentFrame || isProduction || parallelEntry.initialFrame === null);
         return;
       }
-      const regions = effectiveScanRegions(scanRegionsNow, roiState.scan_zoom, roiState);
+      // While the ROI is deferred (Production) this pass is the plain full
+      // frame: Zoom belongs to the ROI, so it must not magnify the background
+      // canvas. The stored zoom is applied to the ROI by the follow-up restart.
+      const regions = effectiveScanRegions(scanRegionsNow, deferRegions ? 1 : roiState.scan_zoom, roiState);
       const activeIndex = roiState.active_scan_region ?? 0;
       const region = regions[Math.min(activeIndex, regions.length - 1)] ?? null;
       const selectedRegion = scanRegionsNow[Math.min(activeIndex, scanRegionsNow.length - 1)] ?? null;
@@ -1092,6 +1095,15 @@ export function ScanControls({
       return;
     }
     const liveEntry = infiniteScanRef.current;
+    if (infiniteScanActiveRef.current && deferredRegionsRef.current) {
+      // Production: the running stream is the full-frame pass and the ROI has
+      // not been applied yet. Only store the zoom; it is applied to the ROI
+      // region(s) when the deferred restart starts them. Pushing geometry now
+      // would zoom the full-scale background canvas instead.
+      zoomTrace("deferred ROI: zoom stored for the ROI restart", { zoom, generation });
+      dispatch(setScanZoom(zoom));
+      return;
+    }
     if (infiniteScanActiveRef.current) {
       const regions = effectiveScanRegions(roiState.scan_regions, zoom, roiState);
       const dacRegions = regions.map((region) => region ? worldSelectionToDacROI(region, roiState) : null);
