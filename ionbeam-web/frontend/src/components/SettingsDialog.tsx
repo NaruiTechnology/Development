@@ -60,7 +60,6 @@ import {
   setActiveTab,
   setDraft,
   setDraftVacuumEnabled,
-  setError,
   writePath,
   type SettingsConfigInfo,
   type SettingsTab,
@@ -258,7 +257,6 @@ function SettingsModalShell({
   const pendingSimulation = sessionSimulationDraft ?? activeSimulation;
 
   const busy = loading || saving || restoring;
-  const adcTimingValid = draft === null || validAdcTiming(draft);
   const configChanged = draft !== null && (draft !== source || draftVacuumEnabled !== sourceVacuumEnabled);
   const sessionSimulationChanged =
     sessionSimulationDraft !== null &&
@@ -313,11 +311,6 @@ function SettingsModalShell({
 
   async function onConfirmSave() {
     if (draft === null) return;
-    if (!validAdcTiming(draft)) {
-      setConfirmSave(false);
-      dispatch(setError(t("settings.general.adcTiming.validation")));
-      return;
-    }
     setConfirmSave(false);
     const imageChanged = simulationImageChanged(source, draft);
     const result = await dispatch(saveSettingsConfig(draft));
@@ -524,7 +517,7 @@ function SettingsModalShell({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy || scanLocked || draft === null || !adcTimingValid}
+              disabled={busy || scanLocked || draft === null}
               onClick={onUpdate}
               title={
                 configChanged || !sessionOnlyChanged
@@ -670,62 +663,12 @@ function GeneralTab({
     1000,
   );
   const bufferSize = stringField(draft, [...ACTION_DATA_PATH, "bufferSize"], "");
-  const adcHalfPeriod = numberField(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], 3);
-  const adcSettleCycles = numberField(draft, [...ACTION_DATA_PATH, "adcSettleCycles"], 1);
-  const adcLatchCycles = numberField(draft, [...ACTION_DATA_PATH, "adcLatchCycles"], 1);
-  const busTurnaroundCycles = numberField(draft, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 0);
-  const dacDataSetupCycles = numberField(draft, [...ACTION_DATA_PATH, "dacDataSetupCycles"], 1);
-  const dacLatchCycles = numberField(draft, [...ACTION_DATA_PATH, "dacLatchCycles"], 1);
-  const adcTimingValid = validAdcTiming(draft);
-  const requiredTimingCycles = adcSettleCycles + adcLatchCycles
-    + busTurnaroundCycles + 2 * (dacDataSetupCycles + dacLatchCycles);
-  const adcMinimumHalfPeriod = Math.max(
-    2, adcLatchCycles + adcSettleCycles, Math.ceil(requiredTimingCycles / 2),
-  );
-  const adcClockMHz = Number.isFinite(adcHalfPeriod) && adcHalfPeriod > 0
-    ? 48 / (2 * adcHalfPeriod)
-    : 0;
   const enableEbeam = boolField(draft, [...ACTION_DATA_PATH, "enableEbeam"], false);
   const enableIbeam = boolField(draft, [...ACTION_DATA_PATH, "enableIbeam"], true);
   const selectedBeam = enableIbeam || !enableEbeam ? "ion" : "ebeam";
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
-  }
-
-  function setHardwareTiming(
-    halfPeriod: number, settleCycles: number, latchCycles: number,
-    turnaroundCycles: number, dacSetupCycles: number, nextDacLatchCycles: number,
-  ) {
-    let next = writePath(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], halfPeriod);
-    next = writePath(next, [...ACTION_DATA_PATH, "adcSettleCycles"], settleCycles);
-    next = writePath(next, [...ACTION_DATA_PATH, "adcLatchCycles"], latchCycles);
-    next = writePath(next, [...ACTION_DATA_PATH, "busTurnaroundCycles"], turnaroundCycles);
-    next = writePath(next, [...ACTION_DATA_PATH, "dacDataSetupCycles"], dacSetupCycles);
-    next = writePath(next, [...ACTION_DATA_PATH, "dacLatchCycles"], nextDacLatchCycles);
-    dispatch(setDraft(next));
-  }
-
-  function boundedTimingValue(value: number, minimum = 1, maximum = 255): number {
-    return Math.min(maximum, Math.max(minimum, Math.trunc(value)));
-  }
-
-  function applyTimingChange(values: {
-    half?: number; settle?: number; latch?: number; turnaround?: number;
-    setup?: number; dacLatch?: number;
-  }) {
-    const settle = values.settle ?? adcSettleCycles;
-    const latch = values.latch ?? adcLatchCycles;
-    const turnaround = values.turnaround ?? busTurnaroundCycles;
-    const setup = values.setup ?? dacDataSetupCycles;
-    const dacLatch = values.dacLatch ?? dacLatchCycles;
-    const required = Math.max(
-      2,
-      settle + latch,
-      Math.ceil((settle + latch + turnaround + 2 * (setup + dacLatch)) / 2),
-    );
-    const half = Math.max(required, values.half ?? adcHalfPeriod);
-    setHardwareTiming(half, settle, latch, turnaround, setup, dacLatch);
   }
 
   return (
@@ -815,60 +758,6 @@ function GeneralTab({
         />
       </div>
 
-
-      <h4 className="settings-form__group">
-        {t("settings.general.group.adcTiming")}
-      </h4>
-
-      <p className="settings-form__hint">
-        {t("settings.general.adcClock", { mhz: adcClockMHz.toFixed(2) })}
-        {" "}
-        {t("settings.general.adcTiming.rule", { minimum: adcMinimumHalfPeriod })}
-      </p>
-
-      <div className="field-row field-row--three">
-        <NumberField
-          label={t("settings.general.adcHalfPeriod")}
-          help={<SettingsHelp topic="generalAdcHalfPeriod" />}
-          value={adcHalfPeriod} min={adcMinimumHalfPeriod} max={255}
-          invalid={!adcTimingValid}
-          warning={!adcTimingValid ? t("settings.general.adcTiming.validation") : undefined}
-          onChange={(value) => applyTimingChange({ half: boundedTimingValue(value, 2) })}
-        />
-        <NumberField
-          label={t("settings.general.adcSettleCycles")}
-          help={<SettingsHelp topic="generalAdcSettleCycles" />}
-          value={adcSettleCycles} min={1} max={255} invalid={!adcTimingValid}
-          onChange={(value) => applyTimingChange({ settle: boundedTimingValue(value) })}
-        />
-        <NumberField
-          label={t("settings.general.adcLatchCycles")}
-          help={<SettingsHelp topic="generalAdcLatchCycles" />}
-          value={adcLatchCycles} min={1} max={255} invalid={!adcTimingValid}
-          onChange={(value) => applyTimingChange({ latch: boundedTimingValue(value) })}
-        />
-      </div>
-
-      <div className="field-row field-row--three settings-form__timing-row">
-        <NumberField
-          label={t("settings.general.busTurnaroundCycles")}
-          help={<SettingsHelp topic="generalBusTurnaroundCycles" />}
-          value={busTurnaroundCycles} min={0} max={255} invalid={!adcTimingValid}
-          onChange={(value) => applyTimingChange({ turnaround: boundedTimingValue(value, 0) })}
-        />
-        <NumberField
-          label={t("settings.general.dacDataSetupCycles")}
-          help={<SettingsHelp topic="generalDacDataSetupCycles" />}
-          value={dacDataSetupCycles} min={1} max={255} invalid={!adcTimingValid}
-          onChange={(value) => applyTimingChange({ setup: boundedTimingValue(value) })}
-        />
-        <NumberField
-          label={t("settings.general.dacLatchCycles")}
-          help={<SettingsHelp topic="generalDacLatchCycles" />}
-          value={dacLatchCycles} min={1} max={255} invalid={!adcTimingValid}
-          onChange={(value) => applyTimingChange({ dacLatch: boundedTimingValue(value) })}
-        />
-      </div>
 
       <h4 className="settings-form__group">
         {t("settings.general.group.beam")}
@@ -3290,12 +3179,6 @@ function AdminUsersTable({
 type SettingsHelpTopic =
   | "generalVoltage"
   | "generalBuffer"
-  | "generalAdcHalfPeriod"
-  | "generalAdcSettleCycles"
-  | "generalAdcLatchCycles"
-  | "generalBusTurnaroundCycles"
-  | "generalDacDataSetupCycles"
-  | "generalDacLatchCycles"
   | "rasterPixels"
   | "rasterResolution"
   | "rasterAdcLatency"
@@ -3352,30 +3235,6 @@ const SETTINGS_HELP_META: Record<SettingsHelpTopic, {
 }> = {
   generalVoltage: { title: "settings.help.generalVoltage.title" },
   generalBuffer: { title: "settings.help.generalBuffer.title" },
-  generalAdcHalfPeriod: {
-    title: "settings.help.generalAdcHalfPeriod.title",
-    body: "settings.help.generalAdcHalfPeriod.body",
-  },
-  generalAdcSettleCycles: {
-    title: "settings.help.generalAdcSettleCycles.title",
-    body: "settings.help.generalAdcSettleCycles.body",
-  },
-  generalAdcLatchCycles: {
-    title: "settings.help.generalAdcLatchCycles.title",
-    body: "settings.help.generalAdcLatchCycles.body",
-  },
-  generalBusTurnaroundCycles: {
-    title: "settings.help.generalBusTurnaroundCycles.title",
-    body: "settings.help.generalBusTurnaroundCycles.body",
-  },
-  generalDacDataSetupCycles: {
-    title: "settings.help.generalDacDataSetupCycles.title",
-    body: "settings.help.generalDacDataSetupCycles.body",
-  },
-  generalDacLatchCycles: {
-    title: "settings.help.generalDacLatchCycles.title",
-    body: "settings.help.generalDacLatchCycles.body",
-  },
   rasterPixels: { title: "settings.help.rasterPixels.title" },
   rasterResolution: { title: "settings.help.rasterResolution.title" },
   rasterAdcLatency: { title: "settings.help.rasterAdcLatency.title" },
@@ -3718,21 +3577,6 @@ function NumberField({
       />
     </div>
   );
-}
-
-function validAdcTiming(config: unknown): boolean {
-  const half = numberField(config, [...ACTION_DATA_PATH, "adcHalfPeriod"], 3);
-  const settle = numberField(config, [...ACTION_DATA_PATH, "adcSettleCycles"], 1);
-  const latch = numberField(config, [...ACTION_DATA_PATH, "adcLatchCycles"], 1);
-  const turnaround = numberField(config, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 0);
-  const setup = numberField(config, [...ACTION_DATA_PATH, "dacDataSetupCycles"], 1);
-  const dacLatch = numberField(config, [...ACTION_DATA_PATH, "dacLatchCycles"], 1);
-  const values = [half, settle, latch, turnaround, setup, dacLatch];
-  return values.every((value) => Number.isInteger(value) && value <= 255)
-    && half >= 2 && settle >= 1 && latch >= 1 && turnaround >= 0
-    && setup >= 1 && dacLatch >= 1
-    && latch + settle <= half
-    && 2 * half >= settle + latch + turnaround + 2 * (setup + dacLatch);
 }
 
 function CheckboxField({

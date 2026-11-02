@@ -84,7 +84,7 @@ export function AdcTestControls({ state, onStart, onStop }: ControlsProps) {
       <div className="adc-test-settings">
         <span>{t("adc.halfPeriod")}</span><b>{String(defaults?.adc?.adcHalfPeriod ?? 3)} {t("adc.cycles")}</b>
         <span>{t("adc.settle")}</span><b>{String(defaults?.adc?.adcSettleCycles ?? 1)} {t("adc.cycles")}</b>
-        <span>{t("settings.general.adcLatchCycles")}</span><b>{String(defaults?.adc?.adcLatchCycles ?? 1)} {t("adc.cycles")}</b>
+        <span>{t("adc.latch")}</span><b>{String(defaults?.adc?.adcLatchCycles ?? 1)} {t("adc.cycles")}</b>
         <span>{t("adc.dataDirection")}</span><b>{t("adc.inputOnly")}</b>
         <span>{t("adc.xyActivity")}</span><b>{t("adc.disabled")}</b>
       </div>

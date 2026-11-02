@@ -1691,6 +1691,13 @@ export function App() {
                   <MagCalibrationControls disabled={panelDisabled} />
                 ) : (
                   <>
+                    <SimulationImageCard
+                      disabled={panelDisabled}
+                      lastScanImageUrl={roiScanImageUrl}
+                      onLoadLastScan={handleLoadLastScan}
+                      onImageChange={handleSimulationImageChange}
+                      calibration
+                    />
                     <ROIEditor
                       disabled={panelDisabled}
                       variant="controls"
