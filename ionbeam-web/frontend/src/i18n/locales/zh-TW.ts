@@ -31,6 +31,10 @@ import type { TranslationTable } from "./en";
 
 export const zhTW: Partial<TranslationTable> = {
   /* ===== app chrome ================================================ */
+  "canvas.measurement.aria": "紋理量測",
+  "canvas.measurement.length": "長度：{length} {unit}",
+  "canvas.measurement.spans": "X：{x} 像素 · Y：{y} 像素",
+  "canvas.measurement.pixelSize": "像素尺寸 X：{x} · Y：{y} {unit}/像素",
   "header.desktop.label": "掃描",
   "header.dashboard.label": "儀表板",
   "header.dashboard.title": "開啟帳戶活動儀表板",

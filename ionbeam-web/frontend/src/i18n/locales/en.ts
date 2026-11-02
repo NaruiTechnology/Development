@@ -21,6 +21,10 @@
 
 export const en = {
   /* ===== app chrome ================================================ */
+  "canvas.measurement.aria": "Texture measurements",
+  "canvas.measurement.length": "Length: {length} {unit}",
+  "canvas.measurement.spans": "X: {x} px · Y: {y} px",
+  "canvas.measurement.pixelSize": "Pixel size X: {x} · Y: {y} {unit}/px",
   "header.desktop.label": "Scan",
   "app.documentTitle": "Ion Beam Technology — Control Panel",
   "app.brand.name": "Ion Beam Technology",

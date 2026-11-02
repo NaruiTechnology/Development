@@ -21,6 +21,11 @@
 import type { TranslationTable } from "./en";
 
 export const zhCN: Partial<TranslationTable> = {
+  "canvas.measurement.aria": "纹理测量",
+  "canvas.measurement.length": "长度：{length} {unit}",
+  "canvas.measurement.spans": "X：{x} 像素 · Y：{y} 像素",
+  "canvas.measurement.pixelSize": "像素尺寸 X：{x} · Y：{y} {unit}/像素",
+
   /* ===== app chrome ================================================ */
   "header.desktop.label": "扫描",
   "header.dashboard.label": "仪表板",

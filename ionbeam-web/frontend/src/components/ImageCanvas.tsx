@@ -1,3 +1,4 @@
+import { TextureMeasurements } from "./TextureMeasurements";
 /**
  * Renders the raster grayscale frame or vector ADC image onto a canvas.
  *
@@ -608,8 +609,10 @@ export function ImageCanvas({
   const selectedPaneHasImage = selectedPane !== scanTargetPane && Boolean(imageSlots[selectedPane]);
   const selectedTargetHasImage = selectedPane === scanTargetPane &&
     (imageLayout === 1 || Boolean(imageSlots[scanTargetPane]));
+  // Live Stop leaves the last frame visible and returns the scan to idle.
+  const targetScanStopped = phase === "idle" || phase === "completed";
   const editorEnabled = selectedPaneHasImage ||
-    (selectedTargetHasImage && phase === "completed" && hasRenderedCanvasImage);
+    (selectedTargetHasImage && targetScanStopped && hasRenderedCanvasImage);
   const toolbarVisible = editorEnabled;
   // A target pane added by the layout button stays empty until a scan fills it.
   const targetParked =
@@ -2018,6 +2021,8 @@ export function ImageCanvas({
               aria-hidden="true"
             />
           )}
+          <TextureMeasurements t={t} frameRef={frameRef} edge={nativeEdge} extent={imageExtent}
+            rotate90={streamTransforms.rotate90} enabled={!targetParked && hasRenderedCanvasImage} />
           {editorEnabled && selectedPane === scanTargetPane && (
             <div
               className="canvas-editor-layer"
