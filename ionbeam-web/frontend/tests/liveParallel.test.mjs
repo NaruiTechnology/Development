@@ -74,7 +74,7 @@ test("live Parallel changes rebuild both scan layouts, preserve pixels, and hono
       const before = sockets.length;
       await act(async () => { await buttonByTitle(kind === "vector" ? "scan.infinite.title.vector" : "scan.infinite.title").props.onClick(); });
       assert.equal(sockets.length, before + 1);
-      assert.equal(sockets.at(-1).requests[0].parallel_rois.length, 3);
+      assert.equal(sockets.at(-1).requests[0].parallel_rois.length, 2);
       assert.equal(toggle().props.disabled, false);
       await act(async () => {
         if (kind === "raster") store.dispatch(image.appendRaster({ pixels: Uint16Array.of(111, 222, 333) }));
@@ -93,7 +93,7 @@ test("live Parallel changes rebuild both scan layouts, preserve pixels, and hono
       await act(async () => { toggle().props.onChange({ target: { checked: true } }); });
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 400)); });
       await act(async () => {});
-      assert.equal(sockets.at(-1).requests[0].parallel_rois.length, 3);
+      assert.equal(sockets.at(-1).requests[0].parallel_rois.length, 2);
       assert.equal(toggle().props.disabled, false);
       assert.equal(toggle().props.checked, true);
       // Stop cancels a scheduled handover instead of resurrecting the live scan.

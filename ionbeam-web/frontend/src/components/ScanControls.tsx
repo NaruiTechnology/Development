@@ -322,11 +322,7 @@ export function ScanControls({
   const sequentialBaseZoomRef = useRef<number | null>(null);
   const zoomUpdateGenerationRef = useRef(0);
   const previousScanRegionsRef = useRef(roiState.scan_regions);
-  // Production Live: regions are held back until one full frame has rendered.
-  const deferredRegionsRef = useRef(false);
   const autoRestartTimesRef = useRef<number[]>([]);
-  const fullFrameReadyRef = useRef(false);
-  const liveFramesDone = useAppSelector((s) => kind === "raster" ? s.image.rasterFrames : s.image.vectorPasses);
   const suppressRegionRollbackRef = useRef(false);
   const regionUpdateGenerationRef = useRef(0);
   const pendingStopClearRef = useRef<"raster" | "vector" | null>(null);
@@ -655,6 +651,10 @@ export function ScanControls({
   async function startRunRequest(repeatRegions = false, preserveCurrentFrame = false) {
     if (startBlocked || scanHasErrors) return;
     if (repeatRegions) runningParallelRegionsRef.current = parallelRegions;
+    // A Live (repeating) scan with an ROI acquires the ROI region(s) only. The
+    // full-field background pass belongs to a single Run, whose result must be
+    // a complete image. Live keeps whatever frame is already on the canvas.
+    const withBackground = compositeROIs && !repeatRegions;
     const allowed = await refreshScanPrivilege();
     if (!allowed) return;
     if (!repeatRegions && !isProduction && selectedTargetGray !== null && roiState.imageDataUrl) {
@@ -704,13 +704,13 @@ export function ScanControls({
           displayROI: displayRegions[index] ?? null,
           initialFrame: initialFrames[index] ?? null,
         }));
-        const fullRequest = compositeROIs ? {
+        const fullRequest = withBackground ? {
           ...await rasterRequestWithBitmapSelection(
             { ...raster, roi: FULL_DAC_ROI }, { ...roiState, selection: null },
             { isProduction, allowBitmapSimulation, grayScaleSelection: null, grayScaleSkipped: null },
           ), roi: FULL_DAC_ROI,
         } : null;
-        const scanEntries = compositeROIs && fullRequest && (parallelRegions || requests.length === 1)
+        const scanEntries = withBackground && fullRequest && (parallelRegions || requests.length === 1)
           ? [{
               kind: "raster" as const,
               req: combineRasterRegions([fullRequest, ...requests]),
@@ -719,7 +719,7 @@ export function ScanControls({
               compositeROIs: displayRegions as ROIRequest[],
               initialFrame: initialFrames[0] ?? null,
             }]
-          : compositeROIs && fullRequest
+          : withBackground && fullRequest
           ? [{
               kind: "raster" as const, req: fullRequest,
               displayROI: null, displayROIs: [FULL_DAC_ROI],
@@ -745,12 +745,12 @@ export function ScanControls({
         // frame, so allocating another full-size underlay for each ROI wastes
         // memory and image decoding work, especially on sequential Live scans.
         const initialFrames = !isProduction && roiState.imageDataUrl
-          ? await Promise.all(regions.map((region, index) => compositeROIs && index > 0 ? null : bitmapImageFrame(roiState, vector.vector_resolution, {
+          ? await Promise.all(regions.map((region, index) => withBackground && index > 0 ? null : bitmapImageFrame(roiState, vector.vector_resolution, {
               sourceSelection: region,
               displayROI: displayRegions[index] ?? null,
             })))
           : regions.map(() => vectorBackground);
-        const backgroundRequest = compositeROIs
+        const backgroundRequest = withBackground
           ? await vectorRequestWithBitmapSelection(
               {
                 ...vector, pattern: "default", points: null, roi: null,
@@ -769,9 +769,9 @@ export function ScanControls({
             }
           }
         }
-        const compositeVector = compositeROIs && requests.every((request) =>
+        const compositeVector = withBackground && requests.every((request) =>
           request.pattern === "default" && !request.points && request.feedback_mode !== "adaptive_gray_feedback");
-        const adaptiveComposite = compositeROIs && requests.every((request) =>
+        const adaptiveComposite = withBackground && requests.every((request) =>
           request.pattern === "default" && !request.points && request.feedback_mode === "adaptive_gray_feedback");
         requests.forEach((req) => logVectorRequestContext("stream", req, resolveVectorBranch(req)));
         const entries = requests.map((req, index) => ({
@@ -806,8 +806,8 @@ export function ScanControls({
               compositeROIs: displayRegions as ROIRequest[],
               initialFrame: initialFrames[0] ?? null,
             }]
-          : compositeROIs && parallelRegions && requests.length > 1
-          ? [backgroundEntry, {
+          : parallelRegions && requests.length > 1
+          ? [...(withBackground ? [backgroundEntry] : []), {
               kind: "vector" as const,
               req: combineVectorRegions(requests),
               scanType: entries[0].scanType,
@@ -817,9 +817,9 @@ export function ScanControls({
                 ? requests.map((request) => request.points?.length ?? 0) : undefined,
               customPointROIs: requests.every((request) => request.pattern === "custom" && request.points)
                 ? requests.map((request) => request.roi ?? null) : undefined,
-              initialFrame: null,
+              initialFrame: withBackground ? null : initialFrames[0] ?? null,
             }]
-          : compositeROIs
+          : withBackground
           ? [backgroundEntry, ...entries.map((entry) => ({ ...entry, initialFrame: null }))]
           : entries;
         startRegionScanSequence(await persistScanSequence(scanEntries, repeatRegions), preserveCurrentFrame || (roiAreaDefined && vectorBackground !== null && (isProduction || !roiState.imageDataUrl)), repeatRegions);
@@ -832,16 +832,10 @@ export function ScanControls({
   async function startInfiniteRequest(preserveCurrentFrame = false) {
     if ((kind !== "raster" && kind !== "vector") || startBlocked || infiniteScanActiveRef.current || scanHasErrors) return;
     runningParallelRegionsRef.current = parallelRegions;
-    // Production: a Live scan started with an ROI first scans the full frame.
-    // The ROI is applied once that frame has been rendered (see the watcher
-    // effect below), so the operator never sees an empty canvas around the ROI.
-    const fullFrameRendered = kind === "raster"
-      ? rasterImageFilled >= raster.resolution * raster.resolution
-      : vectorImageFilled >= vector.vector_resolution * vector.vector_resolution;
-    const deferRegions = isProduction && roiState.scan_regions.length > 0 &&
-      !fullFrameReadyRef.current && !fullFrameRendered;
-    const scanRegionsNow = deferRegions ? [] : roiState.scan_regions;
-    const compositeNow = scanRegionsNow.length > 0;
+    // A Live scan with ROI(s) acquires those region(s) only, from the first
+    // frame and at the current Zoom. Pixels outside the ROI are never scanned;
+    // the canvas keeps whatever frame it already shows there.
+    const scanRegionsNow = roiState.scan_regions;
     if (scanRegionsNow.length > 1 && !parallelRegions) {
       await startRunRequest(true, preserveCurrentFrame);
       return;
@@ -866,21 +860,11 @@ export function ScanControls({
             { ...raster, roi: region }, { ...roiState, selection: region },
             { isProduction, allowBitmapSimulation, grayScaleSelection: scanGrayScaleSelection, grayScaleSkipped: scanGrayScaleSkipped },
           )));
-          const fullRequest = await rasterRequestWithBitmapSelection(
-            { ...raster, roi: FULL_DAC_ROI }, { ...roiState, selection: null },
-            { isProduction, allowBitmapSimulation, grayScaleSelection: null, grayScaleSkipped: null },
-          );
-          if (fullRequest.simulation_bitmap) {
-            for (const request of requests) request.simulation_bitmap = decorateSimulationBitmap(
-              fullRequest.simulation_bitmap, scanGrayScaleSelection, scanGrayScaleSkipped,
-            );
-          }
           parallelEntry = {
             kind: "raster",
-            req: combineRasterRegions([{ ...fullRequest, roi: FULL_DAC_ROI }, ...requests]),
+            req: combineRasterRegions(requests),
             displayROI: null,
-            displayROIs: [FULL_DAC_ROI, ...displayRegions],
-            compositeROIs: displayRegions,
+            displayROIs: displayRegions,
             initialFrame,
           };
         } else {
@@ -896,28 +880,15 @@ export function ScanControls({
             await startRunRequest(true, preserveCurrentFrame);
             return;
           }
-          const fullRequest = await vectorRequestWithBitmapSelection(
-            { ...vector, pattern: "default", points: null, roi: null,
-              feedback_mode: "standard", gray_level_range: null, gray_level_skipped: null },
-            { ...roiState, selection: null },
-            { isProduction, allowBitmapSimulation, grayScaleSelection: null, grayScaleSkipped: null },
-          );
-          if (fullRequest.simulation_bitmap) {
-            for (const request of requests) request.simulation_bitmap = decorateSimulationBitmap(
-              fullRequest.simulation_bitmap, scanGrayScaleSelection, scanGrayScaleSkipped,
-            );
-          }
           parallelEntry = {
             kind: "vector",
-            req: combineVectorRegions([{ ...fullRequest, roi: FULL_DAC_ROI }, ...requests]),
+            req: combineVectorRegions(requests),
             scanType: resolveVectorScanType(requests[0]),
             displayROI: null,
-            displayROIs: [FULL_DAC_ROI, ...displayRegions],
-            compositeROIs: displayRegions,
+            displayROIs: displayRegions,
             initialFrame,
           };
         }
-        deferredRegionsRef.current = deferRegions;
         infiniteScanRef.current = parallelEntry;
         infiniteScanActiveRef.current = true;
         setInfiniteScanActive(true);
@@ -925,10 +896,7 @@ export function ScanControls({
         startInfiniteScanRun(parallelEntry, preserveCurrentFrame || isProduction || parallelEntry.initialFrame === null);
         return;
       }
-      // While the ROI is deferred (Production) this pass is the plain full
-      // frame: Zoom belongs to the ROI, so it must not magnify the background
-      // canvas. The stored zoom is applied to the ROI by the follow-up restart.
-      const regions = effectiveScanRegions(scanRegionsNow, deferRegions ? 1 : roiState.scan_zoom, roiState);
+      const regions = effectiveScanRegions(scanRegionsNow, roiState.scan_zoom, roiState);
       const activeIndex = roiState.active_scan_region ?? 0;
       const region = regions[Math.min(activeIndex, regions.length - 1)] ?? null;
       const selectedRegion = scanRegionsNow[Math.min(activeIndex, scanRegionsNow.length - 1)] ?? null;
@@ -954,27 +922,7 @@ export function ScanControls({
             grayScaleSkipped: scanGrayScaleSkipped,
           }
         );
-        if (compositeNow && displayROI) {
-          const fullReq = await rasterRequestWithBitmapSelection(
-            { ...raster, roi: FULL_DAC_ROI },
-            { ...roiState, selection: null },
-            { isProduction, allowBitmapSimulation, grayScaleSelection: null, grayScaleSkipped: null },
-          );
-          entry = {
-            kind: "raster",
-            req: { ...combineRasterRegions([{ ...fullReq, roi: FULL_DAC_ROI }, {
-              ...req, simulation_bitmap: fullReq.simulation_bitmap
-                ? decorateSimulationBitmap(fullReq.simulation_bitmap, scanGrayScaleSelection, scanGrayScaleSkipped)
-                : req.simulation_bitmap,
-            }]), preview },
-            displayROI: null,
-            displayROIs: [FULL_DAC_ROI, displayROI],
-            compositeROIs: [displayROI],
-            initialFrame,
-          };
-        } else {
-          entry = { kind: "raster", req: { ...req, preview }, displayROI, initialFrame };
-        }
+        entry = { kind: "raster", req: { ...req, preview }, displayROI, initialFrame };
       } else {
         const initialFrame = !isProduction && roiState.imageDataUrl
           ? await bitmapImageFrame(roiState, vector.vector_resolution, {
@@ -985,46 +933,19 @@ export function ScanControls({
             ? resizeImageFrame(vectorImageFrame, vectorImageEdge, vector.vector_resolution)
             : null;
         const req = await buildVectorRequest(region);
-        if (compositeNow && (req.feedback_mode === "adaptive_gray_feedback" || req.pattern === "custom")) {
-          await startRunRequest(true, preserveCurrentFrame);
-          return;
-        }
         logVectorRequestContext(
           "stream",
           req,
           resolveVectorBranch(req),
         );
-        if (compositeNow && displayROI && req.pattern === "default" && !req.points && req.feedback_mode !== "adaptive_gray_feedback") {
-          const fullReq = await vectorRequestWithBitmapSelection(
-            { ...vector, pattern: "default", points: null, roi: null,
-              feedback_mode: "standard", gray_level_range: null, gray_level_skipped: null },
-            { ...roiState, selection: null },
-            { isProduction, allowBitmapSimulation, grayScaleSelection: null, grayScaleSkipped: null },
-          );
-          entry = {
-            kind: "vector",
-            req: { ...combineVectorRegions([{ ...fullReq, roi: FULL_DAC_ROI }, {
-              ...req, simulation_bitmap: fullReq.simulation_bitmap
-                ? decorateSimulationBitmap(fullReq.simulation_bitmap, scanGrayScaleSelection, scanGrayScaleSkipped)
-                : req.simulation_bitmap,
-            }]), preview },
-            scanType: resolveVectorScanType(req),
-            displayROI: null,
-            displayROIs: [FULL_DAC_ROI, displayROI],
-            compositeROIs: [displayROI],
-            initialFrame,
-          };
-        } else {
-          entry = {
-            kind: "vector",
-            req: { ...req, preview },
-            scanType: resolveVectorScanType(req),
-            displayROI,
-            initialFrame,
-          };
-        }
+        entry = {
+          kind: "vector",
+          req: { ...req, preview },
+          scanType: resolveVectorScanType(req),
+          displayROI,
+          initialFrame,
+        };
       }
-      deferredRegionsRef.current = deferRegions;
       infiniteScanRef.current = entry;
       infiniteScanActiveRef.current = true;
       setInfiniteScanActive(true);
@@ -1050,8 +971,6 @@ export function ScanControls({
     // Infinite (a single live session until Stop).
     // Only single runs clear it.
     const stoppingLiveScan = infiniteScanActiveRef.current;
-    deferredRegionsRef.current = false;
-    fullFrameReadyRef.current = false;
     clearInfiniteScanState();
     regionScanQueueRef.current = [];
     // A loaded simulation image is the canvas's initial frame. Keep it visible
@@ -1095,15 +1014,6 @@ export function ScanControls({
       return;
     }
     const liveEntry = infiniteScanRef.current;
-    if (infiniteScanActiveRef.current && deferredRegionsRef.current) {
-      // Production: the running stream is the full-frame pass and the ROI has
-      // not been applied yet. Only store the zoom; it is applied to the ROI
-      // region(s) when the deferred restart starts them. Pushing geometry now
-      // would zoom the full-scale background canvas instead.
-      zoomTrace("deferred ROI: zoom stored for the ROI restart", { zoom, generation });
-      dispatch(setScanZoom(zoom));
-      return;
-    }
     if (infiniteScanActiveRef.current) {
       const regions = effectiveScanRegions(roiState.scan_regions, zoom, roiState);
       const dacRegions = regions.map((region) => region ? worldSelectionToDacROI(region, roiState) : null);
@@ -1357,8 +1267,6 @@ export function ScanControls({
     if (!infiniteScanActiveRef.current) return;
     // An invalid plan (see the message above Zoom) is never sent to a running scan.
     if (scanHasErrors) return;
-    // Regions are applied after the full-frame pass (watcher effect).
-    if (deferredRegionsRef.current) return;
     // The service cannot change the region count of a running continuous
     // stream. A region drawn or removed on the live screen therefore restarts
     // the same live scan (same scan type, same screen) with the new region set.
@@ -1449,15 +1357,6 @@ export function ScanControls({
       changed.forEach((index) => dispatch(updateScanRegion({ index, region: previous[index] })));
     }
   }, [roiState.scan_regions]);
-
-  // Production: once the full-frame pass has rendered, restart the live scan
-  // with the held-back ROI(s). The rendered frame is preserved by the restart.
-  useEffect(() => {
-    if (!deferredRegionsRef.current || !infiniteScanActiveRef.current || liveFramesDone < 1) return;
-    deferredRegionsRef.current = false;
-    fullFrameReadyRef.current = true;
-    scheduleZoomRestart("infinite");
-  }, [liveFramesDone]);
 
   // `delayMs` debounces rapid Zoom edits; a discrete switch such as Parallel
   // passes 0 so the new layout starts as soon as the running stream is stopped.

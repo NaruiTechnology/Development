@@ -612,7 +612,8 @@ export function ROIEditor({
     };
   }, [activeHandle, roi]);
 
-  function loadFile(file: File) {
+  /** Drop the loaded image and everything derived from it (regions, selection). */
+  function clearLoadedImage() {
     clearBitmapSelectionCache();
     stopAllScanActions();
     setDraft(null);
@@ -638,6 +639,10 @@ export function ROIEditor({
       })
     );
     onImageChange?.(null);
+  }
+
+  function loadFile(file: File) {
+    clearLoadedImage();
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -1339,6 +1344,17 @@ export function ROIEditor({
       <button className="btn" disabled={disabled} onClick={() => fileRef.current?.click()}>
         <Icon name="upload" tone="accent" />
         {t("roi.select")}
+      </button>
+      <button
+        className="btn"
+        disabled={disabled || (roi.imageKind === "none" && !roi.imageDataUrl)}
+        onClick={() => {
+          if (fileRef.current) fileRef.current.value = "";
+          clearLoadedImage();
+        }}
+      >
+        <Icon name="x" tone="danger" />
+        {t("roi.clearImage")}
       </button>
       {(lastScanImageUrl || roi.calibration_enabled) && (
         <button
