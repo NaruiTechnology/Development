@@ -44,6 +44,7 @@ import { LoadingSpinner } from "./LoadingSpinner";
 import { CanvasViewHelp } from "./CanvasViewHelp";
 import { ScanRegionOverlay } from "./ScanRegionOverlay";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
+import { paintVectorScanOrderOverlay } from "../lib/scanPathOverlay";
 import { effectiveScanRegions, scanRegionPixelBounds } from "../lib/scanRegions.js";
 import { scaleScanSample } from "../lib/scanSamples";
 import {
@@ -422,6 +423,7 @@ export function ImageCanvas({
   const cursor = useAppSelector((s) => s.image.cursor);
   // Valid raster pixels; stays at the full frame once a live scan wraps.
   const rasterFilled = useAppSelector((s) => s.image.filled);
+  const rasterROI = useAppSelector((s) => s.image.rasterROI);
   const rasterParallelROIs = useAppSelector((s) => s.image.rasterParallelROIs);
 
   // Vector fields
@@ -1134,22 +1136,26 @@ export function ImageCanvas({
     const edge = kind === "raster" ? resolution : vectorEdge;
     const receivedCursor = kind === "raster" ? cursor : visibleVectorCursor;
     const path = kind === "raster" ? "horizontal_sawtooth" : vectorScanPath;
+    const parallelRegions = kind === "raster" ? rasterParallelROIs : vectorParallelROIs;
+    const scanROI = kind === "raster" ? rasterROI : vectorROI;
+    const regions = parallelRegions?.length ? parallelRegions : [scanROI];
+    const regionCount = regions.length;
     const running = phase === "running";
     let animationFrame = 0;
     const draw = (now: number) => {
       // Chunks commonly end on whole rows. Animate the visual indicator within
       // the active sweep; this is not a per-pixel hardware position report.
-      const sweepStart = Math.floor(Math.max(0, receivedCursor - 1) / edge) * edge;
+      const sweepStart = Math.floor(Math.max(0, Math.ceil(receivedCursor / regionCount) - 1) / edge) * edge;
       const indicatorCursor = running
-        ? sweepStart + Math.floor(((now % 800) / 800) * edge) + 1
+        ? (sweepStart + Math.floor(((now % 800) / 800) * edge) + 1) * regionCount
         : receivedCursor;
-      paintVectorScanOrderOverlay(canvas, edge, indicatorCursor, path);
+      paintVectorScanOrderOverlay(canvas, edge, indicatorCursor, path, regions);
       orientCanvas(canvas, streamTransforms);
       if (running) animationFrame = requestAnimationFrame(draw);
     };
     draw(performance.now());
     return () => cancelAnimationFrame(animationFrame);
-  }, [revision, showScanPath, kind, resolution, cursor, vectorEdge, vectorScanPath, visibleVectorCursor, streamTransforms, phase]);
+  }, [revision, showScanPath, kind, resolution, cursor, vectorEdge, vectorScanPath, visibleVectorCursor, streamTransforms, phase, rasterROI, rasterParallelROIs, vectorROI, vectorParallelROIs]);
 
   const phaseKey = PHASE_KEYS[phase];
   const kindKey = KIND_KEYS[kind];
@@ -2374,60 +2380,6 @@ function clearCanvas(canvas: HTMLCanvasElement) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-function paintVectorScanOrderOverlay(
-  canvas: HTMLCanvasElement,
-  edge: number,
-  cursor: number,
-  scanPath: VectorScanPath,
-) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  const size = canvas.width;
-  ctx.clearRect(0, 0, size, size);
-  if (edge <= 0 || cursor <= 0) return;
-
-  const total = vectorScanSampleCount(edge, scanPath);
-  const limit = Math.min(cursor, total);
-  // Show the complete active sweep, including the part ahead of the marker.
-  const first = Math.floor((limit - 1) / edge) * edge;
-  const sweepEnd = Math.min(first + edge, total);
-  ctx.save();
-  ctx.strokeStyle = "rgba(111, 190, 211, 0.75)";
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  for (let index = first; index < sweepEnd; index++) {
-    const point = vectorScanSamplePixel(index, edge, scanPath);
-    if (!point) continue;
-    const x = (point.x / Math.max(1, edge - 1)) * (size - 1);
-    const y = (point.y / Math.max(1, edge - 1)) * (size - 1);
-    if (index === first) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-  ctx.restore();
-
-  const current = vectorScanSamplePixel(limit - 1, edge, scanPath);
-  if (!current) return;
-  const cx = (current.x / Math.max(1, edge - 1)) * (size - 1);
-  const cy = (current.y / Math.max(1, edge - 1)) * (size - 1);
-  ctx.save();
-  ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
-  ctx.shadowBlur = 2;
-  ctx.fillStyle = "rgba(151, 210, 224, 1)";
-  ctx.beginPath();
-  ctx.arc(cx, cy, 1.15, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(151, 210, 224, 1)";
-  ctx.lineWidth = 0.9;
-  ctx.beginPath();
-  ctx.arc(cx, cy, 1.3, 0, Math.PI * 2);
-  ctx.moveTo(cx - 2.3, cy);
-  ctx.lineTo(cx + 2.3, cy);
-  ctx.moveTo(cx, cy - 2.3);
-  ctx.lineTo(cx, cy + 2.3);
-  ctx.stroke();
-  ctx.restore();
-}
 
 function activeROIRegion(roi: ROIState): ROIRequest {
   const regions = effectiveScanRegions(roi.scan_regions, roi.scan_zoom, roi);

@@ -124,3 +124,29 @@ def test_parallel_simulation_batches_updates_and_still_stops():
     assert len(chunks) == 12  # 196,608 samples / 16,384, rather than 383 tiny waits.
     assert sum(map(len, chunks)) == 256 * 256 * 3
     assert len(asyncio.run(run(stop=True))) == 2
+
+
+@pytest.mark.parametrize("continuous", [False, True])
+@pytest.mark.parametrize("path", list(VectorScanPath))
+def test_dac_commands_stay_inside_single_roi_for_every_scan_path(path, continuous):
+    from GlasgowDataIO.IobeamControl.macros.raster import RasterScanCommand
+
+    service = DeviceService(str(CONFIG))
+    roi = ROIRequest(x_start=4096, x_end=8191, y_start=8192, y_end=12287)
+    edge = 64
+    commands = [
+        service._build_raster_cmd(RasterRequest(resolution=edge, dwell=2, roi=roi), continuous=continuous),
+        service._build_vector_cmd(VectorRequest(
+            vector_resolution=edge, dwell=2, roi=roi, scan_path=path), continuous=continuous),
+    ]
+    for command in commands:
+        if isinstance(command, RasterScanCommand):
+            xs = [command._x_range.start + ((i * command._x_range.step) >> 8) for i in range(edge)]
+            ys = [command._y_range.start + ((i * command._y_range.step) >> 8) for i in range(edge)]
+            points = [(x, y) for x in xs for y in ys]
+        else:
+            points = [(x, y) for x, y, *_ in command._iter_points]
+        assert len(points) == edge * edge
+        assert all(roi.x_start <= x <= roi.x_end and roi.y_start <= y <= roi.y_end for x, y in points)
+        assert min(x for x, _ in points) == roi.x_start
+        assert min(y for _, y in points) == roi.y_start
