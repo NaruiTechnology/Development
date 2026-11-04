@@ -396,13 +396,17 @@ async def _watch_client_disconnect(ws: WebSocket, owner, kind: str | None = None
                     import json
                     control = json.loads(message["text"])
                     if control.get("event") == "update_geometry":
+                        logger.info("[%s] live geometry request id=%s diagnostics=%s",
+                                    kind, control.get("id"), control.get("diagnostics"))
                         geometry = control.get("geometry", {})
                         if isinstance(geometry, dict) and "gray_rule" in geometry:
                             await asyncio.to_thread(svc.update_live_scan_geometry, kind, geometry, owner=owner)
                         else:
                             svc.update_live_scan_geometry(kind, geometry, owner=owner)
+                        logger.info("[%s] live geometry accepted id=%s (queued; hardware application not acknowledged)", kind, control.get("id"))
                         await ws.send_json({"event": "geometry_updated", "id": control.get("id")})
                 except (ValueError, TypeError, AttributeError) as exc:
+                    logger.warning("[%s] live geometry rejected id=%s: %s", kind, control.get("id") if isinstance(control, dict) else None, exc)
                     await ws.send_json({"event": "geometry_update_error", "id": control.get("id") if isinstance(control, dict) else None, "detail": str(exc)})
     except (WebSocketDisconnect, RuntimeError):
         pass

@@ -1,0 +1,27 @@
+2026-11-04 19:45:37,046 scan start kind=raster production=False transport=service
+2026-11-04 19:45:37,046 [raster simulation] command queue route=raster max_pipeline=4 capacity=5 chunk_interval_ms=100.000
+2026-11-04 19:45:37,152 [raster simulation] geometry output revision=0 chunks_sent=5 chunks_received=1 queued=4
+2026-11-04 19:45:37,153 [raster] live geometry request id=1 diagnostics={'zoom': 2, 'regionCount': 0}
+2026-11-04 19:45:37,153 [raster] live geometry old_roi=None new_roi=x_start=4096.0 x_end=12287.0 y_start=4096.0 y_end=12287.0 old_regions=None new_regions=None max_pipeline=4 command=_SimulatedCommand
+2026-11-04 19:45:37,153 [raster] geometry queue snapshot chunks_sent=5 chunks_received=1 outstanding=4 pixels_received=16384
+2026-11-04 19:45:37,153 [raster simulation] geometry queued revision=1
+2026-11-04 19:45:37,153 [raster] live geometry accepted id=1 (queued; hardware application not acknowledged)
+2026-11-04 19:45:37,154 [raster simulation] encoding geometry revision=1 roi=x_start=4096.0 x_end=12287.0 y_start=4096.0 y_end=12287.0 regions=None
+2026-11-04 19:45:37,665 [raster simulation] geometry output revision=1 chunks_sent=10 chunks_received=6 queued=4
+2026-11-04 19:45:37,665 [raster] live geometry request id=2 diagnostics={'zoom': 4, 'regionCount': 0}
+2026-11-04 19:45:37,666 [raster] live geometry old_roi=x_start=4096.0 x_end=12287.0 y_start=4096.0 y_end=12287.0 new_roi=x_start=6144.0 x_end=10239.0 y_start=6144.0 y_end=10239.0 old_regions=None new_regions=None max_pipeline=4 command=_SimulatedCommand
+2026-11-04 19:45:37,666 [raster] geometry queue snapshot chunks_sent=10 chunks_received=6 outstanding=4 pixels_received=98304
+2026-11-04 19:45:37,666 [raster simulation] geometry queued revision=2
+2026-11-04 19:45:37,666 [raster] live geometry accepted id=2 (queued; hardware application not acknowledged)
+2026-11-04 19:45:37,666 [raster simulation] encoding geometry revision=2 roi=x_start=6144.0 x_end=10239.0 y_start=6144.0 y_end=10239.0 regions=None
+2026-11-04 19:45:38,176 [raster simulation] geometry output revision=2 chunks_sent=15 chunks_received=11 queued=4
+2026-11-04 19:45:38,176 [raster] live geometry request id=3 diagnostics={'zoom': 1, 'regionCount': 0}
+2026-11-04 19:45:38,177 [raster] live geometry old_roi=x_start=6144.0 x_end=10239.0 y_start=6144.0 y_end=10239.0 new_roi=x_start=0.0 x_end=16383.0 y_start=0.0 y_end=16383.0 old_regions=None new_regions=None max_pipeline=4 command=_SimulatedCommand
+2026-11-04 19:45:38,177 [raster] geometry queue snapshot chunks_sent=15 chunks_received=11 outstanding=4 pixels_received=180224
+2026-11-04 19:45:38,177 [raster simulation] geometry queued revision=3
+2026-11-04 19:45:38,178 [raster] live geometry accepted id=3 (queued; hardware application not acknowledged)
+2026-11-04 19:45:38,178 [raster simulation] encoding geometry revision=3 roi=x_start=0.0 x_end=16383.0 y_start=0.0 y_end=16383.0 regions=None
+2026-11-04 19:45:38,690 [raster simulation] geometry output revision=3 chunks_sent=20 chunks_received=16 queued=4
+2026-11-04 19:45:38,690 scan abort requested (command signalled)
+2026-11-04 19:45:38,692 scan end kind=raster ok=False cancelled=True elapsed=1.646s transport=service chunks=16 error=None
+2026-11-04 19:45:38,692 [link] simulation-raster aborted: chunks sent=20 recv=16/? pixels=262144 wall=1645.4ms beam=? duty=? | flush mean=0.00ms max=0.00ms | read mean=0.00ms max=0.00ms | consumer mean=0.00ms max=0.00ms | limit=unknown

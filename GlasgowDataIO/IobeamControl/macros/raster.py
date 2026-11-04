@@ -55,7 +55,7 @@ BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
 # AutomationPy.buildingblocks.scan_params; these mirror the values there
 # so this module stays importable without that dependency for callers
 # that just want the macro and pass everything explicitly.
-DEFAULT_MAX_PIPELINE        = 32
+DEFAULT_MAX_PIPELINE        = 8
 DEFAULT_PADDING_MIN_PIXELS  = 128
 DEFAULT_PADDING_RATIO_DENOM = 200    # padding = total_pixels // 200 (0.5%)
 DEFAULT_PADDING_DWELL       = 2
@@ -269,6 +269,8 @@ class RasterScanCommand(BaseCommand):
             beam_hz=getattr(self, "link_beam_hz", None),
             expected_chunks=None if self.continuous else math.ceil(
                 total_pixels / max(1, math.ceil(latency / max(1, int(self._dwell))))))
+
+        self._link_stats = stats
 
         async def sender():
             nonlocal tokens

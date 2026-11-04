@@ -1,0 +1,53 @@
+{
+  "kind": "raster",
+  "max_pipeline": 32,
+  "chunk_interval_ms": 100,
+  "mode": "rapid",
+  "accepted_zooms": [
+    2,
+    4
+  ],
+  "observations": [
+    {
+      "zoom": 4,
+      "stale_chunks": 32,
+      "elapsed_ms": 3365.4,
+      "first_sample_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        24576
+      ]
+    }
+  ],
+  "intermediate_zoom_2_absent": true
+}

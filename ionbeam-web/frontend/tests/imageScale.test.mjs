@@ -57,3 +57,19 @@ test("invalid fields have no scale and invalid geometry falls back to field span
   assert.deepEqual(fullCanvasImageExtent({ ...field, scanGeometry: { enabled: true, pixels: [0, 0] } },
     { source: "scanGeometry", x: 1, y: 1, unit: "nm" }), fullCanvasImageExtent(field));
 });
+
+
+test("live Zoom changes only the label, including rotation and unit transitions", () => {
+  const extent = { x: 600, y: 300, unit: "µm" };
+  for (const rotated of [false, true]) {
+    const original = imageScale(extent, rotated);
+    for (const zoom of [1, 2, 3, 4, 7, 10]) {
+      const scale = imageScale(extent, rotated, zoom);
+      assert.equal(scale.fraction, original.fraction);
+      assert.equal(Number(scale.label.split(" ")[0]), Number((Number(original.label.split(" ")[0]) / zoom).toFixed(1)));
+    }
+  }
+  assert.equal(imageScale(extent, false, 2).label, "75.0 µm");
+  assert.deepEqual(imageScale({ x: 4, y: 4, unit: "µm" }, false, 2), { fraction: 0.25, label: "500.0 nm" });
+  assert.deepEqual(imageScale(extent, false, NaN), imageScale(extent));
+});

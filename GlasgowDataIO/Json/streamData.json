@@ -38,6 +38,7 @@
                     "enableEbeam": false,
                     "enableIbeam": true,
                     "rasterScan": {
+                        "max_pipeline": 8,
                         "minChunkBeamTimeMs": 100,
                         "pixels": 8192,
                         "frameBlank": true,
@@ -48,6 +49,7 @@
                         "dwell": 8
                     },
                     "vectorScan": {
+                        "max_pipeline": 8,
                         "vectorResolution": 1024,
                         "minChunkBeamTimeMs": 100,
                         "sawtoothOnRasterGenerator": true,

@@ -1,0 +1,18 @@
+2026-11-04 19:45:54,992 scan start kind=vector production=False transport=service
+2026-11-04 19:45:54,992 [vector simulation] command queue route=raster max_pipeline=32 capacity=33 chunk_interval_ms=100.000
+2026-11-04 19:45:55,121 [vector simulation] geometry output revision=0 chunks_sent=33 chunks_received=1 queued=32
+2026-11-04 19:45:55,122 [vector] live geometry request id=1 diagnostics={'zoom': 2, 'regionCount': 0}
+2026-11-04 19:45:55,122 [vector] live geometry old_roi=None new_roi=x_start=4096.0 x_end=12287.0 y_start=4096.0 y_end=12287.0 old_regions=None new_regions=None max_pipeline=32 command=_SimulatedCommand
+2026-11-04 19:45:55,122 [vector] geometry queue snapshot chunks_sent=33 chunks_received=1 outstanding=32 pixels_received=16384
+2026-11-04 19:45:55,122 [vector simulation] geometry queued revision=1
+2026-11-04 19:45:55,122 [vector] live geometry accepted id=1 (queued; hardware application not acknowledged)
+2026-11-04 19:45:55,122 [vector] live geometry request id=2 diagnostics={'zoom': 4, 'regionCount': 0}
+2026-11-04 19:45:55,123 [vector] live geometry old_roi=x_start=4096.0 x_end=12287.0 y_start=4096.0 y_end=12287.0 new_roi=x_start=6144.0 x_end=10239.0 y_start=6144.0 y_end=10239.0 old_regions=None new_regions=None max_pipeline=32 command=_SimulatedCommand
+2026-11-04 19:45:55,123 [vector] geometry queue snapshot chunks_sent=33 chunks_received=1 outstanding=32 pixels_received=16384
+2026-11-04 19:45:55,123 [vector simulation] geometry queued revision=2
+2026-11-04 19:45:55,123 [vector] live geometry accepted id=2 (queued; hardware application not acknowledged)
+2026-11-04 19:45:55,123 [vector simulation] encoding geometry revision=2 roi=x_start=6144.0 x_end=10239.0 y_start=6144.0 y_end=10239.0 regions=None
+2026-11-04 19:45:58,520 [vector simulation] geometry output revision=2 chunks_sent=66 chunks_received=34 queued=32
+2026-11-04 19:45:58,522 scan abort requested (command signalled)
+2026-11-04 19:45:58,523 scan end kind=vector ok=False cancelled=True elapsed=3.531s transport=service chunks=34 error=None
+2026-11-04 19:45:58,523 [link] simulation-vector aborted: chunks sent=66 recv=34/? pixels=557056 wall=3530.8ms beam=? duty=? | flush mean=0.00ms max=0.00ms | read mean=0.00ms max=0.00ms | consumer mean=0.00ms max=0.00ms | limit=unknown

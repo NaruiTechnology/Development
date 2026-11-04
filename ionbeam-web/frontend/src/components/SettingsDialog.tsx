@@ -871,6 +871,16 @@ function RasterTab({ draft }: { draft: unknown }) {
 
   return (
     <div className="settings-form">
+      <PresetNumberField
+        label={<FieldLabel label={t("settings.pipeline.label")} help={<SettingsHelp topic="pipeline" />} />}
+        value={numberField(draft, [...RASTER_PATH, "max_pipeline"], numberField(draft, [...RASTER_PATH, "maxPipeline"], 8))}
+        options={[1, 2, 3, 4, 8, 16, 32].map((value) => ({ value }))}
+        min={1}
+        max={128}
+        disabled={false}
+        helperText={t("settings.pipeline.help")}
+        onChange={(value) => set([...RASTER_PATH, "max_pipeline"], value)}
+      />
       <h4 className="settings-form__group">{t("settings.raster.group.scan")}</h4>
 
       <div className="field-row">
@@ -940,6 +950,16 @@ function VectorTab({ draft }: { draft: unknown }) {
 
   return (
     <div className="settings-form">
+      <PresetNumberField
+        label={<FieldLabel label={t("settings.pipeline.label")} help={<SettingsHelp topic="pipeline" />} />}
+        value={numberField(draft, [...VECTOR_PATH, "max_pipeline"], numberField(draft, [...VECTOR_PATH, "maxPipeline"], 8))}
+        options={[1, 2, 3, 4, 8, 16, 32].map((value) => ({ value }))}
+        min={1}
+        max={128}
+        disabled={false}
+        helperText={t("settings.pipeline.help")}
+        onChange={(value) => set([...VECTOR_PATH, "max_pipeline"], value)}
+      />
       <h4 className="settings-form__group">{t("settings.vector.group.scan")}</h4>
 
       <div className="field-row">
@@ -3177,6 +3197,7 @@ function AdminUsersTable({
 }
 
 type SettingsHelpTopic =
+  | "pipeline"
   | "generalVoltage"
   | "generalBuffer"
   | "rasterPixels"
@@ -3233,6 +3254,7 @@ const SETTINGS_HELP_META: Record<SettingsHelpTopic, {
   title: TranslationKey;
   body?: TranslationKey;
 }> = {
+  pipeline: { title: "settings.pipeline.label", body: "settings.pipeline.body" },
   generalVoltage: { title: "settings.help.generalVoltage.title" },
   generalBuffer: { title: "settings.help.generalBuffer.title" },
   rasterPixels: { title: "settings.help.rasterPixels.title" },

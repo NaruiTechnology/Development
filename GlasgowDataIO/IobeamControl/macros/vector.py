@@ -96,7 +96,7 @@ DEFAULT_SENDER_DRAIN_TIMEOUT_S = 15.0
 # carries x/y/dwell triples), so MAX_PIPELINE has historically been
 # tuned much lower for vector than the 32 used by raster. See the
 # block comment inside transfer() below for the full story.
-DEFAULT_MAX_PIPELINE = 4
+DEFAULT_MAX_PIPELINE = 8
 
 
 def default_iter(resolution=2048):
@@ -554,6 +554,8 @@ class VectorScanCommand(BaseCommand):
             if not summary_logged:
                 summary_logged = True
                 self._logger.info(stats.summary(result))
+
+        self._link_stats = stats
 
         async def sender():
             nonlocal tokens, sent_total

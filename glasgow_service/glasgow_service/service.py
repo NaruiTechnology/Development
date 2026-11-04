@@ -30,6 +30,7 @@ Lifecycle decisions and the reasoning behind them:
 import asyncio
 import array
 import csv
+from collections import deque
 import io
 import itertools
 import math
@@ -61,6 +62,7 @@ from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 
 from .device_lock import DeviceHeld, DeviceLock
 from .roi_scaling import dac_step, roi_zoom
+from GlasgowDataIO.IobeamControl.transfer.linkStats import LinkStats
 from .models import (
     DeviceState, ServiceStatus, RasterRequest, VectorRequest, AdcTestRequest,
     DacRampRequest, DacRampAxis, BeamHoldRequest, BeamHoldState,
@@ -827,6 +829,8 @@ class _SimulatedCommand:
     def __init__(self) -> None:
         self.abort = asyncio.Event()
         self.continuous = False
+        self._geometry_revision = 0
+        self._encoding_geometry_revision = 0
 
 
 def _simulation_chunk_interval(simulation: dict) -> float:
@@ -1260,6 +1264,8 @@ class DeviceService:
         if self._active_live_request is not req or self._active_command is not cmd:
             raise ValueError("live scan changed before the gray rule could be applied")
         self._active_live_request = req.model_copy(update=updates)
+        if isinstance(cmd, _SimulatedCommand):
+            cmd._geometry_revision += 1
 
     def update_live_scan_geometry(self, kind: str, geometry: dict, *, owner=None) -> None:
         """Update DAC geometry or a gray rule on the current continuous stream."""
@@ -1303,7 +1309,17 @@ class DeviceService:
         old_count = len(req.parallel_rois or [])
         if len(updated.parallel_rois or []) != old_count:
             raise ValueError("live geometry update cannot change the region count")
+        logger.info("[%s] live geometry old_roi=%s new_roi=%s old_regions=%s new_regions=%s max_pipeline=%s command=%s",
+                    kind, req.roi, updated.roi, req.parallel_rois, updated.parallel_rois,
+                    getattr(cmd, "_max_pipeline", None), type(cmd).__name__)
+        stats = getattr(cmd, "_link_stats", None)
+        if stats is not None:
+            logger.info("[%s] geometry queue snapshot chunks_sent=%d chunks_received=%d outstanding=%d pixels_received=%d",
+                        kind, stats.chunks_sent, stats.chunks_recv,
+                        stats.chunks_sent - stats.chunks_recv, stats.pixels_recv)
         if isinstance(cmd, _SimulatedCommand):
+            cmd._geometry_revision += 1
+            logger.info("[%s simulation] geometry queued revision=%d", kind, cmd._geometry_revision)
             self._active_live_request = updated
             return
         replacement = (self._build_raster_cmd(updated, continuous=True) if kind == "raster"
@@ -1429,8 +1445,92 @@ class DeviceService:
             self._active_live_request = req
         return req
 
+    def _simulated_pipeline(self, kind: str, req) -> tuple[int, str]:
+        """Select the same queue setting as the hardware command builder.
+
+        Resolve the route without constructing a physical command: software
+        simulation also permits coarse grids and bitmap-only custom patterns.
+        """
+        raster = kind == "raster" and not req.parallel_rois
+        if kind == "vector" and not req.parallel_rois:
+            feedback = self._adaptive_gray_feedback_config(req)
+            if self._vector_runs_on_raster_generator(req, feedback):
+                x0, x1, y0, y1 = _roi_bounds(req.roi) or (0, 16383, 0, 16383)
+                try:
+                    _dac_range_for_bounds(x0, x1, req.vector_resolution)
+                    _dac_range_for_bounds(y0, y1, req.vector_resolution)
+                except ValueError:
+                    pass  # Hardware also falls back to streamed vector points.
+                else:
+                    raster = True
+        params = self._raster_params_defaults if raster else self._vector_params_defaults
+        pipeline = int(params.max_pipeline)
+        if pipeline < 1:
+            raise ValueError("max_pipeline must be positive")
+        return pipeline, "raster" if raster else "vector"
+
     async def _simulated_chunks(self, kind: str, req, command, *, pace: bool):
-        """Stand-in for ``conn.transfer_multiple(cmd)`` that needs no device."""
+        """Queue encoded chunks ahead of acquisition, as the hardware sender does.
+
+        The hardware receiver grants one initial credit in addition to
+        max_pipeline. Keep that extra chunk here too. Refill only when the
+        consumer resumes, so downstream backpressure cannot grow the queue.
+        Playback uses simulation.chunkIntervalMs, not a physical USB clock.
+        """
+        if not pace:
+            async for chunk in self._simulated_source_chunks(kind, req, command, pace=pace):
+                yield chunk
+            return
+
+        pipeline, route = self._simulated_pipeline(kind, req)
+        command._max_pipeline = pipeline
+        command._link_stats = stats = LinkStats("simulation-" + kind)
+        capacity = pipeline + 1
+        interval = _simulation_chunk_interval(self._simulation_settings(req))
+        pending = deque()
+        source = self._simulated_source_chunks(kind, req, command, pace=True, queued=True)
+        exhausted = False
+        delivered_revision = None
+        logger.info("[%s simulation] command queue route=%s max_pipeline=%d capacity=%d chunk_interval_ms=%.3f",
+                    kind, route, pipeline, capacity, interval * 1000)
+        try:
+            while not command.abort.is_set():
+                while len(pending) < capacity and not exhausted and not command.abort.is_set():
+                    try:
+                        chunk = await anext(source)
+                    except StopAsyncIteration:
+                        exhausted = True
+                    else:
+                        pending.append((chunk, command._encoding_geometry_revision))
+                        stats.sent(0.0)
+                if command.abort.is_set() or not pending:
+                    break
+                chunk, revision = pending.popleft()
+                t_read = time.perf_counter()
+                # Unlike a plain sleep, Stop also wakes a long simulated chunk.
+                if interval:
+                    try:
+                        await asyncio.wait_for(command.abort.wait(), timeout=interval)
+                    except asyncio.TimeoutError:
+                        pass
+                if command.abort.is_set():
+                    break
+                stats.received(time.perf_counter() - t_read, len(chunk))
+                if revision != delivered_revision:
+                    delivered_revision = revision
+                    logger.info("[%s simulation] geometry output revision=%d chunks_sent=%d chunks_received=%d queued=%d",
+                                kind, revision, stats.chunks_sent, stats.chunks_recv, len(pending))
+                t_yield = time.perf_counter()
+                yield chunk
+                stats.consumed(time.perf_counter() - t_yield)
+        finally:
+            outcome = "aborted" if command.abort.is_set() else "ok" if exhausted and not pending else "closed"
+            pending.clear()
+            await source.aclose()
+            logger.info(stats.summary(outcome))
+
+    async def _simulated_source_chunks(self, kind: str, req, command, *, pace: bool, queued: bool = False):
+        """Encode simulation data; geometry is snapshotted at each frame boundary."""
         bitmap_id = getattr(req, "simulation_bitmap_id", None)
         bitmap_ids = getattr(req, "parallel_simulation_bitmap_ids", None)
         if bitmap_id or bitmap_ids:
@@ -1453,7 +1553,7 @@ class DeviceService:
                 "parallel_simulation_bitmap_ids": None,
             })
         simulation = self._simulation_settings(req)
-        interval = _simulation_chunk_interval(simulation) if pace else 0.0
+        interval = _simulation_chunk_interval(simulation) if pace and not queued else 0.0
         req = self._prepare_simulated_stream_request(req, pace=pace)
         build_bitmap = _bitmap_raster_chunks if kind == "raster" else _bitmap_vector_chunks
         # Building a bitmap frame is pure Python; keep it off the event loop.
@@ -1467,6 +1567,9 @@ class DeviceService:
             live_req = getattr(self, "_active_live_request", None)
             if continuous and live_req is not None and live_req is not req:
                 req = live_req
+                command._encoding_geometry_revision = command._geometry_revision
+                logger.info("[%s simulation] encoding geometry revision=%d roi=%s regions=%s",
+                            kind, command._encoding_geometry_revision, req.roi, req.parallel_rois)
                 bitmap_chunks = await asyncio.to_thread(build_bitmap, req, transforms)
             if bitmap_chunks is not None:
                 source = _paced_chunks(bitmap_chunks, abort=command.abort, interval=interval)
@@ -1480,19 +1583,25 @@ class DeviceService:
                     transforms=transforms)
             frame_started = time.monotonic()
             sample_offset = 0
+            encoded_chunks = 0
+            playback_interval = _simulation_chunk_interval(simulation) if queued else 0.0
             async for chunk in source:
                 if kind == "vector" and req.target_gray_level is not None and bitmap_chunks is not None:
-                    steps = int((time.monotonic() - frame_started) * 60)
+                    # Encoding ahead must not freeze time-based sample feedback.
+                    elapsed = max(time.monotonic() - frame_started, encoded_chunks * playback_interval)
+                    steps = int(elapsed * 60)
                     yield _target_gray_chunk(chunk, req, sample_offset, steps)
                 else:
                     yield chunk
                 sample_offset += len(chunk)
+                encoded_chunks += 1
             if frames_left is not None:
                 frames_left -= 1
             if not continuous or command.abort.is_set() or frames_left == 0:
                 return
             if kind == "vector" and req.target_gray_level is not None and bitmap_chunks is not None:
-                steps = max(1, int((time.monotonic() - frame_started) * 60))
+                elapsed = max(time.monotonic() - frame_started, encoded_chunks * playback_interval)
+                steps = max(1, int(elapsed * 60))
                 def advance_target() -> None:
                     if req.parallel_rois and req.parallel_simulation_bitmaps:
                         for index, (region, bitmap) in enumerate(zip(req.parallel_rois, req.parallel_simulation_bitmaps)):
@@ -1542,12 +1651,14 @@ class DeviceService:
             command.continuous = bool(getattr(req, "continuous", False))
             self._active_live_request = req if command.continuous else None
             self._activate_command(command)
+            source = self._simulated_chunks(kind, req, command, pace=True)
             try:
-                async for chunk in self._simulated_chunks(kind, req, command, pace=True):
+                async for chunk in source:
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
                     yield chunk if native_samples else _sample_chunk_to_wire_bytes(chunk)
             finally:
+                await source.aclose()
                 self._deactivate_command(command)
                 self._active_live_request = None
                 # Like a real scan: keep whatever was captured, even if stopped.
@@ -1615,9 +1726,9 @@ class DeviceService:
     def _effective_raster_params(self, req: "RasterRequest") -> RasterParams:
         """Merge the JSON defaults with the request, with the request
         winning on every field it explicitly carries. Macro-tuning
-        constants (max_pipeline, padding_*) come from JSON only — they're
-        not exposed on the request because nothing in the UI needs to set
-        them, but a per-build streamData.json override flows through."""
+        constants (max_pipeline, padding_*) come from JSON only. Configuration
+        exposes max_pipeline; padding remains JSON-only. Changes apply after
+        the service restarts, rather than through per-scan request fields."""
         return self._raster_params_defaults.override(
             resolution    = req.resolution,
             dwell         = req.dwell,
@@ -1791,6 +1902,9 @@ class DeviceService:
             cmd = self._build_raster_cmd(req, continuous=continuous)
             self._active_live_request = req if continuous else None
             latency = self._chunk_latency("raster", req.latency_bytes, cmd)
+            logger.info("[raster] scan geometry roi=%s regions=%s command=%s max_pipeline=%s latency=%s continuous=%s",
+                        req.roi, req.parallel_rois, type(cmd).__name__, getattr(cmd, "_max_pipeline", None),
+                        latency, getattr(cmd, "continuous", False))
             if continuous:
                 # Live scan: keep only the most recent frame for /scan/last/*
                 # instead of every chunk of an unbounded stream.
@@ -1866,6 +1980,9 @@ class DeviceService:
                 req, continuous=bool(getattr(req, "continuous", False)))
             self._active_live_request = req if getattr(cmd, "continuous", False) else None
             latency = self._chunk_latency("vector", req.latency_bytes, cmd)
+            logger.info("[vector] scan geometry roi=%s regions=%s command=%s max_pipeline=%s latency=%s continuous=%s",
+                        req.roi, req.parallel_rois, type(cmd).__name__, getattr(cmd, "_max_pipeline", None),
+                        latency, getattr(cmd, "continuous", False))
             multi_pass_adaptive = getattr(cmd, "_adaptive_passes", 1) > 1
             if getattr(cmd, "continuous", False) or multi_pass_adaptive:
                 # Live scan or Repeat N: keep only the most recent pass for
@@ -2181,6 +2298,9 @@ class DeviceService:
             conn = await self._ensure_conn()
             cmd = self._build_raster_cmd(req)
             latency = self._chunk_latency("raster", req.latency_bytes, cmd)
+            logger.info("[raster] scan geometry roi=%s regions=%s command=%s max_pipeline=%s latency=%s continuous=%s",
+                        req.roi, req.parallel_rois, type(cmd).__name__, getattr(cmd, "_max_pipeline", None),
+                        latency, getattr(cmd, "continuous", False))
             # Log effective params (post-override) — what actually goes to
             # the macro — rather than just the raw request. Makes it easy
             # to confirm a streamData.json default landed where it should.
@@ -2349,6 +2469,9 @@ class DeviceService:
             conn = await self._ensure_conn()
             cmd = self._build_vector_cmd(req)
             latency = self._chunk_latency("vector", req.latency_bytes, cmd)
+            logger.info("[vector] scan geometry roi=%s regions=%s command=%s max_pipeline=%s latency=%s continuous=%s",
+                        req.roi, req.parallel_rois, type(cmd).__name__, getattr(cmd, "_max_pipeline", None),
+                        latency, getattr(cmd, "continuous", False))
             adaptive_feedback = getattr(cmd, "_adaptive_gray_feedback", None)
 
             if req.pre_process and hasattr(cmd, "_pre_process_chunks"):

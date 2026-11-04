@@ -286,7 +286,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <ul className="dwell-help__list">
         <li><strong>較小的延遲（如 4 096）</strong> — 資料區塊更多，每次掃描 USB 往返次數更多，吞吐量較低。中止與掃描中的 UI 更新回應更快，因為接收方在兩區塊之間會檢查中止旗標。</li>
         <li><strong>較大的延遲（如 32 768）</strong> — 資料區塊更少，吞吐量更高，傳輸中峰值主機記憶體略高。掃描中的中止回應可能延後最多一個區塊的時間。</li>
-        <li><strong>發送器流水線</strong> — OUT 端點上同一時刻最多可以有 <code>max_pipeline</code> 個資料區塊在傳輸中（光柵 32，矢量 4）。當延遲與 max_pipeline 都很大時，傳輸中視窗可能超過 FX2 OUT FIFO 並停滯 — 巨集已為此做了預先調整，通常無需手動更動 max_pipeline。</li>
+        <li><strong>發送器流水線</strong> — OUT 端點上同一時刻最多可以有 <code>max_pipeline</code> 個資料區塊在傳輸中（光柵和矢量均為 8）。當延遲與 max_pipeline 都很大時，傳輸中視窗可能超過 FX2 OUT FIFO 並停滯 — 巨集已為此做了預先調整，通常無需手動更動 max_pipeline。</li>
       </ul>
 
       <div className="dwell-help__table-wrap">

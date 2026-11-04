@@ -308,6 +308,14 @@ function validateAdcTiming(data: unknown): void {
   const actionData = streamData ? asRecord(streamData.actionData) : null;
   if (!actionData) return;
 
+  for (const name of ["rasterScan", "vectorScan"]) {
+    const scan = asRecord(actionData[name]);
+    const pipeline = scan?.max_pipeline !== undefined ? scan.max_pipeline : scan?.maxPipeline;
+    if (pipeline !== undefined && (!Number.isInteger(pipeline) || (pipeline as number) < 1)) {
+      throw new ConfigError(`${name}.max_pipeline must be a positive integer`);
+    }
+  }
+
   const halfPeriod = actionData.adcHalfPeriod ?? 3;
   const settleCycles = actionData.adcSettleCycles ?? 1;
   const latchCycles = actionData.adcLatchCycles ?? 1;

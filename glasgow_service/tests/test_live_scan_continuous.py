@@ -388,10 +388,12 @@ def _live_gray_service(*, parallel=False):
     return service, owner, command, req
 
 
-def test_live_target_change_and_clear_take_effect_on_same_command():
+def test_live_target_source_change_and_clear_take_effect_on_same_command():
     async def scenario():
         service, owner, command, req = _live_gray_service()
-        chunks = service._simulated_chunks("vector", req, command, pace=True)
+        # Test the feedback encoder independently of the transport FIFO; the
+        # queue regression tests cover delayed delivery of encoded samples.
+        chunks = service._simulated_source_chunks("vector", req, command, pace=True)
         try:
             assert (await anext(chunks))[0] == 120 * 256
             service.update_live_scan_geometry("vector", {"gray_rule": {

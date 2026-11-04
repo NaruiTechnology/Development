@@ -43,7 +43,7 @@ export function fullCanvasImageExtent(
 const SCALE_STEPS = [8, 6, 5, 4, 3, 2, 1.5, 1];
 
 /** A readable scale occupying at most one quarter of the image width. */
-export function imageScale(extent: ImageExtent | null, rotate90 = false) {
+export function imageScale(extent: ImageExtent | null, rotate90 = false, zoom = 1) {
   if (!extent) return null;
   const span = rotate90 ? extent.y : extent.x;
   if (!Number.isFinite(span) || span <= 0) return null;
@@ -52,10 +52,12 @@ export function imageScale(extent: ImageExtent | null, rotate90 = false) {
   const value = SCALE_STEPS.map((step) => step * magnitude).find((step) => step <= target);
   if (!value || !Number.isFinite(value)) return null;
   const metres: Record<string, number> = { m: 1, mm: 1e-3, um: 1e-6, "µm": 1e-6, "μm": 1e-6, nm: 1e-9 };
-  let displayValue = value;
+  const effectiveZoom = Number.isFinite(zoom) && zoom >= 1 ? zoom : 1;
+  const scaledValue = value / effectiveZoom;
+  let displayValue = scaledValue;
   let unit = extent.unit;
   if (metres[unit]) {
-    const length = value * metres[unit];
+    const length = scaledValue * metres[unit];
     const best = ([["m", 1], ["mm", 1e-3], ["µm", 1e-6], ["nm", 1e-9]] as const)
       .find(([, factor]) => length >= factor * (1 - 1e-12)) ?? ["nm", 1e-9];
     unit = best[0];

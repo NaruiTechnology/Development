@@ -115,7 +115,11 @@ export function useScanStream() {
     const ws = wsRef.current;
     if (!geometryReadyRef.current || !ws || ws.readyState !== WebSocket.OPEN) return;
     for (const update of pendingGeometryUpdatesRef.current) {
-      ws.send(JSON.stringify({ event: "update_geometry", ...update }));
+      const bounds = "roi" in update.geometry
+        ? { roi: update.geometry.roi, parallel_rois: update.geometry.parallel_rois }
+        : { grayRule: true };
+      console.info("[scan] sending live geometry", { id: update.id, ...scanRegionsRef.current, ...bounds });
+      ws.send(JSON.stringify({ event: "update_geometry", ...update, diagnostics: scanRegionsRef.current }));
     }
     pendingGeometryUpdatesRef.current = [];
   }, []);

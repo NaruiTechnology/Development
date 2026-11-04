@@ -229,7 +229,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <ul className="dwell-help__list">
         <li><strong>Smaller latency (e.g. 4 096)</strong> — more chunks, more USB round-trips per scan, lower throughput. Aborts and mid-scan UI updates land sooner, since the receiver checks the abort flag between chunks.</li>
         <li><strong>Larger latency (e.g. 32 768)</strong> — fewer chunks, better throughput, slightly higher peak host memory in flight. Mid-scan aborts can take up to one chunk longer to land.</li>
-        <li><strong>Sender pipeline</strong> — up to <code>max_pipeline</code> (32 for raster, 4 for vector) chunks can be in flight on the OUT endpoint at once. At large latency × large max_pipeline the in-flight window can exceed the FX2 OUT FIFO and stall — the macros pre-tune for this, so you don&apos;t normally need to touch max_pipeline.</li>
+        <li><strong>Sender pipeline</strong> — up to <code>max_pipeline</code> (8 for raster and vector) chunks can be in flight on the OUT endpoint at once. At large latency × large max_pipeline the in-flight window can exceed the FX2 OUT FIFO and stall — the macros pre-tune for this, so you don&apos;t normally need to touch max_pipeline.</li>
       </ul>
 
       <div className="dwell-help__table-wrap">

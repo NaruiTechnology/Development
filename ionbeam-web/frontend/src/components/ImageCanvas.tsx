@@ -1052,8 +1052,8 @@ export function ImageCanvas({
     (kind === "vector" || kind === "raster")
       ? selectionPixelSize(scanBasePixelSize, activeRegion, roi, scanEdge)
       : scanBasePixelSize;
-  // The scale bar describes the full canvas field and nothing else. Adding,
-  // moving or removing an ROI, and changing Zoom, must not change it.
+  // Keep the bar width anchored to full-field calibration; live Zoom changes
+  // only its label. ROI overlays do not change the full-canvas scale.
   const imageExtent = fullCanvasImageExtent(roi, globalPixelSize);
   imageExtentRef.current = imageExtent;
   const current = currentBeamPosition({
@@ -1997,7 +1997,7 @@ export function ImageCanvas({
             <ScanRegionOverlay disabled={!streamRestarting && (phase === "stopping" || (phase === "running" && !infiniteActive))} />
           )}
           {liveScanParamItems && !mergedFigureUrl && <ScanParamChip items={liveScanParamItems} t={t} />}
-          {!targetParked && hasRenderedCanvasImage && <ImageScaleChip extent={imageExtent} rotate90={streamTransforms.rotate90} />}
+          {!targetParked && hasRenderedCanvasImage && <ImageScaleChip extent={imageExtent} rotate90={streamTransforms.rotate90} zoom={roi.scan_zoom} />}
           {displayedFigureUrl && (
             <img
               className="server-figure"
@@ -2621,8 +2621,8 @@ function LiveAxisOverlay({
   );
 }
 
-function ImageScaleChip({ extent, rotate90 = false }: { extent: ImageExtent | null; rotate90?: boolean }) {
-  const scale = imageScale(extent, rotate90);
+function ImageScaleChip({ extent, rotate90 = false, zoom = 1 }: { extent: ImageExtent | null; rotate90?: boolean; zoom?: number }) {
+  const scale = imageScale(extent, rotate90, zoom);
   if (!scale) return null;
   return (
     <div className="canvas-image-scale" role="img" aria-label={scale.label} style={{ width: `calc(${scale.fraction * 100}% + 22px)` }}>
