@@ -5,7 +5,7 @@ import { Provider, useSelector } from "react-redux";
 import { act, create } from "react-test-renderer";
 import { createServer } from "vite";
 
-test("live Parallel changes rebuild both scan layouts, preserve pixels, and honor Stop", async () => {
+test("live ROI and Parallel changes rebuild both scan layouts, preserve pixels, and honor Stop", async () => {
   const originals = Object.fromEntries(["window", "fetch", "WebSocket", "requestAnimationFrame", "cancelAnimationFrame"]
     .map((key) => [key, globalThis[key]]));
   const sockets = [];
@@ -21,9 +21,12 @@ test("live Parallel changes rebuild both scan layouts, preserve pixels, and hono
   globalThis.requestAnimationFrame = window.requestAnimationFrame;
   globalThis.cancelAnimationFrame = window.cancelAnimationFrame;
   const abortCalls = [];
-  globalThis.fetch = async (url) => {
+  globalThis.fetch = async (url, init) => {
     if (String(url).includes("/api/scan/abort")) abortCalls.push(String(url));
     let body = null;
+    if (String(url).endsWith("/api/scan/queues") && init?.method === "POST") {
+      body = { id: "test-queue", status: "queued", next_index: 0, total: JSON.parse(init.body).entries.length };
+    }
     if (String(url).includes("current-account")) {
       if (delayPrivilege) await delayPrivilege;
       body = { ok: true, registered: true, user: { is_active: true, role: 5 } };
@@ -65,6 +68,9 @@ test("live Parallel changes rebuild both scan layouts, preserve pixels, and hono
     }
     const render = (kind) => React.createElement(Provider, { store }, React.createElement(Harness, { kind }));
     const toggle = () => renderer.root.findByProps({ className: "checkbox vacuum-switch app-switch scan-parallel-toggle" }).findByType("input");
+    const roiToggle = () => renderer.root.findAllByType("input").find((node) =>
+      node.props.checked === store.getState().scan.roi.roi_scan_enabled &&
+      node.parent.props.className?.includes("scan-roi-toggle"));
     // Resolve translated labels from the component's actual i18n source.
     const { translate } = await vite.ssrLoadModule("/src/i18n/index.ts");
     const buttonByTitle = (key) => renderer.root.findAllByType("button").find((node) => node.props.title === translate("en", key));
@@ -96,6 +102,21 @@ test("live Parallel changes rebuild both scan layouts, preserve pixels, and hono
       assert.equal(sockets.at(-1).requests[0].parallel_rois.length, 2);
       assert.equal(toggle().props.disabled, false);
       assert.equal(toggle().props.checked, true);
+      // ROI mode can change on the running stream in both directions.
+      const savedRegions = store.getState().scan.roi.scan_regions;
+      assert.equal(roiToggle().props.disabled, false);
+      await act(async () => { roiToggle().props.onChange({ target: { checked: false } }); });
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+      await act(async () => {});
+      assert.equal(store.getState().scan.phase, "running");
+      assert.equal(sockets.at(-1).requests[0].roi ?? null, null);
+      assert.equal(sockets.at(-1).requests[0].parallel_rois ?? null, null);
+      assert.equal(store.getState().scan.roi.scan_regions, savedRegions);
+      assert.equal(kind === "raster" ? store.getState().image.frame : store.getState().image.vectorImage, pixels);
+      await act(async () => { roiToggle().props.onChange({ target: { checked: true } }); });
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+      await act(async () => {});
+      assert.equal(sockets.at(-1).requests[0].parallel_rois.length, 2);
       // Stop cancels a scheduled handover instead of resurrecting the live scan.
       await act(async () => {
         toggle().props.onChange({ target: { checked: false } });
@@ -105,6 +126,31 @@ test("live Parallel changes rebuild both scan layouts, preserve pixels, and hono
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 400)); });
       assert.equal(sockets.length, stoppedAt);
       assert.equal(store.getState().scan.phase, "idle");
+      // Single scans also hand over without becoming infinite scans.
+      await act(async () => { await buttonByTitle("scan.run.title.start").props.onClick(); });
+      assert.equal(roiToggle().props.disabled, false);
+      await act(async () => { roiToggle().props.onChange({ target: { checked: false } }); });
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+      await act(async () => {});
+      assert.equal(store.getState().scan.phase, "running");
+      assert.equal(store.getState().scan.infiniteActive, false);
+      assert.equal(sockets.at(-1).requests[0].roi ?? null, null);
+      assert.equal(sockets.at(-1).requests[0].parallel_rois ?? null, null);
+      await act(async () => { roiToggle().props.onChange({ target: { checked: true } }); });
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+      await act(async () => {});
+      assert.ok(sockets.at(-1).requests[0].roi || sockets.at(-1).requests[0].parallel_rois?.length === 2);
+      assert.equal(store.getState().scan.infiniteActive, false);
+      // Stop cancels an ROI mode change before its handover starts.
+      await act(async () => {
+        roiToggle().props.onChange({ target: { checked: false } });
+        buttonByTitle("scan.stop.title").props.onClick();
+      });
+      const roiStoppedAt = sockets.length;
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+      assert.equal(sockets.length, roiStoppedAt);
+      assert.equal(store.getState().scan.phase, "idle");
+      await act(async () => { store.dispatch(scan.setROIScanEnabled(true)); });
       await act(async () => { renderer.unmount(); });
       renderer = null;
     }
@@ -114,13 +160,18 @@ test("live Parallel changes rebuild both scan layouts, preserve pixels, and hono
     delayPrivilege = new Promise((resolve) => { allowPrivilege = resolve; });
     let starting;
     await act(async () => { starting = buttonByTitle("scan.infinite.title").props.onClick(); });
-    await act(async () => { toggle().props.onChange({ target: { checked: false } }); });
+    await act(async () => {
+      toggle().props.onChange({ target: { checked: false } });
+      roiToggle().props.onChange({ target: { checked: false } });
+    });
     delayPrivilege = null;
     await act(async () => { allowPrivilege(); await starting; });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 400)); });
     await act(async () => {});
     assert.equal(sockets.at(-1).requests[0].parallel_rois ?? null, null);
     assert.equal(toggle().props.checked, false);
+    assert.equal(roiToggle().props.checked, false);
+    assert.equal(sockets.at(-1).requests[0].roi ?? null, null);
     await act(async () => { buttonByTitle("scan.stop.title").props.onClick(); });
     await act(async () => { renderer.unmount(); });
     renderer = null;
@@ -254,9 +305,15 @@ test("live sequential zoom edits keep updating after the Parallel switch is turn
     const beforeZoomROI = sockets.at(-1).requests.at(-1)?.roi ?? null;
     assert.ok(beforeZoomROI && beforeZoomROI.x_end > beforeZoomROI.x_start, "the restarted live sequence is using sequential ROI geometry");
     await act(async () => { await zoomInput().props.onValueChange("2"); });
+    // Sequential geometry is applied when the next region starts, after the
+    // active pass closes; the request already on the wire stays unchanged.
+    await act(async () => {
+      sockets.at(-1).onmessage({ data: JSON.stringify({ event: "done", chunks: 0 }) });
+      sockets.at(-1).close();
+    });
     const afterZoomROI = sockets.at(-1).requests.at(-1)?.roi ?? null;
     assert.ok(afterZoomROI && afterZoomROI.x_end - afterZoomROI.x_start < beforeZoomROI.x_end - beforeZoomROI.x_start,
-      "the sequential live scan must apply the new Zoom to the active ROI");
+      "the next sequential ROI pass must use the new Zoom");
     assert.equal(store.getState().scan.roi.scan_zoom, 2);
     await act(async () => { button("scan.stop.title").props.onClick(); });
   } finally {

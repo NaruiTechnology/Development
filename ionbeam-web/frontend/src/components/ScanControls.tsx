@@ -262,6 +262,11 @@ export function ScanControls({
   const vectorImageFilled = useAppSelector((s) => s.image.vectorFilled);
   const preview = useAppSelector((s) => s.scan.preview);
   const roiState = useAppSelector((s) => s.scan.roi);
+  const activeScanRegions = useMemo(
+    () => roiState.roi_scan_enabled ? roiState.scan_regions : [],
+    [roiState.roi_scan_enabled, roiState.scan_regions],
+  );
+  const runningROIScanEnabledRef = useRef(roiState.roi_scan_enabled);
   const [parallelRegions, setParallelRegions] = useState(false);
   const runningParallelRegionsRef = useRef(false);
   const [roiControlsCollapsed, setROIControlsCollapsed] = useState(true);
@@ -286,7 +291,7 @@ export function ScanControls({
       window.removeEventListener("focus", refresh);
     };
   }, [phase]);
-  const canParallelRegions = roiState.scan_regions.length > 1;
+  const canParallelRegions = activeScanRegions.length > 1;
   useEffect(() => {
     setParallelRegions(canParallelRegions);
   }, [canParallelRegions]);
@@ -317,7 +322,7 @@ export function ScanControls({
   const sequentialZoomTimerRef = useRef<number | null>(null);
   const sequentialBaseZoomRef = useRef<number | null>(null);
   const zoomUpdateGenerationRef = useRef(0);
-  const previousScanRegionsRef = useRef(roiState.scan_regions);
+  const previousScanRegionsRef = useRef(activeScanRegions);
   const autoRestartTimesRef = useRef<number[]>([]);
   const suppressRegionRollbackRef = useRef(false);
   const regionUpdateGenerationRef = useRef(0);
@@ -336,8 +341,8 @@ export function ScanControls({
   // current ROIs and the DAC capacity. Recomputed whenever any of them change.
   const scanResolution = kind === "raster" ? raster.resolution : vector.vector_resolution;
   const scanAssessment = useMemo(
-    () => assessScan(roiState.scan_regions, roiState.scan_zoom, roiState, scanResolution),
-    [roiState.scan_regions, roiState.scan_zoom, roiState.x_origin, roiState.x_end, roiState.y_origin, roiState.y_end,
+    () => assessScan(activeScanRegions, roiState.scan_zoom, roiState, scanResolution),
+    [activeScanRegions, roiState.scan_zoom, roiState.x_origin, roiState.x_end, roiState.y_origin, roiState.y_end,
       roiState.scanGeometry, scanResolution],
   );
   const zoomMaximum = scanAssessment.maxZoom;
@@ -345,7 +350,7 @@ export function ScanControls({
   const [typedZoomIssue, setTypedZoomIssue] = useState<ScanIssue | null>(null);
   useEffect(() => {
     setTypedZoomIssue(null);
-  }, [scanResolution, roiState.scan_regions]);
+  }, [scanResolution, activeScanRegions]);
   const targetGrayRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
   const vectorPixelFallbackBlank = (() => {
     const vectorParams = defaults?.vector_params;
@@ -646,6 +651,7 @@ export function ScanControls({
 
   async function startRunRequest(repeatRegions = false, preserveCurrentFrame = false) {
     if (startBlocked || scanHasErrors) return;
+    runningROIScanEnabledRef.current = roiState.roi_scan_enabled;
     if (repeatRegions) runningParallelRegionsRef.current = parallelRegions;
     // Every run acquires only its requested regions. Preserve existing pixels
     // outside the ROI instead of sending an extra full-field pass to the DAC.
@@ -665,11 +671,11 @@ export function ScanControls({
     }
     if (kind === "raster") {
       try {
-        const regions = effectiveScanRegions(roiState.scan_regions, roiState.scan_zoom, roiState);
-        const displayRegions = roiState.scan_regions.length
-          ? roiState.scan_regions.map((region) => worldSelectionToDacROI(region, roiState))
+        const regions = effectiveScanRegions(activeScanRegions, roiState.scan_zoom, roiState);
+        const displayRegions = activeScanRegions.length
+          ? activeScanRegions.map((region) => worldSelectionToDacROI(region, roiState))
           : [null];
-        const roiAreaDefined = roiState.scan_regions.length > 0 || roiState.selection !== null;
+        const roiAreaDefined = roiState.roi_scan_enabled && (activeScanRegions.length > 0 || roiState.selection !== null);
         // ROI samples only replace their rectangle; keep the previous scan
         // outside it in both hardware and simulation modes.
         const rasterBackground = roiAreaDefined && rasterImageFilled > 0
@@ -713,11 +719,11 @@ export function ScanControls({
       }
     } else {
       try {
-        const regions = effectiveScanRegions(roiState.scan_regions, roiState.scan_zoom, roiState);
-        const displayRegions = roiState.scan_regions.length
-          ? roiState.scan_regions.map((region) => worldSelectionToDacROI(region, roiState))
+        const regions = effectiveScanRegions(activeScanRegions, roiState.scan_zoom, roiState);
+        const displayRegions = activeScanRegions.length
+          ? activeScanRegions.map((region) => worldSelectionToDacROI(region, roiState))
           : [null];
-        const roiAreaDefined = roiState.scan_regions.length > 0 || roiState.selection !== null;
+        const roiAreaDefined = roiState.roi_scan_enabled && (activeScanRegions.length > 0 || roiState.selection !== null);
         const vectorBackground = roiAreaDefined && vectorImageFilled > 0
           ? resizeImageFrame(vectorImageFrame, vectorImageEdge, vector.vector_resolution)
           : null;
@@ -760,11 +766,12 @@ export function ScanControls({
 
   async function startInfiniteRequest(preserveCurrentFrame = false) {
     if ((kind !== "raster" && kind !== "vector") || startBlocked || infiniteScanActiveRef.current || scanHasErrors) return;
+    runningROIScanEnabledRef.current = roiState.roi_scan_enabled;
     runningParallelRegionsRef.current = parallelRegions;
     // A Live scan with ROI(s) acquires those region(s) only, from the first
     // frame and at the current Zoom. Pixels outside the ROI are never scanned;
     // the canvas keeps whatever frame it already shows there.
-    const scanRegionsNow = roiState.scan_regions;
+    const scanRegionsNow = activeScanRegions;
     if (scanRegionsNow.length > 1 && !parallelRegions) {
       await startRunRequest(true, preserveCurrentFrame);
       return;
@@ -830,7 +837,7 @@ export function ScanControls({
       const region = regions[Math.min(activeIndex, regions.length - 1)] ?? null;
       const selectedRegion = scanRegionsNow[Math.min(activeIndex, scanRegionsNow.length - 1)] ?? null;
       const displayROI = selectedRegion ? worldSelectionToDacROI(selectedRegion, roiState) : null;
-      const roiAreaDefined = scanRegionsNow.length > 0 || roiState.selection !== null;
+      const roiAreaDefined = roiState.roi_scan_enabled && (scanRegionsNow.length > 0 || roiState.selection !== null);
       let entry: InfiniteScanEntry;
       if (kind === "raster") {
         const initialFrame = !isProduction && roiState.imageDataUrl
@@ -931,7 +938,7 @@ export function ScanControls({
     // A zoom above the allowed maximum is not applied: the technical reason
     // replaces the "Max zoom" message above the Zoom control.
     const typed = zoom > zoomMaximum
-      ? assessTypedZoom(roiState.scan_regions, zoom, roiState, scanResolution)
+      ? assessTypedZoom(activeScanRegions, zoom, roiState, scanResolution)
       : null;
     setTypedZoomIssue(typed);
     if (typed) { zoomTrace("exit: above max zoom", { zoom, zoomMaximum }); return; }
@@ -944,9 +951,9 @@ export function ScanControls({
     }
     const liveEntry = infiniteScanRef.current;
     if (infiniteScanActiveRef.current) {
-      const regions = effectiveScanRegions(roiState.scan_regions, zoom, roiState);
+      const regions = effectiveScanRegions(activeScanRegions, zoom, roiState);
       const dacRegions = regions.map((region) => region ? worldSelectionToDacROI(region, roiState) : null);
-      const displayRegionsForZoom = roiState.scan_regions.map((region) => worldSelectionToDacROI(region, roiState));
+      const displayRegionsForZoom = activeScanRegions.map((region) => worldSelectionToDacROI(region, roiState));
       // Sequential Infinite scans already end each region before starting the
       // next one. Replace their queued DAC bounds without cancelling the
       // region currently on the wire.
@@ -1187,13 +1194,13 @@ export function ScanControls({
 
   useEffect(() => {
     const previous = previousScanRegionsRef.current;
-    const current = roiState.scan_regions;
+    const current = activeScanRegions;
     previousScanRegionsRef.current = current;
     if (previous === current || suppressRegionRollbackRef.current) {
       suppressRegionRollbackRef.current = false;
       return;
     }
-    if (!infiniteScanActiveRef.current) return;
+    if (!infiniteScanActiveRef.current || runningROIScanEnabledRef.current !== roiState.roi_scan_enabled) return;
     // An invalid plan (see the message above Zoom) is never sent to a running scan.
     if (scanHasErrors) return;
     // The service cannot change the region count of a running continuous
@@ -1285,7 +1292,7 @@ export function ScanControls({
       suppressRegionRollbackRef.current = true;
       changed.forEach((index) => dispatch(updateScanRegion({ index, region: previous[index] })));
     }
-  }, [roiState.scan_regions]);
+  }, [activeScanRegions]);
 
   // `delayMs` debounces rapid Zoom edits; a discrete switch such as Parallel
   // passes 0 so the new layout starts as soon as the running stream is stopped.
@@ -1307,6 +1314,13 @@ export function ScanControls({
       stream.stop();
     }, delayMs);
   }
+
+  // Switching ROI mode rebuilds the request and its display mapping together.
+  // Compare again after startup so edits during request preparation are applied.
+  useEffect(() => {
+    if (streamRestarting || phase !== "running" || runningROIScanEnabledRef.current === roiState.roi_scan_enabled) return;
+    scheduleZoomRestart(infiniteScanActiveRef.current ? "infinite" : "single", 0);
+  }, [roiState.roi_scan_enabled, phase, infiniteScanActive, streamRestarting]);
 
   // A mode change alters the stream layout (interleaved samples versus a
   // sequence of ROI passes). Hand over through the existing live restart path.
@@ -1365,7 +1379,7 @@ export function ScanControls({
     }
     if (kind === "raster") {
       try {
-        const regions = effectiveScanRegions(roiState.scan_regions, roiState.scan_zoom, roiState);
+        const regions = effectiveScanRegions(activeScanRegions, roiState.scan_zoom, roiState);
         const requests = await Promise.all(regions.map((region) => rasterRequestWithBitmapSelection(
           { ...raster, roi: region },
           { ...roiState, selection: region },
@@ -1399,7 +1413,7 @@ export function ScanControls({
     }
     else {
       try {
-        const regions = effectiveScanRegions(roiState.scan_regions, roiState.scan_zoom, roiState);
+        const regions = effectiveScanRegions(activeScanRegions, roiState.scan_zoom, roiState);
         const requests = await Promise.all(regions.map((region) => buildVectorRequest(region)));
         const runRequests = parallelRegions && requests.length > 1
           ? [combineVectorRegions(requests)]
@@ -1593,7 +1607,7 @@ export function ScanControls({
       dispatch(setStreamRestarting(false));
       return;
     }
-    const restart = pendingZoomRestart === "infinite" ? startInfiniteRequest(true) : startRunRequest();
+    const restart = pendingZoomRestart === "infinite" ? startInfiniteRequest(true) : startRunRequest(false, true);
     void restart.finally(() => dispatch(setStreamRestarting(false)));
   }, [disabled, pendingZoomRestart, phase, zoomDisabled, streamRestarting]);
 
@@ -1758,7 +1772,7 @@ export function ScanControls({
               <input
                 type="checkbox"
                 checked={roiState.roi_scan_enabled}
-                disabled={controlsDisabled}
+                disabled={zoomDisabled || closing || settingsSaving || backendRestarting || targetGrayRunning}
                 onChange={(event) => dispatch(setROIScanEnabled(event.target.checked))}
               />
               <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>

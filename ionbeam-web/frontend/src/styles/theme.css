@@ -4038,6 +4038,20 @@ body {
   height: 12px;
   pointer-events: auto;
 }
+
+.scan-roi-layer__dimensions {
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  transform: translateX(-50%);
+  padding: 3px 5px;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 65%);
+  color: yellow;
+  font: 11px/1.3 ui-monospace, monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .scan-roi-layer__handle::after {
   content: "";
   position: absolute;
@@ -7953,7 +7967,7 @@ body {
   pointer-events: none;
 }
 .texture-measurement-length {
-  fill: red;
+  fill: lawngreen;
   font-size: 12px;
   font-family: var(--font-mono);
   stroke: none;

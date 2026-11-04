@@ -122,7 +122,7 @@ export function TextureMeasurements({ frameRef, edge, extent, rotate90, enabled,
         <line
           x1={`${line.start.x * 100}%`} y1={`${line.start.y * 100}%`}
           x2={`${line.end.x * 100}%`} y2={`${line.end.y * 100}%`}
-          stroke="red" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+          stroke="lawngreen" strokeWidth="1" vectorEffect="non-scaling-stroke" />
         {index < lines.length && <text className="texture-measurement-length"
           x={`${(line.start.x + line.end.x) * 50}%`}
           y={`${(line.start.y + line.end.y) * 50}%`}

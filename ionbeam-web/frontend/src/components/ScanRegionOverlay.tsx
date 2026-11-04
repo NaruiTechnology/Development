@@ -98,6 +98,11 @@ export function ScanRegionOverlay({ disabled, moveOnly = false }: { disabled: bo
     };
   }
 
+  function dimensionsFor(region: ROIRequest) {
+    const unit = roi.scale_unit === "um" ? "µm" : roi.scale_unit;
+    return `W: ${Math.abs(region.x_end - region.x_start).toFixed(2)} ${unit} × H: ${Math.abs(region.y_end - region.y_start).toFixed(2)} ${unit}`;
+  }
+
   return (
     <div
       ref={layerRef}
@@ -173,6 +178,7 @@ export function ScanRegionOverlay({ disabled, moveOnly = false }: { disabled: bo
           style={styleFor(region)}
         >
           <span>{index + 1}</span>
+          <div className="scan-roi-layer__dimensions">{dimensionsFor(region)}</div>
           {!disabled && active === index && (["nw", "ne", "sw", "se"] as const).map((corner) => (
             <i key={corner} className={`scan-roi-layer__handle scan-roi-layer__handle--${corner}`}
               data-roi-handle={corner} data-roi-index={index} />
@@ -180,7 +186,9 @@ export function ScanRegionOverlay({ disabled, moveOnly = false }: { disabled: bo
         </div>
       ))}
       {interaction?.kind === "create" && draft && (
-        <div className="scan-roi-layer__region scan-roi-layer__region--draft" style={styleFor(draft)} />
+        <div className="scan-roi-layer__region scan-roi-layer__region--draft" style={styleFor(draft)}>
+          <div className="scan-roi-layer__dimensions">{dimensionsFor(draft)}</div>
+        </div>
       )}
       {menu && (
         <div className="canvas-editor__menu scan-roi-layer__menu" style={{ left: menu.x, top: menu.y }}>

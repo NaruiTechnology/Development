@@ -2382,7 +2382,7 @@ function clearCanvas(canvas: HTMLCanvasElement) {
 
 
 function activeROIRegion(roi: ROIState): ROIRequest {
-  const regions = effectiveScanRegions(roi.scan_regions, roi.scan_zoom, roi);
+  const regions = effectiveScanRegions(roi.roi_scan_enabled ? roi.scan_regions : [], roi.scan_zoom, roi);
   return regions[roi.active_scan_region ?? 0] ?? regions[0] ?? {
     x_start: roi.x_origin,
     x_end: roi.x_end,

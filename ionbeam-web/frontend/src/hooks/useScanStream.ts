@@ -135,7 +135,8 @@ export function useScanStream() {
   const beamEnergyEv = useAppSelector((s: RootState) => s.scan.beamEnergyEv);
   const beamEnergyEvRef = useRef(beamEnergyEv);
   beamEnergyEvRef.current = beamEnergyEv;
-  const scanRegionCount = useAppSelector((s: RootState) => s.scan.roi.scan_regions.length);
+  const scanRegionCount = useAppSelector((s: RootState) =>
+    s.scan.roi.roi_scan_enabled ? s.scan.roi.scan_regions.length : 0);
   const scanZoom = useAppSelector((s: RootState) => s.scan.roi.scan_zoom);
   const scanRegionsRef = useRef({ regionCount: scanRegionCount, zoom: scanZoom });
   scanRegionsRef.current = { regionCount: scanRegionCount, zoom: scanZoom };
