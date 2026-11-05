@@ -196,3 +196,52 @@ def test_theme_and_locale_switch(h):
         ctl.set_locale(loc)
         h.pump(0.2)
     assert h.win.top_btns["scan"].text() == "Scan"
+
+
+def test_processing_tab_cards_and_ring_drawing(h):
+    from PyQt6.QtCore import QPointF, Qt
+    from PyQt6.QtGui import QMouseEvent
+    from PyQt6.QtCore import QEvent
+
+    w = h.win
+    pp = w.processing_panel
+    assert "processing" in w.top_btns and w.top_btns["processing"].text() == "Processing"
+    w.top_btns["processing"].click()
+    h.pump(0.2)
+    assert w.active_top == "processing" and w.left_stack.currentWidget() is w.left_pages["processing"]
+    assert pp.tool.enabled and w.right_stack.currentWidget() is w.roi_canvas
+    # cards come from the JSON, skipped entries have none, all start collapsed
+    assert list(pp.cards) == ["solidBox", "openBox", "stairCut", "cleaningLine", "ring", "freeHand"]
+    assert all(c.collapsed for c in pp.cards.values())
+    # clicking an icon expands that card and collapses the siblings; clicking again disarms
+    pp.buttons["openBox"].click()
+    assert [k for k, c in pp.cards.items() if not c.collapsed] == ["openBox"]
+    pp.buttons["ring"].click()
+    assert [k for k, c in pp.cards.items() if not c.collapsed] == ["ring"] and pp.active_key == "ring"
+    # draw a ring: drag centre -> outer circle, then click the inner circle
+    cv = w.roi_canvas.view
+    r = cv.rect640()
+
+    def at(x, y):
+        return QPointF(r.left() + x * r.width() / 640, r.top() + y * r.width() / 640)
+
+    def ev(kind, pos, btn=Qt.MouseButton.LeftButton):
+        return QMouseEvent(kind, pos, cv.mapToGlobal(pos), btn, btn, Qt.KeyboardModifier.NoModifier)
+
+    ed = w.roi_canvas
+    c, outer, inner = at(320, 320), at(420, 320), at(360, 320)
+    ed.mouse_press(ev(QEvent.Type.MouseButtonPress, c))
+    ed.mouse_move(ev(QEvent.Type.MouseMove, outer))
+    ed.mouse_release(ev(QEvent.Type.MouseButtonRelease, outer))
+    assert pp.tool.ring_stage == 1 and pp.models["ring"].roi is None
+    ed.mouse_move(ev(QEvent.Type.MouseMove, inner))
+    ed.mouse_press(ev(QEvent.Type.MouseButtonPress, inner))
+    ring = pp.models["ring"].roi
+    assert ring and 0 < ring["r_inner"] < ring["r_outer"]
+    assert pp.cards["ring"].readout.text() != "" and "No area" not in pp.cards["ring"].readout.text()
+    # the rectangle ROI tool is not touched while the Processing tab owns the canvas
+    assert w.ctl.scan.roi.selection is None
+    # leaving the tab releases the canvas
+    w.top_btns["scan"].click()
+    h.pump(0.1)
+    assert not pp.tool.enabled

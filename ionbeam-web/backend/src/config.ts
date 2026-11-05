@@ -47,6 +47,7 @@ export interface Config {
   mobilityOnly: boolean;
   staticDir: string;
   configPath: string;
+  processingPatternsPath: string;
   vacuumConfigPath: string;
   sampleStageConfigPath: string;
   adminConfigPath: string;
@@ -88,6 +89,12 @@ const DEFAULT_CONFIG_PATH = path.join(
   "GlasgowDataIO",
   "Json",
   "streamData.json"
+);
+const DEFAULT_PROCESSING_PATTERNS_PATH = path.join(
+  DEPLOY_DEVELOPMENT_ROOT,
+  "GlasgowDataIO",
+  "Json",
+  "processingPatterns.json"
 );
 const DEFAULT_VACUUM_CONFIG_PATH = path.join(
   DEPLOY_DEVELOPMENT_ROOT,
@@ -306,6 +313,8 @@ export const config: Config = {
     process.env.STATIC_DIR ?? "../frontend/dist"
   ),
   configPath: process.env.GLASGOW_CONFIG?.trim() || DEFAULT_CONFIG_PATH,
+  processingPatternsPath:
+    process.env.PROCESSING_PATTERNS_CONFIG?.trim() || DEFAULT_PROCESSING_PATTERNS_PATH,
   vacuumConfigPath:
     process.env.SBC_VACUUM_CONFIG?.trim() || DEFAULT_VACUUM_CONFIG_PATH,
   sampleStageConfigPath:

@@ -2,7 +2,7 @@ import { measuredFieldSpan } from "../lib/dimensionMeasurement";
 import { saveDimensionCalibration } from "../store/dimensionCalibrationSlice";
 import { saveDimensionCalibrationRemote } from "../lib/dimensionCalibrationApi";
 import { selectedEquipmentId } from "../lib/adminActivity";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -100,6 +100,7 @@ export function ROIEditor({
   liveVectorPreview = false,
   hideSelectionOverlay = false,
   graySelectionResetToken = 0,
+  renderCanvasOverlay,
   onLoadLastScan,
   onImageChange,
 }: {
@@ -112,6 +113,8 @@ export function ROIEditor({
   liveVectorPreview?: boolean;
   hideSelectionOverlay?: boolean;
   graySelectionResetToken?: number;
+  /** Extra layer drawn over the canvas (the Processing tab's pattern drawing). Receives pointer/world mapping. */
+  renderCanvasOverlay?: (api: { pointFromClient: (clientX: number, clientY: number) => { x: number; y: number }; toWorld: (point: { x: number; y: number }) => { x: number; y: number } }) => ReactNode;
   onLoadLastScan?: () => void;
   onImageChange?: (imageUrl: string | null) => void;
 }) {
@@ -1781,6 +1784,10 @@ export function ROIEditor({
             height={ROI_CANVAS_EDGE}
             aria-hidden="true"
           />
+          {renderCanvasOverlay?.({
+            pointFromClient: (clientX, clientY) => canvasPointFromClient(clientX, clientY, true),
+            toWorld: toDut,
+          })}
           {ctrlCursor && !roi.calibration_enabled && (
               <span
               className="roi-corner-cursor"
@@ -2303,7 +2310,7 @@ function CoordinateField(props: {
   );
 }
 
-function unitLabel(value: string) {
+export function unitLabel(value: string) {
   return UNITS.find((u) => u.value === value)?.label ?? value;
 }
 

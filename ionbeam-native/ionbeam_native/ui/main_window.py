@@ -32,6 +32,7 @@ from .header import AuthDialog, Footer, Header
 from .image_canvas import ImageCanvasPanel
 from .mag_calibration import MagCalibrationChart, MagCalibrationControls
 from .params import RasterParameters, VectorParameters, VectorScanPathField
+from .processing import ProcessingPanel
 from .report import ManagementReport
 from .roi import ROICalibrationCard, ROIEditorCanvas, ROIEditorControls, ROIScanPreview
 from .scan_controls import ErrorWedge, RunReport, ScanControls
@@ -138,7 +139,8 @@ class MainWindow(QMainWindow):
         tabs = QHBoxLayout()
         tabs.setSpacing(0)
         self.top_btns = {}
-        for key, ic in (("scan", "scan"), ("calibrate", "calibrate"), ("adcTest", "adcTest")):
+        for key, ic in (("scan", "scan"), ("processing", "processing"), ("calibrate", "calibrate"),
+                       ("adcTest", "adcTest")):
             b = QPushButton()
             b.setCheckable(True)
             b.setProperty("kind", "tab")
@@ -195,10 +197,22 @@ class MainWindow(QMainWindow):
         self.dim_cal_card.on_load_last_scan = self.load_last_scan
         dl.addWidget(self.dim_cal_card)
         dl.addStretch(1)
+        # processing page: image loader + the "Patterns" card and the per-pattern cards (processingPatterns.json)
+        proc_page = QWidget()
+        pl = QVBoxLayout(proc_page)
+        pl.setContentsMargins(0, 0, 0, 0)
+        self.proc_controls = ROIEditorControls(ctl)
+        self.proc_controls.on_load_last_scan = self.load_last_scan
+        self.proc_controls.on_clear_image = self._on_clear_image
+        pl.addWidget(self.proc_controls)
+        self.processing_panel = ProcessingPanel(ctl)
+        pl.addWidget(self.processing_panel)
+        pl.addStretch(1)
         self.mag_controls = MagCalibrationControls(ctl)
         self.adc_controls = AdcTestControls(ctl)
         self.left_pages = {"raster": self.raster_params, "vector": self.vector_params, "roi": roi_page,
-                           "dimension": dim_page, "mag": self.mag_controls, "adcTest": self.adc_controls}
+                           "dimension": dim_page, "mag": self.mag_controls, "adcTest": self.adc_controls,
+                           "processing": proc_page}
         for w in self.left_pages.values():
             self.left_stack.addWidget(w)
         self.scan_card.body.addWidget(self.left_stack)
@@ -255,6 +269,8 @@ class MainWindow(QMainWindow):
             c.rendered_image.connect(self._rendered_image)
             c.merged_figure.connect(self._merged_figure)
         self.roi_canvas = ROIEditorCanvas(ctl)
+        self.roi_canvas.pattern_tool = self.processing_panel.tool
+        self.processing_panel.canvas_dirty.connect(self.roi_canvas.view.update)
         self.mag_chart = MagCalibrationChart(ctl)
         self.adc_timeline = AdcTimelineCanvas(ctl)
         self.right_pages = {"raster": self.raster_canvas, "vector": self.vector_canvas, "roi": self.roi_canvas,
@@ -406,8 +422,18 @@ class MainWindow(QMainWindow):
             self.select_kind("mag")
         self.ctl.notify("scan", "roi", "panel", "tabs")
 
+    def _activate_processing(self):
+        """Processing tab: pattern ROIs are drawn on the ROI canvas (kind "roi")."""
+        self.active_top = "processing"
+        self._set_repeat(1)
+        self.ctl.scan.update_roi({"calibration_enabled": False})
+        self.select_kind("roi")
+        self.ctl.notify("scan", "roi", "panel", "tabs")
+
     def _activate_top(self, key: str):
-        if key == "scan":
+        if key == "processing":
+            self._activate_processing()
+        elif key == "scan":
             self.active_top = "scan"
             self._activate_scan_sub(self.scan_sub)
         elif key == "calibrate":
@@ -755,6 +781,7 @@ class MainWindow(QMainWindow):
         disabled = ctl.panel_disabled
         # top / sub tabs
         self.top_btns["scan"].setText(t("tabs.scan"))
+        self.top_btns["processing"].setText(t("tabs.processing"))
         self.top_btns["calibrate"].setText(t("tabs.calibrate"))
         self.top_btns["adcTest"].setText(t("tabs.adcTest"))
         if not ctl.adc_test_enabled and self.active_top == "adcTest":
@@ -763,6 +790,7 @@ class MainWindow(QMainWindow):
         for k, b in self.top_btns.items():
             b.setChecked(k == self.active_top)
         self.top_btns["scan"].setEnabled(not disabled)
+        self.top_btns["processing"].setEnabled(not disabled)
         self.top_btns["calibrate"].setEnabled(not disabled)
         self.top_btns["adcTest"].setEnabled(not ctl.scan_active)
         labels = {"roi": "tabs.roi", "raster": "tabs.raster", "vector": "tabs.vector", "dimension": "tabs.dimensionCal",
@@ -779,12 +807,15 @@ class MainWindow(QMainWindow):
         self.scan_card.set_active(bool(color), color)
         self.controls_card.set_active(bool(color), color)
         # left page
-        page = "adcTest" if self.active_top == "adcTest" else (
-            self.scan_sub if self.active_top == "scan" else self.cal_sub)
+        page = ("adcTest" if self.active_top == "adcTest" else "processing" if self.active_top == "processing" else
+                self.scan_sub if self.active_top == "scan" else self.cal_sub)
+        processing = self.active_top == "processing" and kind == "roi"
+        self.processing_panel.setEnabled(not disabled)
+        self.processing_panel.set_tab_active(processing)
         self.left_stack.setCurrentWidget(self.left_pages[page])
         partial = self.has_partial
         roi_scan_img = self.roi_scan_image()
-        for c in (self.roi_controls, self.dim_controls):
+        for c in (self.roi_controls, self.dim_controls, self.proc_controls):
             c.allow_clear_region_while_disabled = self.roi_action_locked
             c.last_scan_available = roi_scan_img is not None
             c.refresh()
@@ -823,6 +854,7 @@ class MainWindow(QMainWindow):
         self.vector_params.set_gray_filter_active(self.vector_gray_enabled)
         # image column --------------------------------------------------------
         title_key = ("card.adcTimeline" if self.active_top == "adcTest" else
+                     "processing.canvasTitle" if processing else
                      "card.vectorPattern" if (kind == "roi" and self.roi_action_canvas_visible and not gray_filter) else
                      {"raster": "card.rasterImage", "vector": "card.vectorPattern", "mag": "card.magCalibration"}.get(
                          kind, "card.calibration" if roi.calibration_enabled else "card.selectROI"))
@@ -834,7 +866,7 @@ class MainWindow(QMainWindow):
         if grid_key:
             self.grid_switch.setChecked(getattr(roi, grid_key))
         self.grid_switch.setEnabled(not disabled)
-        show_path = kind == "vector" or (kind == "roi" and partial)
+        show_path = kind == "vector" or (kind == "roi" and partial and not processing)
         self.path_switch.setVisible(not_adc and show_path)
         self.path_switch.setText(t("vector.displayScanPath"))
         self.path_switch.setChecked(roi.vector_show_scan_path)
@@ -846,7 +878,7 @@ class MainWindow(QMainWindow):
         self.vgray_switch.setEnabled(not disabled)
         self.vgray_selector.setVisible(not_adc and kind == "vector" and self.vector_gray_enabled)
         self.vgray_selector.set_state(self.vector_gray_range, disabled)
-        show_spec = (not_adc and kind != "vector" and self._show_gray_spectrum()
+        show_spec = (not_adc and not processing and kind != "vector" and self._show_gray_spectrum()
                      and not (kind == "roi" and self.roi_action_canvas_visible and not gray_filter))
         self.spectrum.setVisible(show_spec)
         if show_spec:
@@ -858,7 +890,7 @@ class MainWindow(QMainWindow):
                                     step_delta=self.step_delta,
                                     source_label=gray_scale_source_label_for_kind(src_kind, t),
                                     scope_note=gray_scale_scope_note_for_kind(src_kind, ctl.is_production, t))
-        show_clear = (not_adc and should_show_roi_gray_scale_clear(kind, s.roiGrayScaleSelection is not None)
+        show_clear = (not_adc and not processing and should_show_roi_gray_scale_clear(kind, s.roiGrayScaleSelection is not None)
                       and not (self.roi_action_canvas_visible and not gray_filter))
         self.gray_clear.setVisible(show_clear)
         self.gray_clear.setText(t("scan.clear"))
@@ -877,7 +909,8 @@ class MainWindow(QMainWindow):
                 self.roi_canvas.configure(background=self.active_roi_scan_image(), gray_selection=shown,
                                           gray_skipped=shown_skip,
                                           live_vector_preview=self.roi_action_canvas_visible and gray_filter,
-                                          hide_selection_overlay=self.roi_action_canvas_visible and not gray_filter)
+                                          hide_selection_overlay=processing or (
+                                              self.roi_action_canvas_visible and not gray_filter))
         elif kind == "mag":
             self.right_stack.setCurrentWidget(self.mag_chart)
         elif kind == "raster":
@@ -887,7 +920,8 @@ class MainWindow(QMainWindow):
             if (self.vector_canvas.vector_gray_selection, self.vector_canvas.vector_gray_skipped) != (vgray, vskip):
                 self.vector_canvas.set_vector_gray(vgray, vskip)
         # ROI preview column
-        show_preview = (kind == "roi" and partial and not roi.calibration_enabled and self.active_top != "adcTest")
+        show_preview = (kind == "roi" and partial and not roi.calibration_enabled and self.active_top != "adcTest"
+                        and not processing)
         self.preview_card.setVisible(show_preview and self.route == "control")
         self.preview_card.set_title(t("card.roiPreview"))
         if show_preview:

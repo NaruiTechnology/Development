@@ -8,6 +8,7 @@ import themeReducer from "./themeSlice";
 import localeReducer from "./localeSlice";
 import settingsReducer from "./settingsSlice";
 import magCalibrationReducer from "./magCalibrationSlice";
+import processingReducer from "./processingSlice";
 import dimensionCalibrationReducer, { saveDimensionCalibration } from "./dimensionCalibrationSlice";
 import { persistDimensionCalibration } from "../lib/dimensionCalibrationPersistence";
 
@@ -25,6 +26,7 @@ export const store = configureStore({
     locale: localeReducer,
     settings: settingsReducer,
     magCalibration: magCalibrationReducer,
+    processing: processingReducer,
     dimensionCalibration: dimensionCalibrationReducer,
   },
   // The image slice carries large typed arrays (Uint16Array up to 8 MB for

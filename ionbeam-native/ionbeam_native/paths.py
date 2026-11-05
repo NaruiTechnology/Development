@@ -50,6 +50,14 @@ def stream_config_path() -> Path:
     return development_root() / "GlasgowDataIO" / "Json" / "streamData.json"
 
 
+def processing_patterns_path() -> Path:
+    """processingPatterns.json: IONBEAM_PROCESSING_PATTERNS, else the shared GlasgowDataIO/Json folder."""
+    env = os.environ.get("IONBEAM_PROCESSING_PATTERNS", "").strip()
+    if env and Path(env).expanduser().is_file():
+        return Path(env).expanduser().resolve()
+    return development_root() / "GlasgowDataIO" / "Json" / "processingPatterns.json"
+
+
 def user_data_dir() -> Path:
     base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
     path = Path(base) / "ionbeam-native"

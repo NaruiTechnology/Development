@@ -1,0 +1,168 @@
+{
+    "Header": {
+        "Application": "Ion Beam Processing Patterns",
+        "Version": "1.0.0",
+        "Description": "Pattern catalogue for the native app's Processing tab. Each entry of Patterns is a one-key object: the key is the pattern name, the value selects the data model (a class registered in ionbeam_native.processing.models) and its parameters. Entries with skip=true are not instantiated and get no card. Order is the order of the icons and cards."
+    },
+    "Patterns": [
+        {
+            "solidBox": {
+                "skip": false,
+                "model": "SolidBoxModel",
+                "caption": "Solid box",
+                "icon": "patternSolidBox",
+                "roi": "rect",
+                "parameters": {
+                    "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
+                    "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
+                }
+            }
+        },
+        {
+            "openBox": {
+                "skip": false,
+                "model": "OpenBoxModel",
+                "caption": "Open box",
+                "icon": "patternOpenBox",
+                "roi": "rect",
+                "parameters": {
+                    "lineWidth": {"label": "Line width", "type": "float", "default": 0.5, "min": 0.01, "max": 1000.0, "step": 0.1, "unit": "um"},
+                    "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
+                    "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
+                }
+            }
+        },
+        {
+            "stairCut": {
+                "skip": false,
+                "model": "StairCutModel",
+                "caption": "Stair cut",
+                "icon": "patternStairCut",
+                "roi": "rect",
+                "parameters": {
+                    "steps": {"label": "Steps", "type": "int", "default": 5, "min": 2, "max": 50, "step": 1},
+                    "depth": {"label": "Total depth", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "um"},
+                    "direction": {"label": "Direction", "type": "choice", "default": "down", "choices": ["down", "up", "left", "right"]}
+                }
+            }
+        },
+        {
+            "cleaningLine": {
+                "skip": false,
+                "model": "CleaningLineModel",
+                "caption": "Cleaning line",
+                "icon": "patternCleaningLine",
+                "roi": "rect",
+                "parameters": {
+                    "spacing": {"label": "Line spacing", "type": "float", "default": 0.2, "min": 0.001, "max": 1000.0, "step": 0.05, "unit": "um", "comment": "Later: derived from the beam current / spot size."},
+                    "orientation": {"label": "Orientation", "type": "choice", "default": "horizontal", "choices": ["horizontal", "vertical"]},
+                    "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
+                }
+            }
+        },
+        {
+            "ring": {
+                "skip": false,
+                "model": "RingModel",
+                "caption": "Ring",
+                "icon": "patternRing",
+                "roi": "ring",
+                "parameters": {
+                    "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
+                    "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
+                }
+            }
+        },
+        {
+            "freeHand": {
+                "skip": false,
+                "model": "FreeHandModel",
+                "caption": "Free hand",
+                "icon": "patternFreeHand",
+                "roi": "polygon",
+                "parameters": {
+                    "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
+                    "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1},
+                    "smoothing": {"label": "Point spacing", "type": "float", "default": 2.0, "min": 0.0, "max": 100.0, "step": 0.5, "unit": "px"}
+                }
+            }
+        },
+        {
+            "circuitEdit": {
+                "skip": true,
+                "model": "CircuitEditModel",
+                "caption": "Circuit edit",
+                "icon": "patternSolidBox",
+                "roi": "rect",
+                "comment": "Item 7: needs the Manufacture Data Set (MDS) format first.",
+                "parameters": {}
+            }
+        },
+        {
+            "crossSection": {
+                "skip": true,
+                "model": "CrossSectionModel",
+                "caption": "X-section",
+                "icon": "patternSolidBox",
+                "roi": "rect",
+                "comment": "Item 8: width + depth, auto beam current, drift correction.",
+                "parameters": {}
+            }
+        },
+        {
+            "temPrep": {
+                "skip": true,
+                "model": "TemPrepModel",
+                "caption": "TEM sample prep",
+                "icon": "patternSolidBox",
+                "roi": "rect",
+                "comment": "Item 9: width + depth + final thickness.",
+                "parameters": {}
+            }
+        },
+        {
+            "sliceView": {
+                "skip": true,
+                "model": "SliceViewModel",
+                "caption": "Slice view cut",
+                "icon": "patternSolidBox",
+                "roi": "rect",
+                "comment": "Item 10: width + depth.",
+                "parameters": {}
+            }
+        },
+        {
+            "cadDraw": {
+                "skip": true,
+                "model": "CadDrawModel",
+                "caption": "CAD draw",
+                "icon": "patternSolidBox",
+                "roi": "rect",
+                "comment": "Item 11.",
+                "parameters": {}
+            }
+        },
+        {
+            "imageConversion": {
+                "skip": true,
+                "model": "ImageConversionModel",
+                "caption": "Image conversion",
+                "icon": "patternSolidBox",
+                "roi": "rect",
+                "comment": "Item 12.",
+                "parameters": {}
+            }
+        },
+        {
+            "patternStitching": {
+                "skip": true,
+                "model": "PatternStitchingModel",
+                "caption": "Pattern stitching",
+                "icon": "patternSolidBox",
+                "roi": "rect",
+                "comment": "Item 13: large-area milling.",
+                "parameters": {}
+            }
+        }
+    ]
+}

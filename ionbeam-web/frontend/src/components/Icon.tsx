@@ -37,6 +37,7 @@ type IconName =
   | "magCal"
   | "moon"
   | "pause"
+  | "processing"
   | "play"
   | "plus"
   | "quad"
@@ -117,6 +118,12 @@ const imageSources: Partial<Record<IconName, string>> = {
 };
 
 const paths: Partial<Record<IconName, JSX.Element>> = {
+  processing: (
+    <>
+      <path d="M4 20L9 15M9 15L6 12L12 6L18 12L12 18Z" />
+      <path d="M16 4L20 8" />
+    </>
+  ),
   hand: (
     <>
       <path d="M18 11V7a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v6M10 6a2 2 0 0 0-4 0v9l-2.4-3.2a2 2 0 0 0-3.2 2.4L4 19c1.5 2.1 3.2 3 6 3h2a8 8 0 0 0 8-8V9a2 2 0 0 0-2-2" />

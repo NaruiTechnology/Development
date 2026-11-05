@@ -1,0 +1,201 @@
+/**
+ * Content of the Processing tab: the (not collapsible) "Patterns" card with one icon per pattern, followed by one
+ * collapsible card per pattern. Both are built from the catalogue the backend serves from processingPatterns.json
+ * (entries marked skip never arrive), and every card is bound to its pattern instance in the processing slice.
+ *
+ * Picking an icon expands that pattern's card, collapses all the others and arms drawing on the image canvas
+ * (PatternOverlay); picking it again disarms. Cards start collapsed.
+ */
+import { useEffect, useState } from "react";
+
+import { useTranslation, type TranslationKey } from "../i18n";
+import {
+  MODEL_REGISTRY,
+  type ParameterSpec,
+  type ParameterValue,
+  type PatternRoi,
+  type PatternSpec,
+  type PolygonRoi,
+  type RectRoi,
+  type RingRoi,
+} from "../lib/processingPatterns";
+import { useAppDispatch, useAppSelector } from "../store";
+import { clearPatternRoi, fetchProcessingPatterns, selectPattern, setPatternParameter, type PatternInstance } from "../store/processingSlice";
+import { Icon } from "./Icon";
+import { NumberStepperField } from "./NumberStepperField";
+import { PatternIcon } from "./PatternIcon";
+import { unitLabel } from "./ROIEditor";
+
+/** Translation with the JSON's English text as fallback for keys the locale tables do not know. */
+function useTr() {
+  const { t, fmt } = useTranslation();
+  const tr = (key: string, fallback: string) => {
+    const text = t(key as TranslationKey);
+    return text === key ? fallback : text;
+  };
+  return { t, fmt, tr };
+}
+
+export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
+  const dispatch = useAppDispatch();
+  const { t, tr } = useTr();
+  const { status, error, entryErrors, specs, instances, activeKey } = useAppSelector((s) => s.processing);
+
+  useEffect(() => {
+    if (status === "idle") void dispatch(fetchProcessingPatterns());
+  }, [status, dispatch]);
+
+  const messages: string[] = [];
+  if (status === "error") messages.push(t("processing.configError").replace("{error}", error ?? ""));
+  else if (status === "ready" && specs.length === 0) messages.push(t("processing.noPatterns"));
+  if (entryErrors.length) messages.push(t("processing.entryErrors").replace("{errors}", entryErrors.join("; ")));
+
+  return (
+    <>
+      <div className="card patterns-card">
+        <div className="card__header">
+          <span className="card__title">{t("processing.patterns")}</span>
+        </div>
+        <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
+          {specs.map((spec) => {
+            const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
+            return (
+              <button
+                key={spec.key}
+                type="button"
+                className="pattern-strip__btn"
+                aria-pressed={activeKey === spec.key}
+                title={caption}
+                aria-label={caption}
+                disabled={disabled}
+                onClick={() => dispatch(selectPattern(activeKey === spec.key ? null : spec.key))}
+              >
+                <PatternIcon name={spec.icon} />
+              </button>
+            );
+          })}
+        </div>
+        {messages.length > 0 && (
+          <p className={`patterns-card__status${status === "error" ? " patterns-card__status--error" : ""}`}>{messages.join("\n")}</p>
+        )}
+      </div>
+      {specs.map((spec) => (
+        <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key} disabled={disabled} />
+      ))}
+    </>
+  );
+}
+
+function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; instance: PatternInstance | undefined; active: boolean; disabled: boolean }) {
+  const dispatch = useAppDispatch();
+  const { t, tr } = useTr();
+  const unit = unitLabel(useAppSelector((s) => s.scan.roi.scale_unit));
+  const collapsed = !active;                    // only the selected pattern's card is open
+  const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
+  const label = collapsed ? t("processing.expand") : t("processing.collapse");
+  if (!instance) return null;
+
+  return (
+    <div className={`card pattern-card${active ? " pattern-card--active" : ""}`} data-pattern={spec.key}>
+      <div className="card__header">
+        <span className="card__title">{caption}</span>
+        <button
+          type="button"
+          className="card__collapse-btn"
+          aria-expanded={!collapsed}
+          aria-label={`${caption}: ${label}`}
+          title={label}
+          disabled={disabled}
+          onClick={() => dispatch(selectPattern(collapsed ? spec.key : null))}
+        >
+          <Icon name="chevronDown" />
+        </button>
+      </div>
+      <div className="pattern-card__body" hidden={collapsed}>
+        <p className="pattern-card__hint">{t(`processing.hint.${spec.roi}` as TranslationKey)}</p>
+        {spec.parameters.map((p) => (
+          <ParameterField
+            key={p.name}
+            spec={p}
+            label={tr(`processing.param.${spec.key}.${p.name}`, p.label)}
+            value={instance.parameters[p.name]}
+            disabled={disabled}
+            onChange={(value) => dispatch(setPatternParameter({ key: spec.key, name: p.name, value }))}
+          />
+        ))}
+        <p className="pattern-card__readout">{roiReadout(spec, instance.roi, unit)}</p>
+        <div className="pattern-card__actions">
+          <button type="button" className="btn btn--ghost" disabled={disabled || !instance.roi} onClick={() => dispatch(clearPatternRoi(spec.key))}>
+            {t("processing.clear")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  function roiReadout(s: PatternSpec, roi: PatternRoi | null, u: string): string {
+    if (!roi) return t("processing.roi.none");
+    const n = (v: number) => String(Math.round(v * 100) / 100);
+    let text: string;
+    if (s.roi === "rect") {
+      const r = roi as RectRoi;
+      text = t("processing.roi.rect").replace("{x0}", n(r.x_start)).replace("{x1}", n(r.x_end)).replace("{y0}", n(r.y_start)).replace("{y1}", n(r.y_end)).replace("{unit}", u);
+    } else if (s.roi === "ring") {
+      const r = roi as RingRoi;
+      text = t("processing.roi.ring").replace("{cx}", n(r.cx)).replace("{cy}", n(r.cy)).replace("{ri}", n(r.r_inner)).replace("{ro}", n(r.r_outer)).replace("{unit}", u);
+    } else {
+      text = t("processing.roi.polygon").replace("{n}", String((roi as PolygonRoi).points.length));
+    }
+    const area = MODEL_REGISTRY[s.model].area(roi);
+    return `${text}\n${t("processing.area").replace("{area}", n(area)).replace("{unit}", u)}`;
+  }
+}
+
+function ParameterField({
+  spec, label, value, disabled, onChange,
+}: { spec: ParameterSpec; label: string; value: ParameterValue; disabled: boolean; onChange: (value: ParameterValue | string) => void }) {
+  const { tr } = useTr();
+  const [text, setText] = useState(String(value));
+  // follow external changes (reload, another view of the same instance) without fighting half-typed input
+  useEffect(() => {
+    if (spec.type === "int" || spec.type === "float") setText((cur) => (Number(cur) === value ? cur : String(value)));
+  }, [value, spec.type]);
+
+  const withUnit = spec.unit ? `${label} (${spec.unit})` : label;
+  if (spec.type === "bool") {
+    return (
+      <label className="checkbox">
+        <input type="checkbox" checked={Boolean(value)} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+        {withUnit}
+      </label>
+    );
+  }
+  if (spec.type === "choice") {
+    return (
+      <div className="field">
+        <label>{withUnit}</label>
+        <select className="select" value={String(value)} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+          {spec.choices.map((c) => (
+            <option key={c} value={c}>{tr(`processing.choice.${c}`, c)}</option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+  return (
+    <NumberStepperField
+      label={withUnit}
+      value={text}
+      disabled={disabled}
+      step={spec.step}
+      min={spec.min ?? undefined}
+      max={spec.max ?? undefined}
+      inputMode={spec.type === "int" ? "numeric" : "decimal"}
+      invalid={text.trim() === "" || !Number.isFinite(Number(text))}
+      onValueChange={(v) => {
+        setText(v);
+        onChange(v);
+      }}
+    />
+  );
+}

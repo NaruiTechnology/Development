@@ -40,6 +40,7 @@
     "src/lib/vectorScanPath.ts",
     "src/lib/scanPathOverlay.ts",
     "src/lib/roiTargetGray.ts",
+    "src/lib/processingPatterns.ts",
     "src/store/imageSlice.ts"
   ]
 }

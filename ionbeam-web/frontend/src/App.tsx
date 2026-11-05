@@ -42,6 +42,8 @@ import { RasterScanExecutionSettings } from "./components/RasterScanExecutionSet
 import { ImageCanvas, type CapturedScanImage } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
+import { PatternOverlay } from "./components/PatternOverlay";
+import { ProcessingPatternsPanel } from "./components/ProcessingPatternsPanel";
 import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
 import { SimulationImageCard } from "./components/SimulationImageCard";
@@ -89,6 +91,7 @@ import {
 } from "./store/scanSlice";
 import { resetRaster, resetVector } from "./store/imageSlice";
 import { fetchDefaults } from "./store/statusSlice";
+import { fetchProcessingPatterns } from "./store/processingSlice";
 import { useAppDispatch, useAppSelector } from "./store";
 import { useTranslation } from "./i18n";
 import { scanAuthHeaders } from "./lib/authIdentity";
@@ -107,7 +110,7 @@ const MIN_RIGHT_PANEL_WIDTH = 380;
 const SPLITTER_SPACE = 32;
 const LAST_ADMIN_LOGIN_STORAGE_KEY = "ionbeam:lastAdminLogin";
 type AppRoute = "control" | "report" | "vacuum";
-type LeftTopTab = "scan" | "calibrate";
+type LeftTopTab = "scan" | "processing" | "calibrate";
 type ScanSubTab = "raster" | "vector";
 type CalibrateSubTab = "dimension" | "mag";
 
@@ -333,11 +336,14 @@ export function App() {
     route === "control" && (kind === "roi" || kind === "raster" || kind === "vector");
   const showInlineSampleStage =
     sampleStageDockTargetAvailable && sampleStageDocked && sampleStageOpen && !sampleStageMinimized;
-  const showROIPreviewSideCard = showROIPreviewSideCardBase && !adcView && !showInlineSampleStage;
+  const showROIPreviewSideCard =
+    showROIPreviewSideCardBase && activeTopTab !== "processing" && !adcView && !showInlineSampleStage;
   const showROIThirdColumn = showROIPreviewSideCard || showInlineSampleStage;
 
   useEffect(() => {
     dispatch(fetchDefaults());
+    // processingPatterns.json: one model instance + card per non-skipped entry, built at launch
+    void dispatch(fetchProcessingPatterns());
   }, [dispatch]);
 
   useEffect(() => {
@@ -1370,6 +1376,14 @@ export function App() {
     activateScanSubTab(scanSubTab);
   }
 
+  // Processing: pattern ROIs are drawn on the ROI canvas, so it runs on the "roi" kind like the dimension view.
+  function activateProcessingTopTab() {
+    closeImagePanelSplit();
+    setActiveTopTab("processing");
+    dispatch(updateROI({ calibration_enabled: false }));
+    selectKind("roi");
+  }
+
   function activateCalibrateTopTab() {
     setActiveTopTab("calibrate");
     activateCalibrateSubTab(calibrateSubTab);
@@ -1422,6 +1436,8 @@ export function App() {
       ? "card.vectorPattern"
       : kind === "mag"
       ? "card.magCalibration"
+      : activeTopTab === "processing"
+      ? "card.processingPattern"
       : roiState.calibration_enabled
       ? "card.calibration"
       : "card.selectROI";
@@ -1586,6 +1602,16 @@ export function App() {
               <button
                 role="tab"
                 className="tab tab--top"
+                aria-selected={activeTopTab === "processing"}
+                disabled={panelDisabled}
+                onClick={activateProcessingTopTab}
+              >
+                <Icon name="target" tone="tab" />
+                {t("tabs.processing")}
+              </button>
+              <button
+                role="tab"
+                className="tab tab--top"
                 aria-selected={activeTopTab === "calibrate"}
                 disabled={panelDisabled}
                 onClick={activateCalibrateTopTab}
@@ -1648,7 +1674,18 @@ export function App() {
               </div>
             ) : null}
             <div className="card__body">
-              {activeTopTab === "scan" ? (
+              {activeTopTab === "processing" ? (
+                <>
+                  <SimulationImageCard
+                    defaultCollapsed
+                    disabled={panelDisabled}
+                    lastScanImageUrl={roiScanImageUrl}
+                    onLoadLastScan={handleLoadLastScan}
+                    onImageChange={handleSimulationImageChange}
+                  />
+                  <ProcessingPatternsPanel disabled={panelDisabled} />
+                </>
+              ) : activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
                   <>
                     <SimulationImageCard
@@ -1926,6 +1963,12 @@ export function App() {
                     backgroundImageUrl={activeROIScanImageUrl}
                     grayScaleSelection={displayedROIGrayScaleSelection}
                     grayScaleSkipped={displayedROIGrayScaleSkipped}
+                    hideSelectionOverlay={activeTopTab === "processing"}
+                    renderCanvasOverlay={
+                      activeTopTab === "processing"
+                        ? (api) => <PatternOverlay disabled={panelDisabled} api={api} />
+                        : undefined
+                    }
                   />
               ) : kind === "mag" ? (
                 <MagCalibrationChart />

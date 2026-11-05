@@ -17,9 +17,12 @@ export function SimulationImageCard({
   onLoadLastScan,
   onImageChange,
   calibration = false,
+  defaultCollapsed,
 }: {
   disabled: boolean;
   calibration?: boolean;
+  /** Override the initial state for tabs such as Processing. */
+  defaultCollapsed?: boolean;
   lastScanImageUrl?: string | null;
   onLoadLastScan?: () => void;
   onImageChange?: (imageUrl: string | null) => void;
@@ -29,8 +32,9 @@ export function SimulationImageCard({
   // Same rule as ScanControls: anything but an explicit IsProduction=false
   // (including defaults not loaded yet) counts as production.
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production !== false);
-  const [collapsed, setCollapsed] = useState(calibration ? false : isProduction);
-  useEffect(() => setCollapsed(calibration ? false : isProduction), [isProduction, calibration]);
+  const initialCollapsed = defaultCollapsed ?? (calibration ? false : isProduction);
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
+  useEffect(() => setCollapsed(initialCollapsed), [initialCollapsed]);
 
   return (
     <div className="card simulation-image-card">

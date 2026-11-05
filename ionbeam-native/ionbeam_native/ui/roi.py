@@ -179,6 +179,10 @@ class ROICanvasView(QWidget):
     def leaveEvent(self, e):  # noqa: N802
         self.ed.mouse_leave()
 
+    def keyPressEvent(self, e):  # noqa: N802
+        self.ed.pattern_key(e)
+        super().keyPressEvent(e)
+
     def keyReleaseEvent(self, e):  # noqa: N802
         if e.key() == Qt.Key.Key_Control:
             self.ed.ctrl_released()
@@ -200,6 +204,7 @@ class ROIEditorCanvas(Panel):
         self._suppressed_background: Optional[bytes] = None
         self._promoted_background: Optional[bytes] = None
         self._image_reset = False
+        self.pattern_tool = None        # Processing tab drawing tool (ui/pattern_tool.py)
         self.draft: Optional[dict] = None
         self.drag_start: Optional[tuple] = None
         self.resize_corner: Optional[str] = None
@@ -510,6 +515,8 @@ class ROIEditorCanvas(Panel):
                 self._paint_selection(p, self.draft)
             else:
                 self._paint_selection(p, sel)
+        if self.pattern_tool is not None:
+            self.pattern_tool.paint(p, self)
         p.restore()
         self._paint_overlays(p, R, k)
         p.end()
@@ -892,7 +899,17 @@ class ROIEditorCanvas(Panel):
                     return name
         return None
 
+    def _pattern_owns_mouse(self) -> bool:
+        return self.pattern_tool is not None and self.pattern_tool.enabled
+
+    def pattern_key(self, e) -> None:
+        if self._pattern_owns_mouse():
+            self.pattern_tool.key_press(self, e)
+
     def mouse_press(self, e) -> None:
+        if self._pattern_owns_mouse():
+            self.pattern_tool.mouse_press(self, e)
+            return
         if e.button() != Qt.MouseButton.LeftButton or self.disabled:
             return
         roi = self.roi
@@ -935,6 +952,9 @@ class ROIEditorCanvas(Panel):
         self._tip(e.globalPosition().toPoint(), pt)
 
     def mouse_move(self, e) -> None:
+        if self._pattern_owns_mouse():
+            self.pattern_tool.mouse_move(self, e)
+            return
         roi = self.roi
         pos = e.position()
         if self.active_handle:
@@ -973,6 +993,9 @@ class ROIEditorCanvas(Panel):
         self.view.update()
 
     def mouse_release(self, e) -> None:
+        if self._pattern_owns_mouse():
+            self.pattern_tool.mouse_release(self, e)
+            return
         roi = self.roi
         pos = e.position()
         if self.active_handle:
@@ -1028,6 +1051,9 @@ class ROIEditorCanvas(Panel):
         self.ctl.notify("roi", "scan")
 
     def mouse_leave(self) -> None:
+        if self._pattern_owns_mouse():
+            self.pattern_tool.mouse_leave(self)
+            return
         if self.resize_corner or self.active_handle:
             return
         self.drag_start = None

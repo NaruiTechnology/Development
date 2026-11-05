@@ -65,6 +65,7 @@ import {
 import { saveAllowedHosts, syncAllowedHostsModuleFromDb } from "./allowedHosts";
 import { registerCalibrationRoutes } from "./calibrationRoutes";
 import { registerDimensionCalibrationRoutes } from "./dimensionCalibrationRoutes";
+import { readProcessingPatterns } from "./processingPatternsConfig";
 import { normalizeScanGeometry, readScanGeometry, writeScanGeometry } from "./scanGeometryConfig";
 import {
   ConfigError,
@@ -1211,6 +1212,17 @@ app.get("/api/admin/scan-geometry", async (_req, res) => {
     const info = await readWithBackup();
     res.set("Cache-Control", "no-store");
     res.json({ ok: true, ...readScanGeometry(info.data) });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+// Processing tab pattern catalogue (GlasgowDataIO/Json/processingPatterns.json). Read-only; the browser builds one
+// model instance and one card per entry that is not marked skip.
+app.get("/api/processing/patterns", (_req, res) => {
+  try {
+    res.set("Cache-Control", "no-store");
+    res.json({ ok: true, ...readProcessingPatterns(config.processingPatternsPath) });
   } catch (err) {
     sendConfigError(res, err);
   }
