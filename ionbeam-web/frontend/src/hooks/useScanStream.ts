@@ -110,6 +110,8 @@ export function useScanStream() {
   const nextGeometryUpdateIdRef = useRef(1);
   const geometryReadyRef = useRef(false);
   const pendingGeometryUpdatesRef = useRef<Array<{ id: number; geometry: LiveScanUpdate }>>([]);
+  const stopInFlightRef = useRef<Promise<boolean> | null>(null);
+  const stopCloseWaitersRef = useRef(new Map<WebSocket, () => void>());
 
   const flushPendingGeometryUpdates = useCallback(() => {
     const ws = wsRef.current;
@@ -291,6 +293,8 @@ export function useScanStream() {
         // the close handler. Don't transition phase here — onclose will.
       };
       ws.onclose = (ev) => {
+        stopCloseWaitersRef.current.get(ws)?.();
+        stopCloseWaitersRef.current.delete(ws);
         if (wsRef.current !== ws) return;
         flushRasterSamples();
         markScanPerformanceClosed(ev.code);
@@ -476,6 +480,8 @@ export function useScanStream() {
         /* see startRaster */
       };
       ws.onclose = (ev) => {
+        stopCloseWaitersRef.current.get(ws)?.();
+        stopCloseWaitersRef.current.delete(ws);
         if (wsRef.current !== ws) return;
         flushVectorSamples();
         markScanPerformanceClosed(ev.code);
@@ -509,7 +515,8 @@ export function useScanStream() {
     [dispatch, flushVectorSamples, sessionSimulation, vectorLineShiftPerXRow]
   );
 
-  const stop = useCallback(() => {
+  const stop = useCallback((): Promise<boolean> => {
+    if (stopInFlightRef.current) return stopInFlightRef.current;
     const ws = wsRef.current;
     const hadActiveScan = activeScanRef.current !== null;
     closureKindRef.current = "stop";
@@ -517,23 +524,25 @@ export function useScanStream() {
     autoReconnectAttemptedRef.current = true;
     if (!ws) {
       if (hadActiveScan) dispatch(streamReset());
-      return;
+      return Promise.resolve(true);
     }
+    const closed = ws.readyState === WebSocket.CLOSED ? Promise.resolve() :
+      new Promise<void>((resolve) => stopCloseWaitersRef.current.set(ws, resolve));
     dispatch(streamStopping());
     // Sequential passes reconnect back to back, so Stop can land while the
     // next socket is still CONNECTING. The service has no scan for it yet, so
     // an abort request would only come back 409; closing the socket is enough.
     const connecting = ws.readyState === WebSocket.CONNECTING;
-    if (!connecting) void fetch(apiUrl("/api/scan/abort"), {
+    const aborted = connecting ? Promise.resolve(true) : fetch(apiUrl("/api/scan/abort"), {
       method: "POST",
       headers: scanAuthHeaders(),
     }).then(async (response) => {
-      if (response.ok) return;
+      if (response.ok) return true;
       // MOCK has no physical command to signal; closing its synthetic stream
       // remains safe. Real hardware must never be cancelled through libusb.
       if (response.status === 501) {
         ws.close(1000, "mock-stop");
-        return;
+        return true;
       }
       // The stream may finish or fault between the operator pressing Stop
       // and this request reaching the backend. "No active scan" is therefore
@@ -541,13 +550,20 @@ export function useScanStream() {
       // overwrite the real scan result/warning.
       if (response.status === 409) {
         ws.close(1000, "already-stopped");
-        return;
+        return true;
       }
       const detail = await response.text().catch(() => "");
       throw new Error(detail || `abort: HTTP ${response.status}`);
     }).catch((error) => {
       dispatch(streamErrored(error instanceof Error ? error.message : String(error)));
+      return false;
     });
+    // A late, unscoped HTTP abort can otherwise kill the replacement stream.
+    // Socket closure alone does not mean that request reached the old scan.
+    const stopped = Promise.all([aborted, closed]).then(([ok]) => ok).finally(() => {
+      if (stopInFlightRef.current === stopped) stopInFlightRef.current = null;
+    });
+    stopInFlightRef.current = stopped;
     // Close the client side immediately. The service observes the disconnect
     // and the abort request together; waiting for FPGA cleanup before closing
     // left Stop looking unresponsive on continuous scans.
@@ -555,6 +571,7 @@ export function useScanStream() {
     // Flush the last buffered pixels after the abort request has been sent.
     flushRasterSamples();
     flushVectorSamples();
+    return stopped;
   }, [dispatch, flushRasterSamples, flushVectorSamples]);
 
   const hasActiveStream = useCallback(() =>

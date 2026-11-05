@@ -13,6 +13,7 @@ from amaranth.sim import Simulator
 from GlasgowDataIO.IobeamControl.applet.iobeamDataSubtarget import IobeamDataSubtarget
 from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
     SynchronizeCommand, VectorPixelCommand, RasterRegionCommand, RasterPixelCommand,
+    RasterPixelRunCommand, FlushCommand,
 )
 from GlasgowDataIO.IobeamControl.commands.structs import DACCodeRange, OutputMode, Transforms
 from GlasgowDataIO.IobeamControl.unittest.applet.test_obiPinMapping import pin_config
@@ -35,6 +36,58 @@ class PadPlatform:
 
 
 class PhysicalDataPathTest(unittest.TestCase):
+    def test_live_zoom_changes_physical_dac_latches_without_resynchronizing(self):
+        tx = SimpleNamespace(r_data=Signal(8), r_rdy=Signal(), r_en=Signal())
+        rx = SimpleNamespace(w_data=Signal(8), w_rdy=Signal(), w_en=Signal())
+        platform = PadPlatform()
+        dut = IobeamDataSubtarget(
+            ports=SimpleNamespace(), out_fifo=tx, in_fifo=rx,
+            pin_config=pin_config("streamData.json"),
+            transforms=Transforms(False, False, False))
+        sim = Simulator(Fragment.get(dut, platform))
+        sim.add_clock(1 / 48_000_000)
+        commands = [SynchronizeCommand(cookie=123, output=OutputMode.SixteenBit, raster=True)]
+        expected = []
+        for start, step in ((0, 16), (4096, 8), (0, 16)):
+            commands += [
+                RasterRegionCommand(DACCodeRange(start, 4, step * 256),
+                                    DACCodeRange(start, 2, step * 256)),
+                RasterPixelRunCommand(dwell_time=1, length=7), FlushCommand(),
+            ]
+            expected += [(start + x * step, start + y * step)
+                         for y in range(2) for x in range(4)]
+        wire = b"".join(bytes(command) for command in commands)
+
+        async def bench(ctx):
+            sent = 0
+            observed = []
+            x_code = 0
+            previous_x = previous_y = 0
+            control = platform.ports["control"]
+            for tick in range(5000):
+                ctx.set(tx.r_rdy, sent < len(wire) and tick % 5 != 0)
+                ctx.set(tx.r_data, wire[sent] if sent < len(wire) else 0)
+                ctx.set(rx.w_rdy, tick % 47 >= 18)
+                ctx.set(platform.ports["data"].i, 0x1234)
+                if ctx.get(tx.r_rdy) and ctx.get(tx.r_en):
+                    sent += 1
+                x_latch = ctx.get(control.dac_x_le_clk.o)
+                y_latch = ctx.get(control.dac_y_le_clk.o)
+                if x_latch and not previous_x:
+                    x_code = ctx.get(platform.ports["data"].o)
+                if y_latch and not previous_y:
+                    position = (x_code, ctx.get(platform.ports["data"].o))
+                    # The DAC bus repeats the last position during idle cycles.
+                    if not observed or position != observed[-1]:
+                        observed.append(position)
+                previous_x, previous_y = x_latch, y_latch
+                await ctx.tick()
+            self.assertEqual(sent, len(wire))
+            self.assertEqual(observed, expected)
+
+        sim.add_testbench(bench)
+        sim.run()
+
     def test_raw_samples_reach_usb_in_both_scan_modes_with_backpressure(self):
         for raster in (False, True):
             for mode in (OutputMode.SixteenBit, OutputMode.EightBit):

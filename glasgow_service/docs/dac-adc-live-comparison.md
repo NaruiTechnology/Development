@@ -35,6 +35,17 @@ data. No sample-format or gateware timing changes were made here.
 
 ## Live Zoom and queue behavior
 
+Production and simulation both send Zoom updates on the existing continuous
+stream. Zoom does not issue an HTTP abort or close/reopen the WebSocket.
+Sequential ROI scans update their requests between passes.
+
+With no ROI, the narrowed DAC field fills the whole canvas. With ROI(s), each
+narrowed acquisition fills its original ROI rectangle; background pixels outside
+those rectangles remain unchanged. Zoom 1 restores the original acquisition
+bounds.
+
+The service's in-band geometry API remains available:
+
 Raster updates replace the command's ranges and later frame generators prepend a
 new `RasterRegionCommand`. Vector updates replace the points factory for later
 passes. Neither replaces already encoded or written chunks. The browser queues

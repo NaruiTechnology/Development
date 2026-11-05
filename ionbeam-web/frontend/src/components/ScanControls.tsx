@@ -262,6 +262,8 @@ export function ScanControls({
   const vectorImageFilled = useAppSelector((s) => s.image.vectorFilled);
   const preview = useAppSelector((s) => s.scan.preview);
   const roiState = useAppSelector((s) => s.scan.roi);
+  const roiStateRef = useRef(roiState);
+  roiStateRef.current = roiState;
   const activeScanRegions = useMemo(
     () => roiState.roi_scan_enabled ? roiState.scan_regions : [],
     [roiState.roi_scan_enabled, roiState.scan_regions],
@@ -318,6 +320,8 @@ export function ScanControls({
   const [zoomError, setZoomError] = useState<string | null>(null);
   const [grayRuleError, setGrayRuleError] = useState<string | null>(null);
   const zoomRestartTimerRef = useRef<number | null>(null);
+  const zoomRestartGenerationRef = useRef(0);
+  const startInfiniteRequestRef = useRef<(preserveCurrentFrame?: boolean) => Promise<void>>(async () => {});
   // Debounces the in-place rebuild of queued sequential entries after a Zoom edit.
   const sequentialZoomTimerRef = useRef<number | null>(null);
   const sequentialBaseZoomRef = useRef<number | null>(null);
@@ -764,8 +768,9 @@ export function ScanControls({
     }
   }
 
-  async function startInfiniteRequest(preserveCurrentFrame = false) {
+  async function startInfiniteRequest(preserveCurrentFrame = false): Promise<void> {
     if ((kind !== "raster" && kind !== "vector") || startBlocked || infiniteScanActiveRef.current || scanHasErrors) return;
+    const startGeneration = zoomRestartGenerationRef.current;
     runningROIScanEnabledRef.current = roiState.roi_scan_enabled;
     runningParallelRegionsRef.current = parallelRegions;
     // A Live scan with ROI(s) acquires those region(s) only, from the first
@@ -777,10 +782,14 @@ export function ScanControls({
       return;
     }
     const allowed = await refreshScanPrivilege();
-    if (!allowed) return;
+    if (!allowed || startGeneration !== zoomRestartGenerationRef.current) return;
+    // Zoom remains editable while authentication/request preparation awaits.
+    // A render's closure can be older than the value currently in the control.
+    const scanZoom = roiStateRef.current.scan_zoom;
+    const zoomGeneration = zoomUpdateGenerationRef.current;
     try {
       if (scanRegionsNow.length > 1 && parallelRegions) {
-        const regions = effectiveScanRegions(scanRegionsNow, roiState.scan_zoom, roiState)
+        const regions = effectiveScanRegions(scanRegionsNow, scanZoom, roiState)
           .filter((region): region is ROIRequest => region !== null);
         const displayRegions = scanRegionsNow.map((region) => worldSelectionToDacROI(region, roiState));
         let parallelEntry: InfiniteScanEntry;
@@ -825,6 +834,10 @@ export function ScanControls({
             initialFrame,
           };
         }
+        if (startGeneration !== zoomRestartGenerationRef.current) return;
+        if (zoomGeneration !== zoomUpdateGenerationRef.current) {
+          return startInfiniteRequestRef.current(preserveCurrentFrame);
+        }
         infiniteScanRef.current = parallelEntry;
         infiniteScanActiveRef.current = true;
         setInfiniteScanActive(true);
@@ -832,7 +845,7 @@ export function ScanControls({
         startInfiniteScanRun(parallelEntry, preserveCurrentFrame || isProduction || parallelEntry.initialFrame === null);
         return;
       }
-      const regions = effectiveScanRegions(scanRegionsNow, roiState.scan_zoom, roiState);
+      const regions = effectiveScanRegions(scanRegionsNow, scanZoom, roiState);
       const activeIndex = roiState.active_scan_region ?? 0;
       const region = regions[Math.min(activeIndex, regions.length - 1)] ?? null;
       const selectedRegion = scanRegionsNow[Math.min(activeIndex, scanRegionsNow.length - 1)] ?? null;
@@ -882,6 +895,10 @@ export function ScanControls({
           initialFrame,
         };
       }
+      if (startGeneration !== zoomRestartGenerationRef.current) return;
+      if (zoomGeneration !== zoomUpdateGenerationRef.current) {
+        return startInfiniteRequestRef.current(preserveCurrentFrame);
+      }
       infiniteScanRef.current = entry;
       infiniteScanActiveRef.current = true;
       setInfiniteScanActive(true);
@@ -892,6 +909,7 @@ export function ScanControls({
       dispatch(streamErrored(e?.message ?? String(e)));
     }
   }
+  startInfiniteRequestRef.current = startInfiniteRequest;
 
   function onStop() {
     if (!stopAvailable) return;
@@ -901,6 +919,7 @@ export function ScanControls({
     }
     if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
     zoomRestartTimerRef.current = null;
+    zoomRestartGenerationRef.current++;
     setPendingZoomRestart(null);
     dispatch(setStreamRestarting(false));
     // Like OBI, stopping a live session leaves the last image on the canvas:
@@ -931,8 +950,6 @@ export function ScanControls({
       sequentialEntries: regionScanRepeatRef.current.length, grayFilter: vectorGrayFilterActive,
       generation: zoomUpdateGenerationRef.current + 1,
     });
-    if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
-    zoomRestartTimerRef.current = null;
     const zoom = Number(value);
     if (!Number.isInteger(zoom) || zoom < 1) return;
     // A zoom above the allowed maximum is not applied: the technical reason
@@ -942,8 +959,12 @@ export function ScanControls({
       : null;
     setTypedZoomIssue(typed);
     if (typed) { zoomTrace("exit: above max zoom", { zoom, zoomMaximum }); return; }
+    if (zoom === roiState.scan_zoom) { zoomTrace("exit: unchanged", { zoom }); return; }
+    // Duplicate input events must not cancel a restart for the value already
+    // committed to the store. Only a new valid Zoom supersedes that restart.
+    if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
+    zoomRestartTimerRef.current = null;
     const generation = ++zoomUpdateGenerationRef.current;
-    if (zoom === roiState.scan_zoom) { zoomTrace("exit: unchanged", { zoom, generation }); return; }
     if (!stream.hasActiveStream()) {
       zoomTrace("exit: no active stream, value stored only", { zoom });
       dispatch(setScanZoom(zoom));
@@ -1298,6 +1319,7 @@ export function ScanControls({
   // passes 0 so the new layout starts as soon as the running stream is stopped.
   function scheduleZoomRestart(mode: "single" | "infinite", delayMs = 350) {
     if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
+    const generation = ++zoomRestartGenerationRef.current;
     // The FPGA receives scan coordinates at stream start. Rebuild the request
     // only if the current scan cannot accept an in-band geometry update.
     zoomRestartTimerRef.current = window.setTimeout(() => {
@@ -1310,8 +1332,11 @@ export function ScanControls({
       dispatch(setStreamRestarting(true));
       clearInfiniteScanState();
       regionScanQueueRef.current = [];
-      setPendingZoomRestart(mode);
-      stream.stop();
+      void stream.stop().then((ok) => {
+        if (generation !== zoomRestartGenerationRef.current) return;
+        if (ok) setPendingZoomRestart(mode);
+        else dispatch(setStreamRestarting(false));
+      });
     }, delayMs);
   }
 
@@ -1619,6 +1644,7 @@ export function ScanControls({
   useEffect(() => {
     return () => {
       if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
+      zoomRestartGenerationRef.current++;
       dispatch(setStreamRestarting(false));
       clearInfiniteScanState();
     };
