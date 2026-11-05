@@ -258,7 +258,14 @@ class RasterScanCommand(BaseCommand):
         self._logger.debug(f"transfer - {latency=} max_pipeline={self._max_pipeline}")
 
         tokens = self._max_pipeline
-        token_fut = asyncio.Future()
+        # Counting semaphore, not a one-shot Future: a token returned while
+        # the sender is parked in FlushCommand (an await) must not be lost.
+        # The old Future was replaced right after set_result(), so a sender
+        # that resumed from the flush awaited a *new* Future that only fires
+        # on a 0 -> 1 token transition - which can never happen once the
+        # sender is blocked.  Deadlock: sender silent, receiver drains the
+        # pipeline, then USB read times out (seen on live zoom, production).
+        token_sem = asyncio.Semaphore(self._max_pipeline)
         total_pixels = self._x_range.count * self._y_range.count
         # A finite live session (Repeat N) ends by itself after N frames.
         session_pixels = (total_pixels * self._max_frames
@@ -277,14 +284,14 @@ class RasterScanCommand(BaseCommand):
             for commands, pixel_count in self._iter_chunks(latency):
                 self._logger.debug(f"sender: tokens={tokens}")
                 flush_s = 0.0
-                if tokens == 0:
+                if token_sem.locked():
                     # Pipeline boundary: push everything written so far to the
                     # device (FlushCommand also commits the IN FIFO tail),
                     # then wait for the receiver to return a token.
                     t_flush = time.perf_counter()
                     await FlushCommand().transfer(stream)
                     flush_s = time.perf_counter() - t_flush
-                    await token_fut
+                await token_sem.acquire()
                 if self.frame_blank and self.abort.is_set():
                     # go to a blanked state after an aborted frame
                     commands.extend(bytes(BlankCommand(enable=True, inline=False)))
@@ -374,9 +381,7 @@ class RasterScanCommand(BaseCommand):
         try:
             for commands, pixel_count in self._iter_chunks(latency):
                 tokens += 1
-                if tokens == 1:
-                    token_fut.set_result(None)
-                    token_fut = asyncio.Future()
+                token_sem.release()
                 if tokens == self._max_pipeline + 1:
                     if self.abort.is_set():
                         outcome = "aborted"

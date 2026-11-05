@@ -537,7 +537,10 @@ class VectorScanCommand(BaseCommand):
         max_pipeline = self._max_pipeline
 
         tokens = max_pipeline
-        token_fut = asyncio.Future()
+        # Counting semaphore, not a one-shot Future: see raster.py.  A token
+        # returned while the sender awaits FlushCommand was lost, deadlocking
+        # the sender (live zoom freeze).
+        token_sem = asyncio.Semaphore(max_pipeline)
 
         count_queue = asyncio.Queue()
         end_marker = object()
@@ -564,9 +567,9 @@ class VectorScanCommand(BaseCommand):
             try:
                 for commands, pixel_count in self._iter_chunks(latency):
                     self._logger.debug(f"sender: tokens={tokens}")
-                    if tokens == 0:
+                    if token_sem.locked():
                         await FlushCommand().transfer(stream)
-                        await token_fut
+                    await token_sem.acquire()
                     if self.abort.is_set():
                         # go to a blanked state after an aborted frame
                         # (_iter_chunks yields memoryviews, which cannot be
@@ -673,9 +676,7 @@ class VectorScanCommand(BaseCommand):
                 if pixel_count is end_marker:
                     break
                 tokens += 1
-                if tokens == 1:
-                    token_fut.set_result(None)
-                    token_fut = asyncio.Future()
+                token_sem.release()
                 if tokens == max_pipeline + 1:
                     if self.abort.is_set():
                         outcome = "aborted"
@@ -720,7 +721,7 @@ class VectorScanCommand(BaseCommand):
             if not receiver_complete:
                 # The consumer stopped before the frame completed (for
                 # example, a WebSocket Stop/close). The sender can be parked
-                # on token_fut waiting for receiver pacing that will never
+                # on token_sem waiting for receiver pacing that will never
                 # resume, so cancel and reap it before USB teardown.
                 sender_task.cancel()
                 await asyncio.gather(sender_task, return_exceptions=True)
