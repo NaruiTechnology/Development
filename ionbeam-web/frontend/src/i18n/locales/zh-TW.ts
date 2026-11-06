@@ -1269,6 +1269,8 @@ export const zhTW: Partial<TranslationTable> = {
   "geometry.disabled": "已停用掃描幾何：掃描恢復為線性 ROI 映射。",
 
   /* ===== processing tab ============================================ */
+  "tabs.processing.short": "加工",
+  "tabs.calibrate.short": "校準",
   "tabs.processing": "加工",
   "card.processingPattern": "圖形區域",
   "processing.scan": "掃描",

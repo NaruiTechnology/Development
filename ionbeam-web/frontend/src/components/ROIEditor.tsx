@@ -127,6 +127,7 @@ export function ROIEditor({
   const tr = useTranslation();
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
+  const processingPatterns = useAppSelector((s) => s.processing);
   const calibratedPixelSize = useAppSelector(selectGlobalPixelSize);
   // Native size of the image on the canvas, known once it has loaded.
   const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null);
@@ -445,6 +446,46 @@ export function ROIEditor({
       return;
     }
     const regions = processingRegions?.length ? processingRegions : [processingROI];
+    // The processing preview is a shape mask over rectangular acquisition windows.
+    // Clip both the sweep and its marker; a ring hole must remain empty.
+    const shapes = processingPatterns.specs.flatMap((spec) => {
+      const shape = processingPatterns.instances[spec.key]?.roi;
+      return shape ? [shape] : [];
+    });
+    const clipPattern = shapes.length ? (ctx: CanvasRenderingContext2D) => {
+      const image = imageWorldBounds(roi);
+      const view = viewportBounds(roi);
+      const x = (value: number) => worldToCanvasX(value, image, view);
+      const y = (value: number) => worldToCanvasY(value, image, view);
+      ctx.beginPath();
+      for (const shape of shapes) {
+        if ("points" in shape) {
+          // Normalize winding so overlapping shapes form a union with ring holes.
+          const area = shape.points.reduce((sum, a, i, points) => {
+            const b = points[(i + 1) % points.length];
+            return sum + x(a[0]) * y(b[1]) - x(b[0]) * y(a[1]);
+          }, 0);
+          const points = area < 0 ? [...shape.points].reverse() : shape.points;
+          points.forEach(([px, py], i) => i ? ctx.lineTo(x(px), y(py)) : ctx.moveTo(x(px), y(py)));
+          ctx.closePath();
+        } else if ("cx" in shape) {
+          const outer = "radius" in shape ? shape.radius : shape.r_outer;
+          const ellipse = (radius: number, reverse = false) => {
+            const rx = Math.abs(x(shape.cx + radius) - x(shape.cx));
+            const ry = Math.abs(y(shape.cy + radius) - y(shape.cy));
+            ctx.moveTo(x(shape.cx) + rx, y(shape.cy));
+            ctx.ellipse(x(shape.cx), y(shape.cy), rx, ry, 0, 0, Math.PI * 2, reverse);
+            ctx.closePath();
+          };
+          ellipse(outer);
+          if ("r_inner" in shape && shape.r_inner > 0) ellipse(shape.r_inner, true);
+        } else {
+          ctx.rect(Math.min(x(shape.x_start), x(shape.x_end)), Math.min(y(shape.y_start), y(shape.y_end)),
+            Math.abs(x(shape.x_end) - x(shape.x_start)), Math.abs(y(shape.y_end) - y(shape.y_start)));
+        }
+      }
+      ctx.clip();
+    } : undefined;
     const running = vectorPhase === "running";
     let animationFrame = 0;
     const draw = (now: number) => {
@@ -454,13 +495,13 @@ export function ROIEditor({
         ? (sweepStart + Math.floor(((now % 800) / 800) * edge) + 1) * regions.length
         : processingCursor;
       paintVectorScanOrderOverlay(canvas, edge, cursor,
-        processingPreview === "raster" ? "horizontal_sawtooth" : vectorScanPath, regions);
+        processingPreview === "raster" ? "horizontal_sawtooth" : vectorScanPath, regions, clipPattern);
       if (running) animationFrame = requestAnimationFrame(draw);
     };
     draw(performance.now());
     return () => cancelAnimationFrame(animationFrame);
   }, [processingPreview, processingEdge, processingCursor, processingROI, processingRegions,
-    vectorScanPath, vectorPhase, roi.raster_show_scan_path, roi.vector_show_scan_path]);
+    vectorScanPath, vectorPhase, roi, processingPatterns]);
 
   // Action run toward the target gray level. Each pass compares every pixel
   // inside the ROI area with `selectedTargetGray` and decides its beam state

@@ -3,10 +3,10 @@
  * collapsible card per pattern (ProcessingPatternCards). Both use the catalogue the backend serves from processingPatterns.json
  * (entries marked skip never arrive), and every card is bound to its pattern instance in the processing slice.
  *
- * Picking an icon expands that pattern's card, collapses all the others and arms drawing on the image canvas
- * (PatternOverlay); picking it again disarms. Cards start collapsed.
+ * Picking an icon arms drawing on the image canvas (PatternOverlay); picking it again disarms.
+ * Card expansion is independent of the drawing tool. Cards start collapsed.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import {
@@ -97,20 +97,13 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
   const dispatch = useAppDispatch();
   const { t, tr } = useTr();
   const unit = unitLabel(useAppSelector((s) => s.scan.roi.scale_unit));
-  const collapsed = !active;                    // only the selected pattern's card is open
+  const [collapsed, setCollapsed] = useState(true);
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
   const label = collapsed ? t("processing.expand") : t("processing.collapse");
-  const cardRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    if (active) {
-      cardRef.current?.focus({ preventScroll: true });
-      cardRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    }
-  }, [active]);
   if (!instance) return null;
 
   return (
-    <div ref={cardRef} id={`processing-pattern-${encodeURIComponent(spec.key)}`} tabIndex={-1} role="region" aria-label={caption}
+    <div id={`processing-pattern-${encodeURIComponent(spec.key)}`} tabIndex={-1} role="region" aria-label={caption}
       className={`card pattern-card${active ? " pattern-card--active" : ""}`} data-pattern={spec.key}>
       <div className="card__header">
         <span className="card__title">{caption}</span>
@@ -122,7 +115,10 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
           data-tooltip={`${caption}: ${label}`}
           data-styled-tooltip="true"
           disabled={disabled}
-          onClick={() => dispatch(selectPattern(collapsed ? spec.key : null))}
+          onClick={() => {
+            setCollapsed((value) => !value);
+            if (collapsed) dispatch(selectPattern(spec.key));
+          }}
         >
           <Icon name="chevronDown" />
         </button>

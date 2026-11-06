@@ -1685,21 +1685,25 @@ export function App() {
                 role="tab"
                 className="tab tab--top"
                 aria-selected={activeTopTab === "processing"}
+                title={t("tabs.processing")}
+                aria-label={t("tabs.processing")}
                 disabled={scanControlsSafetyDisabled || phase === "stopping"}
                 onClick={activateProcessingTopTab}
               >
                 <Icon name="target" tone="tab" />
-                {t("tabs.processing")}
+                {t("tabs.processing.short")}
               </button>
               <button
                 role="tab"
                 className="tab tab--top"
                 aria-selected={activeTopTab === "calibrate"}
+                title={t("tabs.calibrate")}
+                aria-label={t("tabs.calibrate")}
                 disabled={panelDisabled}
                 onClick={activateCalibrateTopTab}
               >
                 <Icon name="calibrate" tone="tab" />
-                {t("tabs.calibrate")}
+                {t("tabs.calibrate.short")}
               </button>
             </div>
             {activeTopTab === "scan" ? (

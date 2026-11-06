@@ -8,6 +8,7 @@ export function paintVectorScanOrderOverlay(
   cursor: number,
   scanPath: VectorScanPath,
   regions: Array<ROIRequest | null> = [null],
+  clipPattern?: (ctx: CanvasRenderingContext2D) => void,
 ) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
@@ -31,6 +32,7 @@ export function paintVectorScanOrderOverlay(
     };
     // Clip the sweep and marker so neither can bleed outside its scanned ROI.
     ctx.save();
+    clipPattern?.(ctx);
     ctx.beginPath();
     ctx.rect(bounds.x0 / edge * size, bounds.y0 / edge * size,
       (bounds.x1 - bounds.x0) / edge * size, (bounds.y1 - bounds.y0) / edge * size);

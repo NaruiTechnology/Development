@@ -2927,6 +2927,15 @@ body {
 
 .tabs--top .tab {
   flex: 1 1 0;
+  min-width: 0;
+  gap: 5px;
+  padding-inline: 6px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.tabs--top .tab .icon {
+  flex-shrink: 0;
 }
 
 .tab-group--scan {

@@ -1264,6 +1264,8 @@ export const zhCN: Partial<TranslationTable> = {
   "geometry.disabled": "已停用扫描几何：扫描恢复为线性 ROI 映射。",
 
   /* ===== processing tab ============================================ */
+  "tabs.processing.short": "加工",
+  "tabs.calibrate.short": "校准",
   "tabs.processing": "加工",
   "card.processingPattern": "图形区域",
   "processing.scan": "扫描",

@@ -43,6 +43,21 @@ for (const kind of ["raster", "vector"]) {
       assert.ok(operations.some(([op]) => op === "stroke"), "the active sweep must be visible without a selection");
       assert.ok(operations.some(([op]) => op === "arc"), "the marker remains visible at a live frame boundary (cursor zero)");
       assert.equal(callbacks.size, 1, "one animation loop follows the live scan");
+      const processing = await vite.ssrLoadModule("/src/store/processingSlice.ts");
+      await act(async () => {
+        store.dispatch(processing.fetchProcessingPatterns.fulfilled({ patterns: [
+          { key: "ring", model: "RingModel", caption: "Ring", icon: "ring", roi: "ring", parameters: [] },
+          { key: "free", model: "FreeHandModel", caption: "Free", icon: "free", roi: "polygon", parameters: [] },
+        ] }, "test"));
+        store.dispatch(processing.setPatternRoi({ key: "ring", roi: { cx: 100, cy: 100, r_outer: 30, r_inner: 10 } }));
+        store.dispatch(processing.setPatternRoi({ key: "free", roi: { points: [[150, 150], [180, 150], [170, 180]] } }));
+      });
+      const ellipses = operations.filter(([op]) => op === "ellipse");
+      assert.ok(ellipses.some((op) => op.at(-1) === true), "ring hole clips in the reverse direction");
+      assert.ok(ellipses.some((op) => op.at(-1) === false), "ring exterior clips the sweep");
+      assert.ok(operations.some(([op]) => op === "closePath"), "freehand outline closes the clipping mask");
+      assert.equal(callbacks.size, 1, "editing patterns replaces the animation loop");
+
       operations.length = 0;
       await act(async () => {
         store.dispatch(scan.updateROI(kind === "raster" ? { raster_show_scan_path: false } : { vector_show_scan_path: false }));

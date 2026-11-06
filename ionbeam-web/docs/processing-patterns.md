@@ -6,7 +6,7 @@ A **Processing** tab sits next to Scan. It draws pattern ROIs on the ROI canvas;
 
 **Models.** `frontend/src/lib/processingPatterns.ts` has `MODEL_REGISTRY` (SolidBoxModel, OpenBoxModel, StairCutModel, CleaningLineModel, CircleModel, RingModel, FreeHandModel): ROI validation, area, containment, preview geometry. The processing slice (`store/processingSlice.ts`) holds one instance (parameters + ROI) per catalogue entry; the catalogue is fetched at app launch.
 
-**UI.** `ProcessingPatternsPanel` renders the non-collapsible *Patterns* card (icon strip). The shared Controls card sits directly below it, followed by `ProcessingPatternCards` with one card per pattern, collapsed by default. Picking an icon (or a card's chevron) expands that card, collapses the siblings, focuses and scrolls the card into view, and arms drawing; picking it again disarms. `PatternOverlay` is mounted inside the ROI canvas through `ROIEditor`'s `renderCanvasOverlay`: rect = drag; circle = drag centre to radius and release (open outline); ring = drag centre to outer circle, then click for the inner circle (same centre), Esc / right-click cancels; free hand = press-drag-release.
+**UI.** `ProcessingPatternsPanel` renders the non-collapsible *Patterns* card (icon strip). The shared Controls card sits directly below it, followed by `ProcessingPatternCards` with one card per pattern, collapsed by default. Picking an icon arms drawing; picking it again disarms. Icon selection leaves card expansion and scroll position unchanged. Each card is expanded or collapsed independently using its chevron; expanding a card also selects its drawing tool. `PatternOverlay` is mounted inside the ROI canvas through `ROIEditor`'s `renderCanvasOverlay`: rect = drag; circle = drag centre to radius and release (open outline); ring = drag centre to outer circle, then click for the inner circle (same centre), Esc / right-click cancels; free hand = press-drag-release.
 
 **New pattern:** add a model to `MODEL_REGISTRY` and an entry to the JSON; the card form is generated from `parameters`.
 
@@ -72,3 +72,5 @@ valid pattern regions.
 The bottom-right scale uses the same calibration, unit conversion and Zoom label
 as Scan. Its line width is fixed as Zoom changes, and it stays upright outside
 the transformed image layer. Processing Split snapshots also include this scale.
+
+The Processing scan-path preview clips its sweep and marker to the current drawn shapes, including ring holes and freehand boundaries. Editing or clearing shapes refreshes the mask immediately. This is a display mask: acquisition still uses the rectangular windows described above, so the clipped preview is not evidence of beam blanking outside a pattern.

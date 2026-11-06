@@ -1411,6 +1411,8 @@ export const en = {
   "geometry.disabled": "Scan geometry no longer used: scans are back to the linear ROI mapping.",
 
   /* ===== processing tab ============================================ */
+  "tabs.processing.short": "Process",
+  "tabs.calibrate.short": "Calib",
   "tabs.processing": "Processing",
   "card.processingPattern": "Pattern ROI",
   "processing.scan": "Scan",
