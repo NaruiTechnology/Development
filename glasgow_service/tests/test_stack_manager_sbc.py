@@ -9,12 +9,15 @@ or stopped.
 import os
 from pathlib import Path
 import subprocess
+import sys
+
+import pytest
 
 SCRIPT = Path(__file__).parents[2] / "Scripts/manage-local-system.sh"
 SBC = "sbc-vacuum.service"
 
 
-def run_manager(tmp_path, *args):
+def run_manager(tmp_path, *args, interpreter="/bin/bash"):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     root = tmp_path / "Operations"
@@ -42,7 +45,7 @@ exit 0
     executable("curl", "exit 0\n")
 
     result = subprocess.run(
-        ["/bin/bash", str(SCRIPT), *args], capture_output=True, text=True, timeout=20,
+        [interpreter, str(SCRIPT), *args], capture_output=True, text=True, timeout=20,
         env={**os.environ, "PATH": f"{bin_dir}:/usr/bin:/bin", "OPERATIONS_ROOT": str(root),
              "ADMIN_USER": "operator", "OPERATIONS_LOG_DIR": str(tmp_path / "logs")},
     )
@@ -51,6 +54,19 @@ exit 0
 
 def sbc_calls(calls, verb):
     return [c for c in calls if f" {verb} {SBC}" in c]
+
+
+@pytest.mark.parametrize("interpreter", ["/bin/bash", sys.executable])
+def test_launcher_accepts_bash_and_python(tmp_path, interpreter):
+    result, calls = run_manager(tmp_path, "stop", interpreter=interpreter)
+    assert result.returncode == 0, result.stderr
+    assert any(" stop glasgow-svc.service" in c for c in calls)
+    assert not sbc_calls(calls, "stop")
+    result, _ = run_manager(tmp_path, "--help", interpreter=interpreter)
+    assert result.returncode == 0 and "Usage:" in result.stdout
+    assert not result.stderr
+    result, _ = run_manager(tmp_path, "invalid-action", interpreter=interpreter)
+    assert result.returncode == 2 and "Usage:" in result.stderr
 
 
 def test_stop_leaves_the_sbc_controller_running(tmp_path):

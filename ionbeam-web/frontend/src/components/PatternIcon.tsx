@@ -4,6 +4,7 @@ const ICONS: Record<string, JSX.Element> = {
   patternOpenBox: <rect x="4" y="4" width="16" height="16" />,
   patternStairCut: <path d="M3 20V16H8V12H13V8H18V4H21V20Z" fill="currentColor" />,
   patternCleaningLine: <path d="M4 6H20M4 10H20M4 14H20M4 18H20" />,
+  patternCircle: <circle cx="12" cy="12" r="9" />,
   patternRing: (
     <>
       <circle cx="12" cy="12" r="9" />

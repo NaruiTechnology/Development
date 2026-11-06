@@ -146,6 +146,9 @@ class PatternCard(Card):
             if m.ROI_KIND == "rect":
                 text = t("processing.roi.rect", x0=n(r["x_start"]), x1=n(r["x_end"]), y0=n(r["y_start"]),
                          y1=n(r["y_end"]), unit=unit)
+            elif m.ROI_KIND == "circle":
+                text = t("processing.roi.circle", cx=n(r["cx"]), cy=n(r["cy"]),
+                         radius=n(r["radius"]), unit=unit)
             elif m.ROI_KIND == "ring":
                 text = t("processing.roi.ring", cx=n(r["cx"]), cy=n(r["cy"]), ri=n(r["r_inner"]),
                          ro=n(r["r_outer"]), unit=unit)

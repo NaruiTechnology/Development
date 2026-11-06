@@ -1,16 +1,17 @@
 /**
  * Content of the Processing tab: the (not collapsible) "Patterns" card with one icon per pattern, followed by one
- * collapsible card per pattern. Both are built from the catalogue the backend serves from processingPatterns.json
+ * collapsible card per pattern (ProcessingPatternCards). Both use the catalogue the backend serves from processingPatterns.json
  * (entries marked skip never arrive), and every card is bound to its pattern instance in the processing slice.
  *
  * Picking an icon expands that pattern's card, collapses all the others and arms drawing on the image canvas
  * (PatternOverlay); picking it again disarms. Cards start collapsed.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import {
   MODEL_REGISTRY,
+  type CircleRoi,
   type ParameterSpec,
   type ParameterValue,
   type PatternRoi,
@@ -39,7 +40,7 @@ function useTr() {
 export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
   const { t, tr } = useTr();
-  const { status, error, entryErrors, specs, instances, activeKey } = useAppSelector((s) => s.processing);
+  const { status, error, entryErrors, specs, activeKey } = useAppSelector((s) => s.processing);
 
   useEffect(() => {
     if (status === "idle") void dispatch(fetchProcessingPatterns());
@@ -65,7 +66,9 @@ export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
                 type="button"
                 className="pattern-strip__btn"
                 aria-pressed={activeKey === spec.key}
-                title={caption}
+                aria-controls={`processing-pattern-${encodeURIComponent(spec.key)}`}
+                data-tooltip={caption}
+                data-styled-tooltip="true"
                 aria-label={caption}
                 disabled={disabled}
                 onClick={() => dispatch(selectPattern(activeKey === spec.key ? null : spec.key))}
@@ -79,11 +82,15 @@ export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
           <p className={`patterns-card__status${status === "error" ? " patterns-card__status--error" : ""}`}>{messages.join("\n")}</p>
         )}
       </div>
-      {specs.map((spec) => (
-        <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key} disabled={disabled} />
-      ))}
     </>
   );
+}
+
+export function ProcessingPatternCards({ disabled }: { disabled: boolean }) {
+  const { specs, instances, activeKey } = useAppSelector((s) => s.processing);
+  return <>{specs.map((spec) => (
+    <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key} disabled={disabled} />
+  ))}</>;
 }
 
 function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; instance: PatternInstance | undefined; active: boolean; disabled: boolean }) {
@@ -93,10 +100,18 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
   const collapsed = !active;                    // only the selected pattern's card is open
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
   const label = collapsed ? t("processing.expand") : t("processing.collapse");
+  const cardRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (active) {
+      cardRef.current?.focus({ preventScroll: true });
+      cardRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }, [active]);
   if (!instance) return null;
 
   return (
-    <div className={`card pattern-card${active ? " pattern-card--active" : ""}`} data-pattern={spec.key}>
+    <div ref={cardRef} id={`processing-pattern-${encodeURIComponent(spec.key)}`} tabIndex={-1} role="region" aria-label={caption}
+      className={`card pattern-card${active ? " pattern-card--active" : ""}`} data-pattern={spec.key}>
       <div className="card__header">
         <span className="card__title">{caption}</span>
         <button
@@ -104,7 +119,8 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
           className="card__collapse-btn"
           aria-expanded={!collapsed}
           aria-label={`${caption}: ${label}`}
-          title={label}
+          data-tooltip={`${caption}: ${label}`}
+          data-styled-tooltip="true"
           disabled={disabled}
           onClick={() => dispatch(selectPattern(collapsed ? spec.key : null))}
         >
@@ -140,6 +156,9 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
     if (s.roi === "rect") {
       const r = roi as RectRoi;
       text = t("processing.roi.rect").replace("{x0}", n(r.x_start)).replace("{x1}", n(r.x_end)).replace("{y0}", n(r.y_start)).replace("{y1}", n(r.y_end)).replace("{unit}", u);
+    } else if (s.roi === "circle") {
+      const r = roi as CircleRoi;
+      text = t("processing.roi.circle").replace("{cx}", n(r.cx)).replace("{cy}", n(r.cy)).replace("{radius}", n(r.radius)).replace("{unit}", u);
     } else if (s.roi === "ring") {
       const r = roi as RingRoi;
       text = t("processing.roi.ring").replace("{cx}", n(r.cx)).replace("{cy}", n(r.cy)).replace("{ri}", n(r.r_inner)).replace("{ro}", n(r.r_outer)).replace("{unit}", u);

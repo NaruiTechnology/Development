@@ -67,6 +67,8 @@ def make_workspace(base):
         shutil.copy2(ROOT / rel, slot / rel)
     stubs = {
         "GlasgowDataIO/Json/streamData.json": '{"Version": "0.8.0"}',
+        "GlasgowDataIO/Json/processingPatterns.json": '{"Patterns": []}',
+        "ionbeam-native/ionbeam_native/resources/icons/patternCircle.svg": '<svg xmlns="http://www.w3.org/2000/svg"/>',
         "GlasgowDataIO/IobeamControl/IobeamLauncher.py": "LAUNCHER = 1\n",
         "GlasgowDataIO/IobeamControl/applet/busController.py": "ADC_FSM = True\n",
         "GlasgowDataIO/IobeamControl/applet/upstreamBusController.py": "UPSTREAM = True\n",

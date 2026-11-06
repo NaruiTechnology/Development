@@ -150,6 +150,8 @@ deployment: the installation runs without it and the log ends with a
 Set them later without redeploying, in the web app (Settings > Admin >
 Database or FTP) or with `python3 -m secretstore set NAME` followed by
 `Development/Scripts/manage-local-system.sh restart`.
+The same launcher also accepts `bash Development/Scripts/manage-local-system.sh restart`
+or `python Development/Scripts/manage-local-system.sh restart`; Python hands off to Bash.
 
 ### Optional local admin database fallback
 

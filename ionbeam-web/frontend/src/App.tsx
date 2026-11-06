@@ -46,7 +46,7 @@ import { ImageCanvas, type CapturedScanImage } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { PatternOverlay } from "./components/PatternOverlay";
-import { ProcessingPatternsPanel } from "./components/ProcessingPatternsPanel";
+import { ProcessingPatternCards, ProcessingPatternsPanel } from "./components/ProcessingPatternsPanel";
 import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
 import { SimulationImageCard } from "./components/SimulationImageCard";
@@ -1878,6 +1878,7 @@ export function App() {
                         />
                       </div>
                     </div>
+                  {activeTopTab === "processing" && <ProcessingPatternCards disabled={scanControlsSafetyDisabled || phase === "stopping"} />}
                   {activeTopTab === "scan" && <div className="card save-results-card">
                     <div className="card__header">
                       <span className="card__title">{t("card.runReport")}</span>

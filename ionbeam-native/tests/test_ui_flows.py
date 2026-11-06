@@ -211,7 +211,7 @@ def test_processing_tab_cards_and_ring_drawing(h):
     assert w.active_top == "processing" and w.left_stack.currentWidget() is w.left_pages["processing"]
     assert pp.tool.enabled and w.right_stack.currentWidget() is w.roi_canvas
     # cards come from the JSON, skipped entries have none, all start collapsed
-    assert list(pp.cards) == ["solidBox", "openBox", "stairCut", "cleaningLine", "ring", "freeHand"]
+    assert list(pp.cards) == ["solidBox", "openBox", "stairCut", "cleaningLine", "circle", "ring", "freeHand"]
     assert all(c.collapsed for c in pp.cards.values())
     # clicking an icon expands that card and collapses the siblings; clicking again disarms
     pp.buttons["openBox"].click()
@@ -239,6 +239,29 @@ def test_processing_tab_cards_and_ring_drawing(h):
     ring = pp.models["ring"].roi
     assert ring and 0 < ring["r_inner"] < ring["r_outer"]
     assert pp.cards["ring"].readout.text() != "" and "No area" not in pp.cards["ring"].readout.text()
+    # Circle finishes on release, includes the centre, and can be cleared.
+    pp.buttons["circle"].click()
+    ed.mouse_press(ev(QEvent.Type.MouseButtonPress, c))
+    ed.mouse_move(ev(QEvent.Type.MouseMove, outer))
+    h.pump(0.1)  # paint the draft
+    ed.mouse_release(ev(QEvent.Type.MouseButtonRelease, outer))
+    circle = pp.models["circle"]
+    assert circle.roi and circle.roi["radius"] > 0 and not pp.tool.drawing
+    assert circle.contains(circle.roi["cx"], circle.roi["cy"])
+    assert "radius" in pp.cards["circle"].readout.text()
+    assert "Area:" in pp.cards["circle"].readout.text()
+    h.pump(0.1)  # paint the committed circle
+    saved = dict(circle.roi)
+    ed.mouse_press(ev(QEvent.Type.MouseButtonPress, c))
+    ed.mouse_release(ev(QEvent.Type.MouseButtonRelease, c))
+    assert circle.roi == saved  # clicks are not drawings
+    ed.mouse_press(ev(QEvent.Type.MouseButtonPress, c))
+    ed.mouse_move(ev(QEvent.Type.MouseMove, inner))
+    ed.mouse_press(ev(QEvent.Type.MouseButtonPress, inner, Qt.MouseButton.RightButton))
+    ed.mouse_release(ev(QEvent.Type.MouseButtonRelease, inner))
+    assert circle.roi == saved and not pp.tool.drawing
+    pp.cards["circle"].clear_btn.click()
+    assert circle.roi is None
     # the rectangle ROI tool is not touched while the Processing tab owns the canvas
     assert w.ctl.scan.roi.selection is None
     # leaving the tab releases the canvas

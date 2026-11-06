@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Accept both Bash and Python invocation. Bash runs `true` with ignored arguments;
+# Python stores the shell implementation as a raw string and runs the handoff below.
+true = r""":"
 set -Eeuo pipefail
 
 # Local Operations stack administrator. The checkout may live anywhere: every
@@ -398,3 +401,13 @@ case "${ACTION}" in
       "${LOG_DIR}/ionbeam-web-frontend.log"
     ;;
 esac
+exit "$?"
+# Bash ignores the Python handoff; Python includes this line in the raw string.
+: <<'PYTHON_HANDOFF'
+":"""
+
+import os
+import sys
+
+os.execvp("bash", ["bash", os.path.abspath(__file__), *sys.argv[1:]])
+PYTHON_HANDOFF

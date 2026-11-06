@@ -30,7 +30,10 @@
   "processing.choice.left": "Left",
   "processing.choice.right": "Right",
   "processing.choice.horizontal": "Horizontal",
-  "processing.choice.vertical": "Vertical"
+  "processing.choice.vertical": "Vertical",
+  "processing.pattern.circle": "Circle",
+  "processing.hint.circle": "Drag from the centre to set the radius; release to finish. Esc or right-click cancels.",
+  "processing.roi.circle": "Centre ({cx}, {cy}) {unit}; radius {radius}"
  },
  "zh-CN": {
   "native.releaseDevice": "释放 Glasgow（交给网页版使用）",
@@ -63,7 +66,10 @@
   "processing.choice.left": "向左",
   "processing.choice.right": "向右",
   "processing.choice.horizontal": "水平",
-  "processing.choice.vertical": "垂直"
+  "processing.choice.vertical": "垂直",
+  "processing.pattern.circle": "空心圆",
+  "processing.hint.circle": "从圆心向外拖动以设定半径，松开完成。按 Esc 或右键取消。",
+  "processing.roi.circle": "圆心 ({cx}, {cy}) {unit}；半径 {radius}"
  },
  "zh-TW": {
   "native.releaseDevice": "釋放 Glasgow（交給網頁版使用）",
@@ -96,6 +102,9 @@
   "processing.choice.left": "向左",
   "processing.choice.right": "向右",
   "processing.choice.horizontal": "水平",
-  "processing.choice.vertical": "垂直"
+  "processing.choice.vertical": "垂直",
+  "processing.pattern.circle": "空心圓",
+  "processing.hint.circle": "從圓心向外拖曳以設定半徑，放開完成。按 Esc 或右鍵取消。",
+  "processing.roi.circle": "圓心 ({cx}, {cy}) {unit}；半徑 {radius}"
  }
 }

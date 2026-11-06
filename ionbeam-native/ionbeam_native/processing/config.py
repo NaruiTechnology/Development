@@ -16,7 +16,7 @@ from typing import Optional
 from .models import MODEL_REGISTRY, ParameterSpec
 
 log = logging.getLogger(__name__)
-ROI_KINDS = ("rect", "ring", "polygon")
+ROI_KINDS = ("rect", "circle", "ring", "polygon")
 PARAM_TYPES = ("int", "float", "bool", "choice")
 
 

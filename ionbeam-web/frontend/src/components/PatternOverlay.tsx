@@ -5,6 +5,7 @@
  * pattern, and every pattern's ROI is painted over the image.
  *
  *   rect     drag a rectangle
+ *   circle   drag from the centre to the radius; release to finish
  *   ring     drag from the centre to the outer circle, then click for the inner circle; both circles share the
  *            centre and the pattern is the area between them (Esc / right-click cancels)
  *   polygon  press, drag, release: a free-hand outline
@@ -14,7 +15,7 @@
  */
 import { useEffect, useReducer, useRef, type PointerEvent as ReactPointerEvent } from "react";
 
-import { cleaningLines, stairRects, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
+import { cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { useAppDispatch, useAppSelector } from "../store";
 import { setPatternRoi } from "../store/processingSlice";
@@ -34,7 +35,7 @@ export interface CanvasOverlayApi {
 
 type Draft =
   | { kind: "rect"; start: Pt; rect: RectRoi | null }
-  | { kind: "ring"; center: Pt; centerCanvas: Pt; outer: number; inner: number; dragging: boolean }
+  | { kind: "circle" | "ring"; center: Pt; centerCanvas: Pt; outer: number; inner: number; dragging: boolean }
   | { kind: "polygon"; points: Pt[] };
 
 export function PatternOverlay({ disabled, api }: { disabled: boolean; api: CanvasOverlayApi }) {
@@ -99,7 +100,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       // synthetic events have no active pointer
     }
     if (active.roi === "rect") draft.current = { kind: "rect", start: p, rect: null };
-    else if (active.roi === "ring") draft.current = { kind: "ring", center: api.toWorld(p), centerCanvas: p, outer: 0, inner: 0, dragging: true };
+    else if (active.roi === "circle" || active.roi === "ring") draft.current = { kind: active.roi, center: api.toWorld(p), centerCanvas: p, outer: 0, inner: 0, dragging: true };
     else draft.current = { kind: "polygon", points: [p] };
     repaint();
   }
@@ -114,11 +115,11 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         const b = api.toWorld(p);
         d.rect = { x_start: Math.min(a.x, b.x), x_end: Math.max(a.x, b.x), y_start: Math.min(a.y, b.y), y_end: Math.max(a.y, b.y) };
       }
-    } else if (d.kind === "ring") {
+    } else if (d.kind === "circle" || d.kind === "ring") {
       const dist = worldDistance(api.toWorld(p), d.center);
       if (d.dragging) d.outer = dist;
       else d.inner = Math.min(dist, d.outer * 0.999);
-    } else {
+    } else if (d.kind === "polygon") {
       const last = d.points[d.points.length - 1];
       const spacing = Number(instances[active.key]?.parameters.smoothing ?? 2);
       if (Math.hypot(p.x - last.x, p.y - last.y) >= Math.max(spacing, 0.5)) d.points.push(p);
@@ -133,15 +134,21 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     if (d.kind === "rect") {
       if (d.rect) commit(d.rect);
       draft.current = null;
-    } else if (d.kind === "ring") {
+    } else if (d.kind === "circle" || d.kind === "ring") {
       const moved = Math.hypot(p.x - d.centerCanvas.x, p.y - d.centerCanvas.y);
+      if (d.dragging) d.outer = worldDistance(api.toWorld(p), d.center);
       if (moved >= DRAG_THRESHOLD && d.outer > 0) {
-        d.dragging = false;                     // wait for the inner-circle click
-        d.inner = d.outer * 0.5;
+        if (d.kind === "circle") {
+          commit({ cx: d.center.x, cy: d.center.y, radius: d.outer });
+          draft.current = null;
+        } else {
+          d.dragging = false;                     // wait for the inner-circle click
+          d.inner = d.outer * 0.5;
+        }
       } else {
         draft.current = null;
       }
-    } else {
+    } else if (d.kind === "polygon") {
       if (d.points.length >= 3) commit({ points: d.points.map((q): [number, number] => { const w = api.toWorld(q); return [w.x, w.y]; }) });
       draft.current = null;
     }
@@ -177,6 +184,9 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       )}
       {active && d?.kind === "ring" && d.outer > 0 && (
         <Shape spec={active} params={{}} roi={{ cx: d.center.x, cy: d.center.y, r_inner: d.dragging ? 0 : d.inner, r_outer: d.outer }} active draft cx={cx} cy={cy} sx={sx} sy={sy} />
+      )}
+      {active && d?.kind === "circle" && d.outer > 0 && (
+        <Shape spec={active} params={{}} roi={{ cx: d.center.x, cy: d.center.y, radius: d.outer }} active draft cx={cx} cy={cy} sx={sx} sy={sy} />
       )}
       {d?.kind === "polygon" && d.points.length > 1 && (
         <polyline
@@ -215,6 +225,10 @@ function Shape({ spec, params, roi, active, draft = false, cx, cy, sx, sy }: Sha
   const fill = { fill: color, fillOpacity: active ? 0.22 : 0.14 };
   const rectBox = (r: RectRoi) => ({ x: Math.min(cx(r.x_start), cx(r.x_end)), y: Math.min(cy(r.y_start), cy(r.y_end)), width: Math.abs(cx(r.x_end) - cx(r.x_start)), height: Math.abs(cy(r.y_end) - cy(r.y_start)) });
 
+  if (spec.roi === "circle") {
+    const r = roi as CircleRoi;
+    return <ellipse cx={cx(r.cx)} cy={cy(r.cy)} rx={r.radius * sx} ry={r.radius * sy} fill="none" {...common} />;
+  }
   if (spec.roi === "ring") {
     const r = roi as RingRoi;
     const x = cx(r.cx);

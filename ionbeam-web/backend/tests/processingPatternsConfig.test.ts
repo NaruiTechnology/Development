@@ -7,10 +7,12 @@ import { parseProcessingPatterns, readProcessingPatterns } from "../src/processi
 
 const shipped = path.resolve(__dirname, "..", "..", "..", "GlasgowDataIO", "Json", "processingPatterns.json");
 
-test("shipped file: six active patterns in order, skipped ones dropped, no errors", () => {
+test("shipped file: seven active patterns in order, skipped ones dropped, no errors", () => {
   const cfg = readProcessingPatterns(shipped);
-  assert.deepEqual(cfg.patterns.map((p) => p.key), ["solidBox", "openBox", "stairCut", "cleaningLine", "ring", "freeHand"]);
+  assert.deepEqual(cfg.patterns.map((p) => p.key), ["solidBox", "openBox", "stairCut", "cleaningLine", "circle", "ring", "freeHand"]);
   assert.deepEqual(cfg.errors, []);
+  assert.equal(cfg.patterns.find((p) => p.key === "circle")?.roi, "circle");
+  assert.equal(cfg.patterns.find((p) => p.key === "circle")?.model, "CircleModel");
   assert.equal(cfg.patterns.find((p) => p.key === "ring")?.roi, "ring");
   assert.equal(cfg.patterns.find((p) => p.key === "stairCut")?.parameters.find((q) => q.name === "steps")?.default, 5);
 });

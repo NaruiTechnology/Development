@@ -6,6 +6,7 @@ its parameter values and the ROI the operator drew, both in world coordinates
 
 ROI shapes (``ROI_KIND``):
   rect     {"x_start", "x_end", "y_start", "y_end"}                 (ordered)
+  circle   {"cx", "cy", "radius"}                              solid disk
   ring     {"cx", "cy", "r_inner", "r_outer"}   two concentric circles, one centre
   polygon  {"points": [[x, y], ...]}                                 (>= 3 points)
 """
@@ -211,6 +212,26 @@ class CleaningLineModel(PatternModel):
                 out.append(((x, r["y_start"]), (x, r["y_end"])))
                 x += spacing
         return out
+
+
+@register_model
+class CircleModel(PatternModel):
+    """A solid circular area, including its centre."""
+
+    ROI_KIND = "circle"
+
+    def validate_roi(self, roi: dict) -> dict:
+        cx, cy, radius = _finite(roi, "cx", "cy", "radius")
+        if radius <= 0:
+            raise ValueError("Circle needs a positive radius")
+        return {"cx": cx, "cy": cy, "radius": radius}
+
+    def area(self) -> float:
+        return 0.0 if not self.roi else math.pi * self.roi["radius"] ** 2
+
+    def contains(self, x: float, y: float) -> bool:
+        r = self.roi
+        return bool(r and math.hypot(x - r["cx"], y - r["cy"]) <= r["radius"])
 
 
 @register_model

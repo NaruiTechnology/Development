@@ -11,7 +11,7 @@ from ionbeam_native.processing.config import parse_config
 def test_shipped_config_loads_and_skips():
     cfg, models = load_models(processing_patterns_path())
     assert not cfg.errors
-    assert list(models) == ["solidBox", "openBox", "stairCut", "cleaningLine", "ring", "freeHand"]
+    assert list(models) == ["solidBox", "openBox", "stairCut", "cleaningLine", "circle", "ring", "freeHand"]
     assert all(s.skip for s in cfg.specs if s.key not in models)
     assert models["stairCut"].parameters["steps"] == 5
 
@@ -74,6 +74,23 @@ def test_stair_and_cleaning_geometry():
     cl.set_roi({"x_start": 0, "x_end": 10, "y_start": 0, "y_end": 1})
     cl.set_parameter("spacing", 0.25)
     assert len(cl.lines()) == 4
+
+
+def test_circle_is_a_solid_disk():
+    _, models = load_models(processing_patterns_path())
+    circle = models["circle"]
+    assert circle.area() == 0 and not circle.contains(5, 5)
+    circle.set_roi({"cx": 5, "cy": 5, "radius": 3})
+    assert math.isclose(circle.area(), math.pi * 9)
+    assert circle.contains(5, 5) and circle.contains(8, 5) and not circle.contains(9, 5)
+    assert circle.to_dict()["model"] == "CircleModel"
+    for radius in (0, -1, math.inf, math.nan):
+        with pytest.raises(ValueError):
+            circle.set_roi({"cx": 5, "cy": 5, "radius": radius})
+    with pytest.raises(ValueError):
+        circle.set_roi({"cx": 5, "cy": 5})
+    circle.clear_roi()
+    assert circle.roi is None
 
 
 def test_ring_is_two_concentric_circles():

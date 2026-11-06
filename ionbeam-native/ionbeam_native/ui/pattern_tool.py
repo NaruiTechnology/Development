@@ -5,6 +5,7 @@ visible) it takes over the canvas mouse: the operator draws the ROI of the
 selected pattern model, and every drawn pattern ROI is painted on the image.
 
   rect     drag a rectangle
+  circle   drag from the centre to the radius; release to finish
   ring     drag from the centre to the outer circle, then click to place the
            inner circle; both circles share the centre, the pattern is the area
            between them
@@ -102,7 +103,7 @@ class PatternTool:
         kind = model.ROI_KIND
         if kind == "rect":
             self.rect_start, self.rect_draft = pt, None
-        elif kind == "ring":
+        elif kind in ("circle", "ring"):
             if self.ring_stage == 1:
                 w = canvas._to_dut(pt)
                 inner = min(math.hypot(w[0] - self.ring_center[0], w[1] - self.ring_center[1]),
@@ -128,7 +129,7 @@ class PatternTool:
         if kind == "rect" and self.rect_start is not None:
             if max(abs(pt[0] - self.rect_start[0]), abs(pt[1] - self.rect_start[1])) >= DRAG_THRESHOLD:
                 self.rect_draft = canvas._rect_from_points(self.rect_start, pt)
-        elif kind == "ring" and (self.ring_drag or self.ring_stage == 1):
+        elif kind in ("circle", "ring") and (self.ring_drag or self.ring_stage == 1):
             w = canvas._to_dut(pt)
             d = math.hypot(w[0] - self.ring_center[0], w[1] - self.ring_center[1])
             if self.ring_drag:
@@ -152,13 +153,20 @@ class PatternTool:
             if self.rect_draft is not None:
                 self._commit(model, self.rect_draft)
             self.rect_start, self.rect_draft = None, None
-        elif kind == "ring" and self.ring_drag:
+        elif kind in ("circle", "ring") and self.ring_drag:
             self.ring_drag = False
             pt = canvas._canvas_point(e.position())
             moved = math.hypot(pt[0] - self.ring_center_canvas[0], pt[1] - self.ring_center_canvas[1])
+            w = canvas._to_dut(pt)
+            self.ring_outer = math.hypot(w[0] - self.ring_center[0], w[1] - self.ring_center[1])
             if moved >= DRAG_THRESHOLD and self.ring_outer > 0:
-                self.ring_stage = 1
-                self.ring_inner = self.ring_outer * 0.5
+                if kind == "circle":
+                    self._commit(model, {"cx": self.ring_center[0], "cy": self.ring_center[1],
+                                         "radius": self.ring_outer})
+                    self.reset()
+                else:
+                    self.ring_stage = 1
+                    self.ring_inner = self.ring_outer * 0.5
             else:
                 self.reset()
         elif kind == "polygon" and self.poly is not None:
@@ -192,6 +200,9 @@ class PatternTool:
         kind = active.ROI_KIND
         if kind == "rect" and self.rect_draft:
             self._paint_roi(p, canvas, active, self.rect_draft, True, draft=True)
+        elif kind == "circle" and self.ring_drag and self.ring_outer > 0:
+            self._paint_roi(p, canvas, active, {"cx": self.ring_center[0], "cy": self.ring_center[1],
+                                                "radius": self.ring_outer}, True, draft=True)
         elif kind == "ring" and (self.ring_drag or self.ring_stage == 1) and self.ring_outer > 0:
             self._paint_roi(p, canvas, active, {"cx": self.ring_center[0], "cy": self.ring_center[1],
                                                 "r_inner": self.ring_inner if self.ring_stage == 1 else 0.0,
@@ -215,6 +226,11 @@ class PatternTool:
         kind = model.ROI_KIND
         if kind == "rect":
             self._paint_rect_model(p, canvas, model, roi, col, pen, fill)
+        elif kind == "circle":
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            c = self._to_canvas(canvas, roi["cx"], roi["cy"])
+            sx, sy = self._scales(canvas)
+            p.drawEllipse(c, roi["radius"] * sx, roi["radius"] * sy)
         elif kind == "ring":
             c = self._to_canvas(canvas, roi["cx"], roi["cy"])
             sx, sy = self._scales(canvas)

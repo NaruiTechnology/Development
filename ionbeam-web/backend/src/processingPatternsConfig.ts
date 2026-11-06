@@ -13,7 +13,7 @@ import fs from "node:fs";
 
 import { ConfigError } from "./configManager";
 
-export const ROI_KINDS = ["rect", "ring", "polygon"] as const;
+export const ROI_KINDS = ["rect", "circle", "ring", "polygon"] as const;
 export const PARAMETER_TYPES = ["int", "float", "bool", "choice"] as const;
 export type RoiKind = (typeof ROI_KINDS)[number];
 export type ParameterType = (typeof PARAMETER_TYPES)[number];

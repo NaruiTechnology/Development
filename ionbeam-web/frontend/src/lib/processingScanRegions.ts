@@ -17,9 +17,10 @@ export function processingScanRegions(specs: readonly Pick<PatternSpec, "key">[]
       if (!shape.points.length) continue;
       bounds = { x_start: Math.min(...shape.points.map(([x]) => x)), x_end: Math.max(...shape.points.map(([x]) => x)),
         y_start: Math.min(...shape.points.map(([, y]) => y)), y_end: Math.max(...shape.points.map(([, y]) => y)) };
-    } else if ("r_outer" in shape) {
-      bounds = { x_start: shape.cx - shape.r_outer, x_end: shape.cx + shape.r_outer,
-        y_start: shape.cy - shape.r_outer, y_end: shape.cy + shape.r_outer };
+    } else if ("cx" in shape) {
+      const radius = "radius" in shape ? shape.radius : shape.r_outer;
+      bounds = { x_start: shape.cx - radius, x_end: shape.cx + radius,
+        y_start: shape.cy - radius, y_end: shape.cy + radius };
     } else bounds = { ...shape };
     bounds = { x_start: Math.max(Math.min(field.x_origin, field.x_end), bounds.x_start),
       x_end: Math.min(Math.max(field.x_origin, field.x_end), bounds.x_end),

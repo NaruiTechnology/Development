@@ -31,6 +31,17 @@ test("rect models order the corners and reject empty areas", () => {
   assert.throws(() => m.validateRoi({ x_start: 1, x_end: 1, y_start: 0, y_end: 2 }));
 });
 
+test("circle is a solid disk with a finite positive radius", () => {
+  const m = MODEL_REGISTRY.CircleModel;
+  const r = m.validateRoi({ cx: 5, cy: 5, radius: 3 });
+  assert.ok(Math.abs(m.area(r) - Math.PI * 9) < 1e-9);
+  assert.ok(m.contains(r, 5, 5) && m.contains(r, 8, 5) && !m.contains(r, 9, 5));
+  for (const radius of [0, -1, Infinity, NaN, undefined]) {
+    assert.throws(() => m.validateRoi({ cx: 5, cy: 5, radius }));
+  }
+  assert.throws(() => m.validateRoi({ cx: NaN, cy: 5, radius: 3 }));
+});
+
 test("ring is two concentric circles: radii ordered, area between them", () => {
   const m = MODEL_REGISTRY.RingModel;
   const r = m.validateRoi({ cx: 5, cy: 5, r_inner: 4, r_outer: 2 });

@@ -142,6 +142,9 @@ REQUIRED_DIST_MODULES = (
 )
 REQUIRED_DIST_FILES = (
     'Development/GlasgowDataIO/Json/streamData.json',
+    # Shared Processing catalogue and the solid Circle tool's native artwork.
+    'Development/GlasgowDataIO/Json/processingPatterns.json',
+    'Development/ionbeam-native/ionbeam_native/resources/icons/patternCircle.svg',
     'Development/Scripts/manage-local-system.sh',
     'Development/Scripts/program-fpga-ram.py',
     'Development/ionbeam-web/backend/package.json',

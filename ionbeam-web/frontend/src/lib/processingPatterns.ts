@@ -7,10 +7,11 @@
  * changes.
  *
  *   rect     { x_start, x_end, y_start, y_end }                      ordered
+ *   circle   { cx, cy, radius }                                    solid disk
  *   ring     { cx, cy, r_inner, r_outer }                           two concentric circles
  *   polygon  { points: [x, y][] }                                   at least three points
  */
-export type RoiKind = "rect" | "ring" | "polygon";
+export type RoiKind = "rect" | "circle" | "ring" | "polygon";
 export type ParameterType = "int" | "float" | "bool" | "choice";
 export type ParameterValue = number | boolean | string;
 
@@ -37,8 +38,9 @@ export interface PatternSpec {
 
 export interface RectRoi { x_start: number; x_end: number; y_start: number; y_end: number }
 export interface RingRoi { cx: number; cy: number; r_inner: number; r_outer: number }
+export interface CircleRoi { cx: number; cy: number; radius: number }
 export interface PolygonRoi { points: [number, number][] }
-export type PatternRoi = RectRoi | RingRoi | PolygonRoi;
+export type PatternRoi = RectRoi | CircleRoi | RingRoi | PolygonRoi;
 export type PatternParameters = Record<string, ParameterValue>;
 
 export interface PatternModelDef {
@@ -139,6 +141,20 @@ const ringDef: PatternModelDef = {
   },
 };
 
+const circleDef: PatternModelDef = {
+  roi: "circle",
+  validateRoi: (roi) => {
+    const [cx, cy, radius] = finite(roi, "cx", "cy", "radius");
+    if (radius <= 0) throw new Error("Circle needs a positive radius");
+    return { cx, cy, radius };
+  },
+  area: (r) => Math.PI * (r as CircleRoi).radius ** 2,
+  contains: (r, x, y) => {
+    const q = r as CircleRoi;
+    return Math.hypot(x - q.cx, y - q.cy) <= q.radius;
+  },
+};
+
 const polygonDef: PatternModelDef = {
   roi: "polygon",
   validateRoi: validatePolygon,
@@ -161,6 +177,7 @@ export const MODEL_REGISTRY: Record<string, PatternModelDef> = {
   OpenBoxModel: rectDef(),
   StairCutModel: rectDef(),
   CleaningLineModel: rectDef(),
+  CircleModel: circleDef,
   RingModel: ringDef,
   FreeHandModel: polygonDef,
 };
