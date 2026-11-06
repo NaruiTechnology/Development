@@ -8104,3 +8104,8 @@ body {
   margin-left: 0;
   flex-shrink: 0;
 }
+
+.roi-canvas-frame { position: relative; flex: 1 1 0; min-width: 0; align-self: flex-start; }
+.processing-parallel-controls { flex: 1 0 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.roi-canvas-frame > .canvas-image-scale { z-index: 30; }

@@ -42,6 +42,23 @@ export async function captureProcessingCanvas(root: HTMLElement): Promise<string
       image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     });
   }
+  const scale = root.querySelector<HTMLElement>(".canvas-image-scale");
+  const fraction = Number(scale?.dataset.scaleFraction);
+  if (scale && Number.isFinite(fraction) && fraction > 0) {
+    context.save(); context.resetTransform();
+    const length = fraction * copy.width;
+    const right = copy.width - 14;
+    const bottom = copy.height - 14;
+    context.fillStyle = "rgba(9,20,36,0.65)";
+    context.fillRect(right - length - 8, bottom - 30, length + 16, 38);
+    context.strokeStyle = context.fillStyle = "#fff"; context.lineWidth = 2;
+    context.beginPath(); context.moveTo(right - length, bottom); context.lineTo(right, bottom);
+    context.moveTo(right - length, bottom - 4); context.lineTo(right - length, bottom + 4);
+    context.moveTo(right, bottom - 4); context.lineTo(right, bottom + 4); context.stroke();
+    context.font = "11px monospace"; context.textAlign = "center";
+    context.fillText(scale.dataset.scaleLabel ?? "", right - length / 2, bottom - 10);
+    context.restore();
+  }
   return copy.toDataURL("image/png");
 }
 

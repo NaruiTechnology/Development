@@ -90,7 +90,7 @@ type LiveScanUpdate = {
   points?: VectorRequest["points"];
 } | { gray_rule: LiveGrayRule };
 
-export function useScanStream() {
+export function useScanStream(regionCountOverride?: number) {
   const dispatch = useAppDispatch();
   const wsRef = useRef<WebSocket | null>(null);
   const closureKindRef = useRef<Closure | null>(null);
@@ -144,8 +144,9 @@ export function useScanStream() {
   const scanRegionCount = useAppSelector((s: RootState) =>
     s.scan.roi.roi_scan_enabled ? s.scan.roi.scan_regions.length : 0);
   const scanZoom = useAppSelector((s: RootState) => s.scan.roi.scan_zoom);
-  const scanRegionsRef = useRef({ regionCount: scanRegionCount, zoom: scanZoom });
-  scanRegionsRef.current = { regionCount: scanRegionCount, zoom: scanZoom };
+  const effectiveRegionCount = regionCountOverride ?? scanRegionCount;
+  const scanRegionsRef = useRef({ regionCount: effectiveRegionCount, zoom: scanZoom });
+  scanRegionsRef.current = { regionCount: effectiveRegionCount, zoom: scanZoom };
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const chunksReceivedRef = useRef(chunksReceived);

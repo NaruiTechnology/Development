@@ -45,6 +45,7 @@ import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
 import { Icon } from "./Icon";
 import { TransformCard } from "./TransformCard";
+import { processingScanRegions } from "../lib/processingScanRegions";
 import { VectorScanPathField } from "./VectorScanPathField";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { RunValidatedHelp } from "./RunValidatedHelp";
@@ -268,7 +269,21 @@ export function ScanControls({
   const vectorImageEdge = useAppSelector((s) => s.image.vectorEdge);
   const vectorImageFilled = useAppSelector((s) => s.image.vectorFilled);
   const preview = useAppSelector((s) => s.scan.preview);
-  const roiState = useAppSelector((s) => s.scan.roi);
+  const baseROIState = useAppSelector((s) => s.scan.roi);
+  const patterns = useAppSelector((s) => s.processing);
+  // Parameter edits and pattern selection do not change acquisition bounds.
+  const shapeKey = JSON.stringify(patterns.specs.map((spec) => [spec.key, patterns.instances[spec.key]?.roi ?? null]));
+  const processingPlan = useMemo(() => processingScanRegions(patterns.specs, patterns.instances, baseROIState),
+    [shapeKey, baseROIState.x_origin, baseROIState.x_end, baseROIState.y_origin, baseROIState.y_end]);
+  const roiState = useMemo(() => processingMode ? {
+    ...baseROIState, selection: null, scan_regions: processingPlan.regions,
+    roi_scan_enabled: processingPlan.regions.length > 0,
+    active_scan_region: Math.max(0, processingPlan.keys.indexOf(patterns.activeKey ?? "")),
+  } : baseROIState, [processingMode, baseROIState, processingPlan, patterns.activeKey]);
+  useEffect(() => {
+    if (processingMode) console.info("[processing] scan ROI plan", { patterns: processingPlan.keys,
+      regions: processingPlan.regions, roiScan: processingPlan.regions.length > 0, zoom: roiState.scan_zoom });
+  }, [processingMode, processingPlan, roiState.scan_zoom]);
   const roiStateRef = useRef(roiState);
   roiStateRef.current = roiState;
   const activeScanRegions = useMemo(
@@ -313,7 +328,7 @@ export function ScanControls({
   const roiSelectionKey = roi
     ? `${roi.x_start}:${roi.x_end}:${roi.y_start}:${roi.y_end}`
     : "";
-  const stream = useScanStream();
+  const stream = useScanStream(processingMode ? processingPlan.regions.length : undefined);
   const prevPhaseRef = useRef(phase);
   // Infinite mode repeats one prepared request until Stop: a Raster frame or a
   // Vector scan (with the scan type its progress/feedback handling needs).
@@ -1302,8 +1317,11 @@ export function ScanControls({
         scheduleZoomRestart("infinite");
         return;
       }
-      suppressRegionRollbackRef.current = true;
-      changed.forEach((index) => dispatch(updateScanRegion({ index, region: previous[index] })));
+      if (processingMode) setZoomError(detail);
+      else {
+        suppressRegionRollbackRef.current = true;
+        changed.forEach((index) => dispatch(updateScanRegion({ index, region: previous[index] })));
+      }
     }, () => {
       if (generation !== regionUpdateGenerationRef.current) return;
       liveEntry.req.roi = geometry.roi;
@@ -1317,8 +1335,11 @@ export function ScanControls({
       }
       dispatch(queueLiveScanDisplay({ kind: liveEntry.kind, display }));
     })) {
-      suppressRegionRollbackRef.current = true;
-      changed.forEach((index) => dispatch(updateScanRegion({ index, region: previous[index] })));
+      if (processingMode) setZoomError("Scan stream is not ready to accept the pattern ROI update.");
+      else {
+        suppressRegionRollbackRef.current = true;
+        changed.forEach((index) => dispatch(updateScanRegion({ index, region: previous[index] })));
+      }
     }
   }, [activeScanRegions]);
 
@@ -1682,6 +1703,19 @@ export function ScanControls({
     };
   }, [clearInfiniteScanState]);
 
+  const parallelSwitch = (
+    <label className="checkbox vacuum-switch app-switch scan-parallel-toggle" title={t("scan.parallel.title")}>
+              <input
+                type="checkbox"
+                checked={parallelRegions && canParallelRegions}
+                disabled={zoomDisabled || settingsSaving || backendRestarting || !canParallelRegions}
+                onChange={(event) => setParallelRegions(event.target.checked)}
+              />
+              <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+              <span>{t("scan.parallel")}</span>
+            </label>
+  );
+
   const validatedActions = (
     <>
       <span className="scan-action-with-help">
@@ -1806,6 +1840,14 @@ export function ScanControls({
           <LoadingSpinner inline size={20} ariaLabel={t("scan.busy.title")} />
         </span>
       )}
+      {processingMode && <div className="processing-parallel-controls">
+        <label className="checkbox vacuum-switch app-switch scan-roi-toggle" title={t("processing.roiAutomatic")}>
+          <input type="checkbox" checked={roiState.roi_scan_enabled} disabled readOnly />
+          <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+          <span>{t("scan.roi.edit")}</span>
+        </label>
+        {parallelSwitch}
+      </div>}
       {(kind === "raster" || kind === "vector") && <TransformCard />}
       {!processingMode && (kind === "raster" || kind === "vector") && (
         <div className="card scan-roi-controls-card">
@@ -1839,16 +1881,7 @@ export function ScanControls({
               <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
               <span>{t("scan.roi.edit")}</span>
             </label>
-            <label className="checkbox vacuum-switch app-switch scan-parallel-toggle" title={t("scan.parallel.title")}>
-              <input
-                type="checkbox"
-                checked={parallelRegions && canParallelRegions}
-                disabled={zoomDisabled || settingsSaving || backendRestarting || !canParallelRegions}
-                onChange={(event) => setParallelRegions(event.target.checked)}
-              />
-              <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-              <span>{t("scan.parallel")}</span>
-            </label>
+            {parallelSwitch}
           </div>
         </div>
       )}

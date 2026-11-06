@@ -1,3 +1,5 @@
+import { ImageScaleChip } from "./ImageScaleChip";
+import { fullCanvasImageExtent } from "../lib/imageScale";
 import { measuredFieldSpan } from "../lib/dimensionMeasurement";
 import { saveDimensionCalibration } from "../store/dimensionCalibrationSlice";
 import { saveDimensionCalibrationRemote } from "../lib/dimensionCalibrationApi";
@@ -1632,6 +1634,7 @@ export function ROIEditor({
 
       {(variant === "canvas" || variant === "all") && (
         <div className="canvas-stage roi-canvas-stage">
+        <div className="roi-canvas-frame">
         <div
           ref={canvasWrapRef}
           className={`roi-canvas-wrap${roi.calibration_enabled ? " roi-canvas-wrap--calibrating" : ""}`}
@@ -2155,6 +2158,9 @@ export function ROIEditor({
               <span>Spot beam-on pixels</span>
             </div>
           )}
+        </div>
+        {processingPreview && <ImageScaleChip extent={fullCanvasImageExtent(roi, globalPixelSize)}
+          rotate90={streamTransforms.rotate90} zoom={roi.scan_zoom} />}
         </div>
         <LevelWedge
           histogram={grayHist}

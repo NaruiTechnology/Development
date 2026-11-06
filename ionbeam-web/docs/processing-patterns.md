@@ -51,3 +51,24 @@ cleared. Unlock returns to one live pane; Split restores the saved layout.
 Processing keeps its pane state while visiting other tabs and does not change
 Scan's raster/vector pane layouts. Snapshot export includes the current display
 orientation and pattern geometry.
+
+
+## Pattern-driven acquisition
+
+Processing derives its acquisition ROI list from the drawn pattern instances,
+in catalogue order. A first drawing enables ROI Scan automatically; clearing the
+last drawing returns to full-field acquisition. The read-only ROI Scan switch
+shows this automatic mode. Processing uses its own derived plan and does not
+replace the Scan tab's configured ROIs.
+
+The existing live geometry/restart path applies edits, region-count changes and
+Zoom to these windows. Rectangles use their drawn bounds; rings and freehand
+patterns use clipped bounding rectangles because the acquisition API supports
+rectangular windows. Pattern shapes are preserved; this is image acquisition,
+not a shape-specific milling executor. Parallel uses the same switch, default,
+interleaving and sequential fallback as Scan, and is available with two or more
+valid pattern regions.
+
+The bottom-right scale uses the same calibration, unit conversion and Zoom label
+as Scan. Its line width is fixed as Zoom changes, and it stays upright outside
+the transformed image layer. Processing Split snapshots also include this scale.

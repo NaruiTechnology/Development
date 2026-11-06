@@ -34,6 +34,12 @@ for (const kind of ["raster", "vector"]) {
           createNodeMock: (node) => node.props.className === "roi-canvas-layer roi-canvas-layer--scan-path" ? canvas : null,
         });
       });
+      const scaleBefore = renderer.root.findByProps({ className: "canvas-image-scale" }).props;
+      assert.ok(scaleBefore["aria-label"], "Processing displays the physical scale bar");
+      await act(async () => { store.dispatch(scan.setScanZoom(2)); });
+      const scaleAfter = renderer.root.findByProps({ className: "canvas-image-scale" }).props;
+      assert.equal(scaleAfter.style.width, scaleBefore.style.width, "live Zoom keeps the bar width fixed");
+      assert.equal(parseFloat(scaleAfter["aria-label"]), parseFloat(scaleBefore["aria-label"]) / 2);
       assert.ok(operations.some(([op]) => op === "stroke"), "the active sweep must be visible without a selection");
       assert.ok(operations.some(([op]) => op === "arc"), "the marker remains visible at a live frame boundary (cursor zero)");
       assert.equal(callbacks.size, 1, "one animation loop follows the live scan");

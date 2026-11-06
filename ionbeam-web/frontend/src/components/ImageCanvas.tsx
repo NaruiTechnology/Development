@@ -1,3 +1,4 @@
+import { ImageScaleChip } from "./ImageScaleChip";
 import { TextureMeasurements } from "./TextureMeasurements";
 /**
  * Renders the raster grayscale frame or vector ADC image onto a canvas.
@@ -59,7 +60,7 @@ import {
 import { LevelWedge } from "./LevelWedge";
 import { selectGlobalPixelSize } from "../store/selectors";
 import { formatPixelSize, pixelSizeFromExtent, selectionPixelSize } from "../lib/pixelSize";
-import { fullCanvasImageExtent, imageScale, type ImageExtent } from "../lib/imageScale";
+import { fullCanvasImageExtent, type ImageExtent } from "../lib/imageScale";
 import { ROI_CANVAS_EDGE } from "../lib/roiGeometry";
 import { clipPixelRect, stepTowardTargetGray } from "../lib/roiTargetGray";
 import { selectionCrop, worldSelectionToDacROI } from "../lib/bitmapVector";
@@ -2621,16 +2622,6 @@ function LiveAxisOverlay({
   );
 }
 
-function ImageScaleChip({ extent, rotate90 = false, zoom = 1 }: { extent: ImageExtent | null; rotate90?: boolean; zoom?: number }) {
-  const scale = imageScale(extent, rotate90, zoom);
-  if (!scale) return null;
-  return (
-    <div className="canvas-image-scale" role="img" aria-label={scale.label} style={{ width: `calc(${scale.fraction * 100}% + 22px)` }}>
-      <span className="canvas-image-scale__label">{scale.label}</span>
-      <span className="canvas-image-scale__bar" aria-hidden="true" />
-    </div>
-  );
-}
 
 /**
  * Low-opacity summary of the settings a scan ran with, drawn over the image
