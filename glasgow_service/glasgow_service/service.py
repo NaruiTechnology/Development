@@ -28,6 +28,8 @@ Lifecycle decisions and the reasoning behind them:
   the uvicorn process.
 """
 import asyncio
+import concurrent.futures
+import copy
 import array
 import csv
 from collections import deque
@@ -107,6 +109,11 @@ _ADC_DIAGNOSTIC_UNIQUE_LIMIT = 64
 # arrives in that window waits this long for the lock instead of failing with
 # "busy": gateware load cannot be interrupted, so cleanup can take ~10 s.
 _BUSY_WAIT_AFTER_ABORT_S = 20.0
+
+# One worker serialises DumpData writes (matplotlib's pyplot is not
+# thread-safe) and keeps them off the event loop and the device lock.
+_DUMP_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="dumpdata")
 _ADC_FULL_SCALE_ARRAY = np.array(sorted(_ADC_FULL_SCALE_VALUES), dtype=np.int64)
 
 
@@ -1213,6 +1220,8 @@ class DeviceService:
         if owner is not None and (active is None or active.get("owner") is not owner):
             return False
         self._abort_requested = True
+        if not getattr(self, "_scan_aborted", False):
+            self._abort_time = time.monotonic()  # first Stop request of this scan
         self._scan_aborted = True
         abort = getattr(self._active_command, "abort", None)
         if abort is not None:
@@ -2916,12 +2925,26 @@ class DeviceService:
         return f"vector_latency_{last.get('latency_bytes') or 0}_{timestamp}.{file_type}"
 
     def _maybe_dump_last_outputs(self) -> None:
-        """Mirror the unit-test DumpData behavior for service/UI scans."""
+        """Mirror the unit-test DumpData behavior for service/UI scans.
+
+        The CSV (pure Python) and the matplotlib PNG take seconds for a live
+        frame. This runs in the scan's ``finally`` while the device lock is
+        held, so doing it inline blocked the event loop and delayed the next
+        scan's start (Stop -> Zoom/Parallel restart). The files are therefore
+        written by a single background worker from a frozen snapshot, so a
+        scan that ends before the worker finishes cannot change their content.
+        """
         if not getattr(self._config, "DumpData", False):
             return
         if not self.has_last():
             return
         timestamp = time.strftime("%y%m%d_%H%M%S")
+        snapshot = copy.copy(self)   # shares config; freezes ``_last``
+        snapshot._last = self._last
+        _DUMP_EXECUTOR.submit(snapshot._write_dump_files, timestamp)
+
+    def _write_dump_files(self, timestamp: str) -> None:
+        started = time.monotonic()
         try:
             output_dir = Path.home() / "Output"
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -2938,6 +2961,7 @@ class DeviceService:
             logger.info("wrote PNG dump: %s", png_path)
         except Exception as exc:
             logger.warning("failed to write PNG dump: %s", exc)
+        logger.info("DumpData finished in %.3fs (background)", time.monotonic() - started)
 
     def has_last(self) -> bool:
         return self._last is not None and bool(self._last.get("chunks"))
@@ -3339,12 +3363,15 @@ class DeviceService:
                 svc._status.chunks_in_flight = 0
                 svc._release_device_if_idle()
                 svc._active_scan = None
+                stop_s = (time.monotonic() - svc._abort_time
+                          if aborted and getattr(svc, "_abort_time", None) else None)
                 svc._scan_aborted = False
                 svc._lock.release()
                 logger.info("scan end kind=%s ok=%s cancelled=%s elapsed=%.3fs "
-                            "transport=%s chunks=%d error=%s",
+                            "transport=%s chunks=%d error=%s%s",
                             kind, exc is None, cancelled, time.monotonic() - self.started,
                             transport, chunks, None if exc is None or cancelled
-                            else f"{type(exc).__name__}: {exc}")
+                            else f"{type(exc).__name__}: {exc}",
+                            "" if stop_s is None else f" stop_to_release={stop_s:.3f}s")
                 return False
         return _Ctx()

@@ -161,8 +161,10 @@ class AutomationLog(object):
         self._file_handler = logging.FileHandler(self._logfile, mode='a')
         self._file_handler.setLevel(logging.DEBUG)
         self._file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
-            datefmt='%m-%d %H:%M',
+            # Seconds and milliseconds: minute resolution cannot show where a
+            # multi-second Stop / Zoom / Parallel delay is spent.
+            '%(asctime)s.%(msecs)03d %(name)-12s %(levelname)-8s %(message)s',
+            datefmt='%m-%d %H:%M:%S',
         ))
 
         self._loggers: dict = {}             # logger-name -> logging.Logger

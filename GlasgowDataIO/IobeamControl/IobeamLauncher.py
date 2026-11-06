@@ -92,8 +92,16 @@ class IobeamLauncher:
             await device.write_register(applet.addr_bus_ownership_clear, 0)
             self._logger.info("Run gate open")
 
+        # Re-programming the FPGA costs ~8.8 s on every connection (synthesis
+        # check + download + 4.7 s of settle sleeps), and a scan restart
+        # (Parallel, region-count change, Stop -> Run) reconnects. A matching
+        # image already on the device is reused by default: _activate() always
+        # asserts the gateware reset, so the command parser and FIFOs start
+        # clean. Set "forceBitstreamReload": true to restore the old behavior.
+        force_reload = bool(actionConfig.get("forceBitstreamReload", False))
         iface, image_programmed = await self._launch_applet(
-            applet, applet_args, deviceId=deviceId, prepare=prepare)
+            applet, applet_args, deviceId=deviceId, prepare=prepare,
+            reload=force_reload)
         iface.iobeam_bus_ownership_addr = applet.addr_bus_ownership
         iface.iobeam_power_good_addr = applet.addr_power_good
 
@@ -107,12 +115,12 @@ class IobeamLauncher:
         return iface
 
     async def _launch_applet(self, applet, applet_args, *, deviceId=None,
-                             prepare=None):
+                             prepare=None, reload=False):
         """Shared Glasgow build/download/claim lifecycle for Iobeam applets."""
         device = GlasgowDevice(deviceId)
         try:
             return await self._activate_applet(
-                device, applet, applet_args, prepare=prepare)
+                device, applet, applet_args, prepare=prepare, reload=reload)
         except BaseException:
             # GlasgowDevice() has already claimed USB interface 0.  Release it
             # on every failure, or this process keeps the device and every
@@ -125,7 +133,8 @@ class IobeamLauncher:
                                      type(exc).__name__, exc)
             raise
 
-    async def _activate_applet(self, device, applet, applet_args, *, prepare=None):
+    async def _activate_applet(self, device, applet, applet_args, *, prepare=None,
+                               reload=False):
         target = GlasgowHardwareTarget(
             revision=device.revision, multiplexer_cls=DirectMultiplexer)
         applet.build(target, applet_args)
@@ -136,7 +145,7 @@ class IobeamLauncher:
         )
         plan = target.build_plan()
         self._logger.info("launcher: building bitstream %s", plan.bitstream_id.hex())
-        image_programmed = await device.download_target(plan, reload=True)
+        image_programmed = await device.download_target(plan, reload=reload)
         self._logger.info("launcher: loaded bitstream %s (build_dir=%s)",
                           plan.bitstream_id.hex(), plan.buildDir)
         device.demultiplexer = DirectDemultiplexer(

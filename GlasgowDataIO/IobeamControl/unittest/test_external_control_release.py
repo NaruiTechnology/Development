@@ -156,6 +156,41 @@ class ExternalControlReleaseTest(unittest.TestCase):
         run(asyncio.wait_for(go(), timeout=2))
         self.assertEqual(conn.closed, 1)
 
+    def test_release_drains_pixels_while_output_is_blocked(self):
+        class BackpressuredStream(RecordingStream):
+            def __init__(self):
+                super().__init__()
+                self.draining = asyncio.Event()
+                self.flushed = asyncio.Event()
+
+            async def write(self, data):
+                # A full USB output queue can block write as well as flush.
+                await self.draining.wait()
+                await super().write(data)
+
+            async def flush(self):
+                await self.draining.wait()
+                self.flushed.set()
+
+            async def readuntil(self, separator=b"\n", *, flush=True, max_count=False):
+                if flush:
+                    await self.flush()
+                self.draining.set()
+                await self.flushed.wait()
+                return memoryview(separator)
+
+        async def go():
+            stream = BackpressuredStream()
+            conn = RecordingConnection(stream)
+            conn.RELEASE_TIMEOUT_S = 0.1
+            with self.assertLogs(level="INFO") as logs:
+                await conn._release_external_control(FakeScan())
+            self.assertTrue(any("external control released to the instrument" in line
+                                for line in logs.output))
+            self.assertIn(RELEASE, bytes(stream.writes))
+
+        run(go())
+
     def test_unconfirmed_release_still_closes(self):
         stream = RecordingStream(reply=False)
         conn = RecordingConnection(stream)

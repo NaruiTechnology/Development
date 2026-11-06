@@ -3,6 +3,7 @@ import asyncio
 import logging
 import random
 import struct
+import time
 
 logger = logging.getLogger()
 
@@ -279,10 +280,28 @@ class Connection(metaclass=ABCMeta):
         res = struct.pack(">HH", 0xffff, cookie)
 
         async def handshake():
-            await self._stream.write(cmd)
-            await self._stream.flush()
-            return await self._stream.readuntil(res)
+            async def send_release():
+                await self._stream.write(cmd)
+                await self._stream.flush()
 
+            # Queued pixels can fill the input FIFO and prevent the FPGA
+            # from consuming more commands. Drain while writing/flushing,
+            # otherwise the release itself can deadlock behind those pixels.
+            # Only the sender flushes: readuntil must not flush first either.
+            sender = asyncio.create_task(send_release())
+            reader = asyncio.create_task(self._stream.readuntil(res, flush=False))
+            try:
+                _, data = await asyncio.gather(sender, reader)
+                return data
+            finally:
+                # gather does not cancel its sibling when one task fails.
+                # Settle both before the caller closes the USB interface.
+                for task in (sender, reader):
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(sender, reader, return_exceptions=True)
+
+        t_release = time.perf_counter()
         try:
             data = await asyncio.wait_for(handshake(), timeout=self.RELEASE_TIMEOUT_S)
         except asyncio.CancelledError:
@@ -292,11 +311,13 @@ class Connection(metaclass=ABCMeta):
             raise
         except Exception as exc:
             self._logger.warning(
-                f"external control release failed ({type(exc).__name__}: {exc}); "
+                f"external control release failed ({type(exc).__name__}: {exc}) "
+                f"after {time.perf_counter() - t_release:.3f}s; "
                 "the next connection's gateware reset will release it")
             return
         if bytes(data).endswith(res):
-            self._logger.info("external control released to the instrument")
+            self._logger.info("external control released to the instrument in %.3fs",
+                              time.perf_counter() - t_release)
         else:
             self._logger.warning(
                 f"external control release not confirmed: no reply cookie {cookie:#06x}")

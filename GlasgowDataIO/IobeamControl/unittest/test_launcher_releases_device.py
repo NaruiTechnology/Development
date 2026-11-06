@@ -39,7 +39,7 @@ class LauncherReleasesDeviceTest(unittest.IsolatedAsyncioTestCase):
         self.applet = SimpleNamespace(build=Mock(), mux_interface=0)
         self.args = SimpleNamespace(buffer_size=1024)
 
-    async def launch(self, **device_overrides):
+    async def launch(self, launch_kwargs=None, **device_overrides):
         def make(serial=None):
             device = FakeDevice(serial)
             for name, value in device_overrides.items():
@@ -51,7 +51,8 @@ class LauncherReleasesDeviceTest(unittest.IsolatedAsyncioTestCase):
              patch(f"{MODULE}.DirectDemultiplexer") as demux, \
              patch(f"{MODULE}.asyncio.sleep", new_callable=AsyncMock):
             demux.return_value.claim_interface = AsyncMock(return_value="iface")
-            return await self.launcher._launch_applet(self.applet, self.args)
+            return await self.launcher._launch_applet(
+                self.applet, self.args, **(launch_kwargs or {}))
 
     async def test_success_keeps_the_device_open(self):
         iface, programmed = await self.launch()
@@ -91,3 +92,12 @@ class LauncherReleasesDeviceTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    async def test_matching_image_is_reused_by_default(self):
+        await self.launch()
+        FakeDevice.instances[0].download_target.assert_awaited_once()
+        self.assertFalse(FakeDevice.instances[0].download_target.await_args.kwargs["reload"])
+
+    async def test_force_reload_is_passed_to_download_target(self):
+        await self.launch(launch_kwargs={"reload": True})
+        self.assertTrue(FakeDevice.instances[0].download_target.await_args.kwargs["reload"])

@@ -29,6 +29,7 @@
                     },
                     "voltage": 3.3,
                     "bufferSize": "1024*1024",
+                    "forceBitstreamReload": false,
                     "adcHalfPeriod": 3,
                     "adcSettleCycles": 1,
                     "adcLatchCycles": 1,
