@@ -1266,6 +1266,10 @@ export const zhCN: Partial<TranslationTable> = {
   /* ===== processing tab ============================================ */
   "tabs.processing": "加工",
   "card.processingPattern": "图形区域",
+  "processing.scan": "扫描",
+  "processing.run": "运行",
+  "processing.imageInvalid": "无法解码配置的加工图像。",
+  "processing.imageError": "加工图像：{error}",
   "processing.patterns": "图形",
   "processing.hint.rect": "在图像上拖动以绘制图形区域。",
   "processing.hint.ring": "从圆心向外拖动到外圆，然后单击设定内圆（同一圆心）。按 Esc 或右键取消。",

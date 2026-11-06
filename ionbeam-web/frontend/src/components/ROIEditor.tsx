@@ -27,6 +27,7 @@ import type { ROIRequest } from "../types/api";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
+import { paintVectorScanOrderOverlay } from "../lib/scanPathOverlay";
 import { stopAllScanActions } from "../hooks/scanActionRegistry";
 import {
   ROI_CANVAS_EDGE,
@@ -98,6 +99,7 @@ export function ROIEditor({
   grayScaleSelection = null,
   grayScaleSkipped = null,
   liveVectorPreview = false,
+  processingPreview = null,
   hideSelectionOverlay = false,
   graySelectionResetToken = 0,
   renderCanvasOverlay,
@@ -111,6 +113,7 @@ export function ROIEditor({
   grayScaleSelection?: GrayScaleSelection;
   grayScaleSkipped?: boolean | null;
   liveVectorPreview?: boolean;
+  processingPreview?: "raster" | "vector" | null;
   hideSelectionOverlay?: boolean;
   graySelectionResetToken?: number;
   /** Extra layer drawn over the canvas (the Processing tab's pattern drawing). Receives pointer/world mapping. */
@@ -154,7 +157,8 @@ export function ROIEditor({
     roi.scanImageDataUrl !== null ||
     (roi.roiScanResultUrl !== null && roi.imageDataUrl === roi.roiScanResultUrl);
   const canvasTransforms =
-    roi.calibration_enabled || showingLoadedFile || showingROIScan ? NO_CANVAS_TRANSFORMS : streamTransforms;
+    roi.calibration_enabled ? NO_CANVAS_TRANSFORMS : processingPreview ? streamTransforms
+      : showingLoadedFile || showingROIScan ? NO_CANVAS_TRANSFORMS : streamTransforms;
   const canvasOrientation = [
     canvasTransforms.xflip ? "scaleX(-1)" : "",
     canvasTransforms.yflip ? "scaleY(-1)" : "",
@@ -248,6 +252,14 @@ export function ROIEditor({
   const vectorPhase = useAppSelector((s) => s.scan.phase);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorRevision = useAppSelector((s) => s.image.revision);
+  const processingFrame = useAppSelector((s) => processingPreview === "raster" ? s.image.frame : s.image.vectorImage);
+  const processingEdge = useAppSelector((s) => processingPreview === "raster" ? s.image.resolution : s.image.vectorEdge);
+  const processingFilled = useAppSelector((s) => processingPreview === "raster" ? s.image.filled : s.image.vectorFilled);
+  const processingCursor = useAppSelector((s) => processingPreview === "raster" ? s.image.cursor : s.image.vectorCursor);
+  const processingROI = useAppSelector((s) => processingPreview === "raster" ? s.image.rasterROI : s.image.vectorROI);
+  const processingRegions = useAppSelector((s) => processingPreview === "raster" ? s.image.rasterParallelROIs : s.image.vectorParallelROIs);
+  const processingCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
   const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
   const vectorScanPath = useAppSelector((s) => s.image.vectorScanPath);
@@ -400,6 +412,14 @@ export function ROIEditor({
     tr.locale,
     liveVectorPreview,
     hideSelectionOverlay,
+    processingPreview,
+    processingFrame,
+    processingEdge,
+    processingFilled,
+    processingCursor,
+    processingROI,
+    processingRegions,
+    vectorRevision,
     vectorPhase,
     vectorCursor,
     vectorPattern,
@@ -413,6 +433,32 @@ export function ROIEditor({
     calibrationLine,
     lut,
   ]);
+
+  useEffect(() => {
+    const canvas = scanPathCanvasRef.current;
+    if (!processingPreview || !canvas) return;
+    const visible = processingPreview === "raster" ? roi.raster_show_scan_path : roi.vector_show_scan_path;
+    if (!visible) {
+      canvas.getContext("2d")?.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+      return;
+    }
+    const regions = processingRegions?.length ? processingRegions : [processingROI];
+    const running = vectorPhase === "running";
+    let animationFrame = 0;
+    const draw = (now: number) => {
+      const edge = Math.max(1, processingEdge);
+      const sweepStart = Math.floor(Math.max(0, Math.ceil(processingCursor / regions.length) - 1) / edge) * edge;
+      const cursor = running
+        ? (sweepStart + Math.floor(((now % 800) / 800) * edge) + 1) * regions.length
+        : processingCursor;
+      paintVectorScanOrderOverlay(canvas, edge, cursor,
+        processingPreview === "raster" ? "horizontal_sawtooth" : vectorScanPath, regions);
+      if (running) animationFrame = requestAnimationFrame(draw);
+    };
+    draw(performance.now());
+    return () => cancelAnimationFrame(animationFrame);
+  }, [processingPreview, processingEdge, processingCursor, processingROI, processingRegions,
+    vectorScanPath, vectorPhase, roi.raster_show_scan_path, roi.vector_show_scan_path]);
 
   // Action run toward the target gray level. Each pass compares every pixel
   // inside the ROI area with `selectedTargetGray` and decides its beam state
@@ -902,6 +948,32 @@ export function ROIEditor({
       ctx.fillRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
     }
 
+    if (processingPreview && processingFilled > 0 && processingEdge > 0) {
+      // Sample into the displayed canvas size, rather than copying a multi-
+      // megapixel scan buffer for every incoming packet. Unacquired pixels
+      // stay transparent so the selected source remains visible underneath.
+      const live = processingCanvasRef.current ?? document.createElement("canvas");
+      processingCanvasRef.current = live;
+      live.width = live.height = ROI_CANVAS_EDGE;
+      const liveContext = live.getContext("2d");
+      if (liveContext) {
+        const pixels = liveContext.createImageData(ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+        const filled = Math.min(processingFilled, processingFrame.length);
+        for (let y = 0; y < ROI_CANVAS_EDGE; y++) {
+          const row = Math.floor(y * processingEdge / ROI_CANVAS_EDGE) * processingEdge;
+          for (let x = 0; x < ROI_CANVAS_EDGE; x++) {
+            const source = row + Math.floor(x * processingEdge / ROI_CANVAS_EDGE);
+            if (source >= filled) continue;
+            const offset = (y * ROI_CANVAS_EDGE + x) * 4;
+            const gray = Math.min(255, processingFrame[source] >>> 8);
+            pixels.data[offset] = pixels.data[offset + 1] = pixels.data[offset + 2] = lut[gray];
+            pixels.data[offset + 3] = 255;
+          }
+        }
+        liveContext.putImageData(pixels, 0, 0);
+        ctx.drawImage(live, 0, 0);
+      }
+    }
   }
 
   /** Keep the raw copy and the wedge histogram in step with the current image. */
@@ -1053,6 +1125,9 @@ export function ROIEditor({
   }
 
   function drawLiveScanPathOverlay() {
+    // The Processing view owns a full-field/ROI scan overlay independently
+    // of the legacy single-selection vector preview below.
+    if (processingPreview) return;
     const canvas = scanPathCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");

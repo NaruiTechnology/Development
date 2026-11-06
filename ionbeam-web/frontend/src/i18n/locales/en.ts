@@ -1413,6 +1413,10 @@ export const en = {
   /* ===== processing tab ============================================ */
   "tabs.processing": "Processing",
   "card.processingPattern": "Pattern ROI",
+  "processing.scan": "Scan",
+  "processing.run": "Run",
+  "processing.imageInvalid": "The configured Processing image could not be decoded.",
+  "processing.imageError": "Processing image: {error}",
   "processing.patterns": "Patterns",
   "processing.hint.rect": "Drag on the image to draw the pattern area.",
   "processing.hint.ring": "Drag from the centre out to the outer circle, then click to set the inner circle (same centre). Esc or right-click cancels.",

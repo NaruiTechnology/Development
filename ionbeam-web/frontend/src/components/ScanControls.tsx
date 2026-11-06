@@ -45,6 +45,7 @@ import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
 import { Icon } from "./Icon";
 import { TransformCard } from "./TransformCard";
+import { VectorScanPathField } from "./VectorScanPathField";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { RunValidatedHelp } from "./RunValidatedHelp";
 import { HelpPopover } from "./HelpPopover";
@@ -234,6 +235,9 @@ export function ScanControls({
   onScanRunStart,
   validatedActionsHost = null,
   firstRowContent,
+  processingMode = false,
+  autoStartRequest = 0,
+  autoStartReady = true,
 }: {
   kind: ScanKind;
   disabled?: boolean;
@@ -246,6 +250,9 @@ export function ScanControls({
    *  parameters card, under Validated run options) instead of inline. */
   validatedActionsHost?: HTMLElement | null;
   firstRowContent?: ReactNode;
+  processingMode?: boolean;
+  autoStartRequest?: number;
+  autoStartReady?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -1508,6 +1515,31 @@ export function ScanControls({
   const stopDisabled = !stopAvailable || closing;
   const infiniteDisabled =
     (kind !== "raster" && kind !== "vector") || runDisabled || infiniteScanActive;
+  const consumedAutoStart = useRef(0);
+  const startProcessingLiveRef = useRef(onInfinite);
+  startProcessingLiveRef.current = onInfinite;
+  useEffect(() => {
+    if (!processingMode || !autoStartReady || !autoStartRequest || consumedAutoStart.current === autoStartRequest) return;
+    if (streaming || infiniteScanActive) {
+      consumedAutoStart.current = autoStartRequest;
+      return;
+    }
+    if (infiniteDisabled) {
+      console.info("[processing] live start waiting", { request: autoStartRequest, kind,
+        controlsDisabled, closing, runStarting, targetGrayRunning, issues: scanAssessment.issues });
+      return;
+    }
+    // Let mount cleanup (including React Strict Mode's effect replay) finish
+    // before consuming the request and starting asynchronous authentication.
+    const timer = window.setTimeout(() => {
+      consumedAutoStart.current = autoStartRequest;
+      console.info("[processing] starting live scan", { request: autoStartRequest, kind });
+      void startProcessingLiveRef.current();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [processingMode, autoStartReady, autoStartRequest, streaming, infiniteScanActive,
+    infiniteDisabled, kind, controlsDisabled, closing, runStarting, targetGrayRunning, scanAssessment]);
+
   useEffect(() => {
     let cancelled = false;
     fetch(apiUrl("/api/admin/iobeam/equipment"))
@@ -1726,7 +1758,9 @@ export function ScanControls({
           extraError={zoomError}
         />
       )}
-      <div className="scan-preview-zoom-row">
+      <div className={`scan-preview-zoom-row${processingMode && kind === "vector" ? " processing-path-zoom-row" : ""}`}>
+          {processingMode && kind === "vector" && <VectorScanPathField disabled={controlsDisabled} />}
+          {!processingMode && <>
           <label
             className={`checkbox vacuum-switch app-switch scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
             title={t("scan.preview.title")}
@@ -1744,6 +1778,7 @@ export function ScanControls({
           <HelpPopover title={t("scan.preview.help.title")} ariaLabel={t("scan.preview.help.aria")}>
             {t("scan.preview.help.body")}
           </HelpPopover>
+          </>}
           {(kind === "raster" || kind === "vector") && (
             <label className="scan-equipment-field scan-zoom-field">
               <span className="scan-zoom-label"><Icon name="zoomIn" />{t("scan.zoom")}</span>
@@ -1772,7 +1807,7 @@ export function ScanControls({
         </span>
       )}
       {(kind === "raster" || kind === "vector") && <TransformCard />}
-      {(kind === "raster" || kind === "vector") && (
+      {!processingMode && (kind === "raster" || kind === "vector") && (
         <div className="card scan-roi-controls-card">
           <div className="card__header">
             <span className="card__title"><Icon name="target" />{t("tabs.roi")}</span>
@@ -1827,9 +1862,9 @@ export function ScanControls({
           title={t("scan.run.title.start")}
         >
           <Icon name="play" tone="success" />
-          {t("scan.run")}
+          {t(processingMode ? "processing.scan" : "scan.run")}
         </button>
-        {!runDisabled && kind !== "roi" && pendingQueue && pendingQueue.status === "interrupted" && pendingQueue.next_index >= 0 && pendingQueue.next_index < pendingQueue.total && (
+        {!processingMode && !runDisabled && kind !== "roi" && pendingQueue && pendingQueue.status === "interrupted" && pendingQueue.next_index >= 0 && pendingQueue.next_index < pendingQueue.total && (
           <button
             type="button"
             className="btn btn--primary"
@@ -1859,7 +1894,7 @@ export function ScanControls({
             aria-pressed={infiniteScanActive}
           >
             <Icon name="infinity" tone="accent" />
-            {t("scan.infinite")}
+            {t(processingMode ? "processing.run" : "scan.infinite")}
           </button>
         )}
       </div>
@@ -1867,8 +1902,8 @@ export function ScanControls({
       {grayRuleError && <div className="scan-inline-error" role="alert">{grayRuleError}</div>}
       {kind !== "raster" && <span className="spacer" />}
 
-      {validatedActionsHost ? createPortal(validatedActions, validatedActionsHost) : validatedActions}
-      {(kind === "raster" || kind === "vector") && (
+      {!processingMode && (validatedActionsHost ? createPortal(validatedActions, validatedActionsHost) : validatedActions)}
+      {!processingMode && (kind === "raster" || kind === "vector") && (
         <ScanTakeoverEstimate kind={kind} />
       )}
       {visibleError && (

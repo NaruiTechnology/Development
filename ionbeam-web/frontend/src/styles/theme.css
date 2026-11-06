@@ -536,7 +536,8 @@ body {
 }
 
 /* Nothing to show on the second row (no slider, toolbox or Split). */
-.image-panel-card__header-row:not(:has(> button)):has(> .card__header-toolbar-slot:empty) {
+/* Layout controls may be portaled into a nested Processing header host. */
+.image-panel-card__header-row:not(:has(.image-panel-card__layout-button)):has(> .card__header-toolbar-slot:empty) {
   display: none;
 }
 
@@ -8070,4 +8071,34 @@ body {
 
 .roi-pattern-overlay--idle {
   cursor: default;
+}
+
+/* Processing shares Scan's header controls and image-grid layout. */
+.processing-layout-controls { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+#processing-image-panel-grid .image-panel-grid__target--single { border: 0; }
+#processing-image-panel-grid .roi-canvas-wrap { width: 100%; }
+
+.processing-path-zoom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+.processing-path-zoom-row .vector-scan-path-field { min-width: 0; margin-bottom: 0; }
+.processing-path-zoom-row .scan-zoom-field { margin-left: 0; }
+
+/* Keep Processing's path toggle and Split/Lock controls together on one row. */
+.image-panel-card__header--roi.image-panel-card__header--scan-path .processing-header-actions {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.processing-header-actions .processing-layout-controls {
+  margin-left: 0;
+  flex-shrink: 0;
 }

@@ -75,8 +75,8 @@ test("Processing tab is wired into the app: tab, panel, canvas overlay, launch-t
   const app = read("App.tsx");
   assert.match(app, /type LeftTopTab = "scan" \| "processing" \| "calibrate";/);
   assert.match(app, /onClick=\{activateProcessingTopTab\}/);
-  assert.match(app, /<ProcessingPatternsPanel disabled=\{panelDisabled\} \/>/);
-  assert.match(app, /<PatternOverlay disabled=\{panelDisabled\} api=\{api\} \/>/);
+  assert.match(app, /<ProcessingPatternsPanel disabled=\{scanControlsSafetyDisabled \|\| phase === "stopping"\} \/>/);
+  assert.match(app, /<PatternOverlay disabled=\{scanControlsSafetyDisabled \|\| phase === "stopping"\} api=\{api\} \/>/);
   assert.match(app, /void dispatch\(fetchProcessingPatterns\(\)\)/);
   // the tab sits right after Scan, before Calibrate
   assert.ok(app.indexOf('t("tabs.scan")') < app.indexOf('t("tabs.processing")'));

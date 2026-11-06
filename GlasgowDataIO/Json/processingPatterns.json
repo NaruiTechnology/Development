@@ -1,8 +1,8 @@
 {
     "Header": {
         "Application": "Ion Beam Processing Patterns",
-        "Version": "1.0.0",
-        "Description": "Pattern catalogue for the native app's Processing tab. Each entry of Patterns is a one-key object: the key is the pattern name, the value selects the data model (a class registered in ionbeam_native.processing.models) and its parameters. Entries with skip=true are not instantiated and get no card. Order is the order of the icons and cards."
+        "Description": "Pattern catalogue for the native app's Processing tab. Each entry of Patterns is a one-key object: the key is the pattern name, the value selects the data model (a class registered in ionbeam_native.processing.models) and its parameters. Entries with skip=true are not instantiated and get no card. Order is the order of the icons and cards.",
+        "LoadImage": "/home/vboxuser/Project/Operations/Development/GlasgowDataIO/IobeamControl/unittest/testData/Mystery Chip FIB X-Section - 1.jpeg"
     },
     "Patterns": [
         {

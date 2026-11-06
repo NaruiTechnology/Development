@@ -18,9 +18,10 @@ function validateResolution(value: number, t: (key: "vector.resolution.validatio
   return null;
 }
 
-export function VectorScanExecutionSettings({ disabled, grayLevelFilterActive = false }: {
+export function VectorScanExecutionSettings({ disabled, grayLevelFilterActive = false, showScanPath = true }: {
   disabled: boolean;
   grayLevelFilterActive?: boolean;
+  showScanPath?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -42,7 +43,7 @@ export function VectorScanExecutionSettings({ disabled, grayLevelFilterActive = 
 
   return (
     <div className="scan-execution-settings">
-      <VectorScanPathField disabled={disabled} />
+      {showScanPath && <VectorScanPathField disabled={disabled} />}
       <div className="field-row">
         <PresetNumberField
           label={<label>{t("vector.resolution")}<VectorResolutionHelp /></label>}

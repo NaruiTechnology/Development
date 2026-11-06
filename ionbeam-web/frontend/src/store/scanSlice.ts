@@ -598,9 +598,11 @@ const slice = createSlice({
       s.roi.imageBounds = null;
       s.roi.scale_unit = a.payload.scale_unit;
     },
-    applyPersistedDimensionCalibration(s, a: PayloadAction<DimensionCalibrationValues>) {
+    applyPersistedDimensionCalibration(s, a: PayloadAction<DimensionCalibrationValues & { activate?: boolean }>) {
       const values = a.payload;
-      s.roi.calibration_enabled = true;
+      // Background geometry/calibration loads supply activate=false. Only
+      // explicit navigation into Dimension Cal enables the editing handles.
+      s.roi.calibration_enabled = values.activate ?? true;
       s.roi.calibration_x_origin = 0;
       s.roi.calibration_x_end = values.x_end - values.x_origin;
       s.roi.calibration_y_origin = 0;

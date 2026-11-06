@@ -20,6 +20,9 @@ import {
 } from "react";
 
 import { Header } from "./components/Header";
+import { ImagePanelLayoutControls } from "./components/ImagePanelLayoutControls";
+import { ProcessingImagePanel } from "./components/ProcessingImagePanel";
+import { controlCanvasKind } from "./lib/controlCanvasKind";
 import { HelpPopover } from "./components/HelpPopover";
 import type { SignedInUser } from "./components/AuthDialog";
 import { apiUrl } from "./lib/backendUrl";
@@ -166,10 +169,17 @@ export function App() {
   const [adcTestCollapsed, setAdcTestCollapsed] = useState(true);
   // Controls card (nested in the scan panel card) starts expanded.
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const [processingControlsCollapsed, setProcessingControlsCollapsed] = useState(false);
+  const [processingEntryRequest, setProcessingEntryRequest] = useState(0);
+  const [processingStartRequest, setProcessingStartRequest] = useState(0);
+  const [processingImageReady, setProcessingImageReady] = useState(false);
+  const [processingImageError, setProcessingImageError] = useState<string | null>(null);
+
   // Slot at the bottom of the scan parameters card (under Validated run
   // options) that ScanControls portals Run validated + Clear into.
   const [validatedActionsHost, setValidatedActionsHost] = useState<HTMLDivElement | null>(null);
   const [validationSummaryHost, setValidationSummaryHost] = useState<HTMLDivElement | null>(null);
+  const [processingHeaderHost, setProcessingHeaderHost] = useState<HTMLDivElement | null>(null);
   const handleVacuumActivityChange = useCallback((active: boolean) => {
     setVacuumControllerBusy(active);
   }, []);
@@ -180,7 +190,13 @@ export function App() {
   const [highVoltagePower, setHighVoltagePower] = useState(false);
   const [highVoltagePending, setHighVoltagePending] = useState(false);
   const [highVoltageError, setHighVoltageError] = useState<string | null>(null);
-  const kind = useAppSelector((s) => s.scan.kind);
+  const storedKind = useAppSelector((s) => s.scan.kind);
+  const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>("scan");
+  const [scanSubTab, setScanSubTab] = useState<ScanSubTab>("vector");
+  const [calibrateSubTab, setCalibrateSubTab] = useState<CalibrateSubTab>(storedKind === "mag" ? "mag" : "dimension");
+  const kind = controlCanvasKind(activeTopTab, scanSubTab, calibrateSubTab);
+  const navigationRef = useRef({ activeTopTab, calibrateSubTab });
+  navigationRef.current = { activeTopTab, calibrateSubTab };
   const phase = useAppSelector((s) => s.scan.phase);
   const streamRestarting = useAppSelector((s) => s.scan.streamRestarting);
   const previewMode = useAppSelector((s) => s.scan.preview);
@@ -324,11 +340,6 @@ export function App() {
     (hasPartialROI || Boolean(roiState.imageDataUrl)) &&
     !roiState.calibration_enabled;
   const isSignedIn = Boolean(signedInUser);
-  const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>("scan");
-  const [scanSubTab, setScanSubTab] = useState<ScanSubTab>("vector");
-  const [calibrateSubTab, setCalibrateSubTab] = useState<CalibrateSubTab>(
-    kind === "mag" ? "mag" : "dimension"
-  );
   const adcTest = useAdcTestStream();
   const adcActive = adcTest.state.phase === "connecting" || adcTest.state.phase === "running";
   const adcView = adcTestEnabled && !adcTestCollapsed;
@@ -356,7 +367,7 @@ export function App() {
     dimensionCalibrationRestoredRef.current = true;
     if (!hasPersistedDimensionCalibration) return;
     clearBitmapSelectionCache();
-    dispatch(applyPersistedDimensionCalibration(dimensionCalibration));
+    dispatch(applyPersistedDimensionCalibration({ ...dimensionCalibration, activate: false }));
   }, [dimensionCalibration, dispatch, hasPersistedDimensionCalibration]);
 
   // Dimension Cal also lives server-side, one row per equipment (see dimensionCalibrationApi.ts) so it's
@@ -373,7 +384,8 @@ export function App() {
       if (!remote) return;
       clearBitmapSelectionCache();
       dispatch(saveDimensionCalibration(remote));
-      dispatch(applyPersistedDimensionCalibration(remote));
+      dispatch(applyPersistedDimensionCalibration({ ...remote, activate:
+        navigationRef.current.activeTopTab === "calibrate" && navigationRef.current.calibrateSubTab === "dimension" }));
     });
   }, [dispatch]);
 
@@ -405,7 +417,8 @@ export function App() {
         const geometry = geometryFromConfig(config);
         clearBitmapSelectionCache();
         dispatch(setScanGeometry(toAppliedGeometry(geometry, config.profile_revision, config.magnification_calibration)));
-        dispatch(applyPersistedDimensionCalibration({ ...dimensionCalibration, ...dimensionBoundsFromGeometry(geometry) }));
+        dispatch(applyPersistedDimensionCalibration({ ...dimensionCalibration, ...dimensionBoundsFromGeometry(geometry),
+          activate: navigationRef.current.activeTopTab === "calibrate" && navigationRef.current.calibrateSubTab === "dimension" }));
       })
       .catch((err) => console.warn(`[scan-geometry] not loaded: ${err instanceof Error ? err.message : String(err)}`));
   }, [dispatch, dimensionCalibration]);
@@ -741,14 +754,15 @@ export function App() {
         {t("roi.showGrid")}
       </label>
     ) : null;
+  const scanPathKind = activeTopTab === "processing" ? scanSubTab : kind;
   const scanPathToggle =
-    kind === "vector" || kind === "raster" || (kind === "roi" && hasPartialROI) ? (
+    kind === "vector" || kind === "raster" || activeTopTab === "processing" || (kind === "roi" && hasPartialROI) ? (
     <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-scan-path-toggle">
       <input
         type="checkbox"
-        checked={kind === "raster" ? roiState.raster_show_scan_path : roiState.vector_show_scan_path}
+        checked={scanPathKind === "raster" ? roiState.raster_show_scan_path : roiState.vector_show_scan_path}
         onChange={(e) =>
-          dispatch(updateROI(kind === "raster"
+          dispatch(updateROI(scanPathKind === "raster"
             ? { raster_show_scan_path: e.target.checked }
             : { vector_show_scan_path: e.target.checked }))
         }
@@ -1130,6 +1144,11 @@ export function App() {
 
   const handleSimulationImageChange = useCallback(
     (imageUrl: string | null) => {
+      if (activeTopTab === "processing") {
+        setProcessingImageError(null);
+        setProcessingImageReady(true);
+        if (!scanActive) setProcessingStartRequest((value) => value + 1);
+      }
       if (kind !== "raster" && kind !== "vector") return;
       const scanKind = kind;
       const pane = selectedImagePane[scanKind];
@@ -1148,8 +1167,50 @@ export function App() {
         setScanTargetImagePane((current) => ({ ...current, [scanKind]: pane }));
       }
     },
-    [imagePanelLayoutByKind, kind, selectedImagePane],
+    [imagePanelLayoutByKind, kind, selectedImagePane, activeTopTab, scanActive],
   );
+
+  useEffect(() => {
+    if (activeTopTab !== "processing") return;
+    const controller = new AbortController();
+    let cancelled = false;
+    setProcessingImageReady(false);
+    setProcessingImageError(null);
+    void (async () => {
+      try {
+        const response = await fetch(apiUrl("/api/processing/image"), { signal: controller.signal });
+        const data = await readJsonResponse<{ ok: boolean; image?: { name: string; data_url: string } | null; error?: string }>(response, "processing image");
+        if (!response.ok || data.ok === false) throw new Error(data.error ?? `HTTP ${response.status}`);
+        if (data.image) {
+          const image = data.image;
+          await new Promise<void>((resolve, reject) => {
+            const probe = new Image();
+            probe.onload = () => resolve();
+            probe.onerror = () => reject(new Error(t("processing.imageInvalid")));
+            probe.src = image.data_url;
+          });
+          if (cancelled) return;
+          clearBitmapSelectionCache();
+          dispatch(updateROI({ imageName: image.name, imageDataUrl: image.data_url,
+            imageKind: "file", imageBounds: null, roiScanResultUrl: null, scanImageDataUrl: null }));
+        }
+        if (cancelled) return;
+        console.info("[processing] image ready; requesting live scan", { image: data.image?.name ?? null });
+        setProcessingImageReady(true);
+        setProcessingStartRequest((value) => value + 1);
+      } catch (error) {
+        if (!cancelled) setProcessingImageError(error instanceof Error ? error.message : String(error));
+      }
+    })();
+    return () => { cancelled = true; controller.abort(); };
+    // A locale change must not reload the source or request another scan.
+  }, [activeTopTab, processingEntryRequest, dispatch]);
+
+  const requestProcessingLiveScan = () => {
+    if (activeTopTab === "processing" && !scanActive && processingImageReady && !scanControlsSafetyDisabled) {
+      setProcessingStartRequest((value) => value + 1);
+    }
+  };
 
   const handleTargetGrayPick = useCallback((gray: number, point: { x: number; y: number }) => {
     if (scanControlsSafetyDisabled || targetGrayRunning || phase === "stopping") return;
@@ -1294,8 +1355,13 @@ export function App() {
   }, [dispatch, resetROIContext, roiScanImageUrl, t]);
 
   function selectKind(nextKind: ScanKind) {
-    if (nextKind === kind) return;
-    if (scanActive) return;
+    if (nextKind === storedKind) return;
+    if (scanActive) {
+      // Returning from Processing to the already-running scan only changes
+      // navigation; retain its socket, phase and acquired buffer.
+      if (activeTopTab === "processing" && nextKind === scanSubTab) dispatch(setKind(nextKind));
+      return;
+    }
 
     const nextScanKind = nextKind === "raster" || nextKind === "vector" ? nextKind : null;
     const currentScanKind = kind === "raster" || kind === "vector" ? kind : null;
@@ -1318,6 +1384,7 @@ export function App() {
   }
 
   function activateScanSubTab(nextTab: ScanSubTab) {
+    if (scanActive && nextTab !== scanSubTab) return;
     setActiveTopTab("scan");
     setScanSubTab(nextTab);
     dispatch(updateROI({ calibration_enabled: false }));
@@ -1380,6 +1447,8 @@ export function App() {
   function activateProcessingTopTab() {
     closeImagePanelSplit();
     setActiveTopTab("processing");
+    setProcessingControlsCollapsed(false);
+    setProcessingEntryRequest((value) => value + 1);
     dispatch(updateROI({ calibration_enabled: false }));
     selectKind("roi");
   }
@@ -1427,17 +1496,30 @@ export function App() {
       } as CSSProperties)
     : undefined;
 
+  const roiCanvas = (
+    <ROIEditor
+      disabled={panelDisabled}
+      variant="canvas"
+      backgroundImageUrl={activeROIScanImageUrl}
+      grayScaleSelection={displayedROIGrayScaleSelection}
+      grayScaleSkipped={displayedROIGrayScaleSkipped}
+      processingPreview={activeTopTab === "processing" ? scanSubTab : null}
+      hideSelectionOverlay={activeTopTab === "processing"}
+      renderCanvasOverlay={activeTopTab === "processing"
+        ? (api) => <PatternOverlay disabled={scanControlsSafetyDisabled || phase === "stopping"} api={api} />
+        : undefined}
+    />
+  );
+
   // The image-panel title key flips with the active tab. Picking it
   // up front rather than inline below means the JSX stays readable.
   const imagePanelTitleKey =
-    kind === "raster"
+    activeTopTab === "processing" ? "card.processingPattern" : kind === "raster"
       ? "card.rasterImage"
       : kind === "vector"
       ? "card.vectorPattern"
       : kind === "mag"
       ? "card.magCalibration"
-      : activeTopTab === "processing"
-      ? "card.processingPattern"
       : roiState.calibration_enabled
       ? "card.calibration"
       : "card.selectROI";
@@ -1446,7 +1528,7 @@ export function App() {
   // Select, or the annotation toolbox) and the Split button on a second
   // header row below the switches; ROI keeps its own header grid.
   const headerSecondRow =
-    !adcView && (kind === "raster" || kind === "vector");
+    !adcView && (kind === "raster" || kind === "vector" || activeTopTab === "processing");
   const toolbarSlot = (
     <div
       id="image-panel-toolbar-slot"
@@ -1591,7 +1673,7 @@ export function App() {
                   role="tab"
                   className="tab tab--top"
                   aria-selected={activeTopTab === "scan"}
-                  disabled={panelDisabled}
+                  disabled={scanControlsSafetyDisabled || phase === "stopping"}
                   onClick={activateScanTopTab}
                 >
                   <Icon name="scan" tone="tab" />
@@ -1603,7 +1685,7 @@ export function App() {
                 role="tab"
                 className="tab tab--top"
                 aria-selected={activeTopTab === "processing"}
-                disabled={panelDisabled}
+                disabled={scanControlsSafetyDisabled || phase === "stopping"}
                 onClick={activateProcessingTopTab}
               >
                 <Icon name="target" tone="tab" />
@@ -1683,7 +1765,8 @@ export function App() {
                     onLoadLastScan={handleLoadLastScan}
                     onImageChange={handleSimulationImageChange}
                   />
-                  <ProcessingPatternsPanel disabled={panelDisabled} />
+                  {processingImageError && <p className="scan-inline-error" role="alert">{t("processing.imageError", { error: processingImageError })}</p>}
+                  <ProcessingPatternsPanel disabled={scanControlsSafetyDisabled || phase === "stopping"} />
                 </>
               ) : activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
@@ -1751,7 +1834,7 @@ export function App() {
                   </>
                 )
               )}
-              {activeTopTab === "scan" && (
+              {(activeTopTab === "scan" || activeTopTab === "processing") && (
                 <>
                   <div className={`card scan-controls-card${activeScanColor ? " scan-controls-card--active" : ""}`}>
                       <div className="card__header">
@@ -1759,18 +1842,21 @@ export function App() {
                         <button
                           type="button"
                           className="card__collapse-btn"
-                          aria-expanded={!controlsCollapsed}
-                          aria-label={controlsCollapsed ? t("controls.expand") : t("controls.collapse")}
-                          title={controlsCollapsed ? t("controls.expand") : t("controls.collapse")}
-                          onClick={() => setControlsCollapsed((collapsed) => !collapsed)}
+                          aria-expanded={!(activeTopTab === "processing" ? processingControlsCollapsed : controlsCollapsed)}
+                          aria-label={(activeTopTab === "processing" ? processingControlsCollapsed : controlsCollapsed) ? t("controls.expand") : t("controls.collapse")}
+                          title={(activeTopTab === "processing" ? processingControlsCollapsed : controlsCollapsed) ? t("controls.expand") : t("controls.collapse")}
+                          onClick={() => activeTopTab === "processing" ? setProcessingControlsCollapsed((value) => !value) : setControlsCollapsed((value) => !value)}
                         >
                           <Icon name="chevronDown" />
                         </button>
                       </div>
                       {/* hidden, not unmounted: ScanControls owns the live scan stream */}
-                      <div className="card__body" hidden={controlsCollapsed}>
+                      <div className="card__body" hidden={activeTopTab === "processing" ? processingControlsCollapsed : controlsCollapsed}>
                         <ScanControls
                           kind={scanSubTab}
+                          processingMode={activeTopTab === "processing"}
+                          autoStartRequest={processingStartRequest}
+                          autoStartReady={processingImageReady}
                           disabled={panelDisabled}
                           scanActive={scanActive}
                           zoomDisabled={scanControlsSafetyDisabled}
@@ -1783,7 +1869,7 @@ export function App() {
                           firstRowContent={(
                             <>
                               {scanSubTab === "vector" ? (
-                                <VectorScanExecutionSettings disabled={panelDisabled} grayLevelFilterActive={vectorGrayFilterActive} />
+                                <VectorScanExecutionSettings disabled={panelDisabled} grayLevelFilterActive={vectorGrayFilterActive} showScanPath={activeTopTab !== "processing"} />
                               ) : <RasterScanExecutionSettings disabled={panelDisabled} />}
                             </>
                           )}
@@ -1792,7 +1878,7 @@ export function App() {
                         />
                       </div>
                     </div>
-                  <div className="card save-results-card">
+                  {activeTopTab === "scan" && <div className="card save-results-card">
                     <div className="card__header">
                       <span className="card__title">{t("card.runReport")}</span>
                       <button
@@ -1823,7 +1909,7 @@ export function App() {
                         validationSummaryHost={validationSummaryHost}
                       />
                     </div>
-                  </div>
+                  </div>}
                 </>
               )}
               {adcTestEnabled && activeTopTab === "scan" && scanSubTab === "vector" && (
@@ -1915,7 +2001,12 @@ export function App() {
                       </ol>
                     </HelpPopover>
                   )}
-                  {!adcView && scanPathToggle}
+                  {!adcView && (activeTopTab === "processing" ? (
+                    <div className="processing-header-actions">
+                      {scanPathToggle}
+                      <div ref={setProcessingHeaderHost} className="processing-layout-controls" />
+                    </div>
+                  ) : scanPathToggle)}
                   {!adcView && !headerSecondRow && toolbarSlot}
                 </div>
                 {headerSecondRow && (
@@ -1924,52 +2015,26 @@ export function App() {
                   // and the Split button.
                   <div className="image-panel-card__header-row">
                     {toolbarSlot}
-                    {!adcView && activeTopTab === "scan" && showSplitButton && imagePanelSplitActive && (
-                      <label className="checkbox vacuum-switch app-switch image-panel-card__layout-lock">
-                        <input
-                          type="checkbox"
-                          checked={imagePanelLocked}
-                          onChange={(event) => handleImagePanelLockChange(event.target.checked)}
-                        />
-                        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-                        {t("canvas.layout.lock")}
-                      </label>
-                    )}
                     {!adcView && activeTopTab === "scan" && showSplitButton && (
-                      <button
-                        type="button"
-                        className="btn btn--primary image-panel-card__layout-button"
-                        aria-label={t("canvas.layout.cycle", { count: imagePanelLayout })}
-                        aria-pressed={imagePanelLayout > 1}
-                        aria-controls="image-panel-grid"
-                        disabled={!canSplitImagePanel}
-                        title={t("canvas.layout.cycle", { count: imagePanelLayout })}
-                        onClick={splitImagePanel}
-                      >
-                        <Icon name="quad" tone="accent" />
-                        <span>{t("canvas.layout.splitScreen")}</span>
-                      </button>
+                      <ImagePanelLayoutControls layout={imagePanelLayout} locked={imagePanelLocked}
+                        showLock={imagePanelSplitActive} onLockedChange={handleImagePanelLockChange}
+                        onSplit={() => void splitImagePanel()} />
                     )}
                   </div>
                 )}
             </div>
-            <div className="card__body">
+            <div className="card__body" onPointerDownCapture={activeTopTab === "processing" ? (event) => {
+              if ((event.target as Element).closest(".roi-canvas-wrap")) requestProcessingLiveScan();
+            } : undefined}>
+              <div hidden={activeTopTab !== "processing" || adcView}>
+                <ProcessingImagePanel headerHost={processingHeaderHost}>
+                  {activeTopTab === "processing" && !adcView ? roiCanvas : null}
+                </ProcessingImagePanel>
+              </div>
                 {adcView ? (
                   <AdcTimelineCanvas state={adcTest.state} />
-              ) : kind === "roi" ? (
-                  <ROIEditor
-                    disabled={panelDisabled}
-                    variant="canvas"
-                    backgroundImageUrl={activeROIScanImageUrl}
-                    grayScaleSelection={displayedROIGrayScaleSelection}
-                    grayScaleSkipped={displayedROIGrayScaleSkipped}
-                    hideSelectionOverlay={activeTopTab === "processing"}
-                    renderCanvasOverlay={
-                      activeTopTab === "processing"
-                        ? (api) => <PatternOverlay disabled={panelDisabled} api={api} />
-                        : undefined
-                    }
-                  />
+              ) : activeTopTab === "processing" ? null : kind === "roi" ? (
+                  roiCanvas
               ) : kind === "mag" ? (
                 <MagCalibrationChart />
               ) : (
