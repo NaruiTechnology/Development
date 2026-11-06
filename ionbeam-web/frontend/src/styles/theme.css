@@ -7981,12 +7981,14 @@ body {
 .pattern-strip {
   display: flex;
   flex-wrap: wrap;
+  justify-content: space-evenly;
   gap: 4px;
   padding: 8px 10px;
 }
 
 .pattern-strip__btn {
   display: inline-flex;
+  flex: 0 0 38px;
   align-items: center;
   justify-content: center;
   width: 38px;
