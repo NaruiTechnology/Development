@@ -237,8 +237,6 @@ export function ScanControls({
   validatedActionsHost = null,
   firstRowContent,
   processingMode = false,
-  autoStartRequest = 0,
-  autoStartReady = true,
 }: {
   kind: ScanKind;
   disabled?: boolean;
@@ -252,8 +250,6 @@ export function ScanControls({
   validatedActionsHost?: HTMLElement | null;
   firstRowContent?: ReactNode;
   processingMode?: boolean;
-  autoStartRequest?: number;
-  autoStartReady?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -272,7 +268,7 @@ export function ScanControls({
   const baseROIState = useAppSelector((s) => s.scan.roi);
   const patterns = useAppSelector((s) => s.processing);
   // Parameter edits and pattern selection do not change acquisition bounds.
-  const shapeKey = JSON.stringify(patterns.specs.map((spec) => [spec.key, patterns.instances[spec.key]?.roi ?? null]));
+  const shapeKey = JSON.stringify(patterns.specs.map((spec) => [spec.key, patterns.instances[spec.key]?.enabled, patterns.instances[spec.key]?.roi ?? null]));
   const processingPlan = useMemo(() => processingScanRegions(patterns.specs, patterns.instances, baseROIState),
     [shapeKey, baseROIState.x_origin, baseROIState.x_end, baseROIState.y_origin, baseROIState.y_end]);
   const roiState = useMemo(() => processingMode ? {
@@ -676,7 +672,7 @@ export function ScanControls({
   }
 
   async function startRunRequest(repeatRegions = false, preserveCurrentFrame = false) {
-    if (startBlocked || scanHasErrors) return;
+    if (startBlocked || scanHasErrors || (processingMode && !processingPlan.regions.length)) return;
     runningROIScanEnabledRef.current = roiState.roi_scan_enabled;
     if (repeatRegions) runningParallelRegionsRef.current = parallelRegions;
     // Every run acquires only its requested regions. Preserve existing pixels
@@ -791,6 +787,7 @@ export function ScanControls({
   }
 
   async function startInfiniteRequest(preserveCurrentFrame = false): Promise<void> {
+    if (processingMode && !processingPlan.regions.length) return;
     if ((kind !== "raster" && kind !== "vector") || startBlocked || infiniteScanActiveRef.current || scanHasErrors) return;
     const startGeneration = zoomRestartGenerationRef.current;
     runningROIScanEnabledRef.current = roiState.roi_scan_enabled;
@@ -1532,34 +1529,11 @@ export function ScanControls({
     closing ||
     runStarting ||
     targetGrayRunning ||
-    scanHasErrors;
+    scanHasErrors ||
+    (processingMode && !processingPlan.regions.length);
   const stopDisabled = !stopAvailable || closing;
   const infiniteDisabled =
     (kind !== "raster" && kind !== "vector") || runDisabled || infiniteScanActive;
-  const consumedAutoStart = useRef(0);
-  const startProcessingLiveRef = useRef(onInfinite);
-  startProcessingLiveRef.current = onInfinite;
-  useEffect(() => {
-    if (!processingMode || !autoStartReady || !autoStartRequest || consumedAutoStart.current === autoStartRequest) return;
-    if (streaming || infiniteScanActive) {
-      consumedAutoStart.current = autoStartRequest;
-      return;
-    }
-    if (infiniteDisabled) {
-      console.info("[processing] live start waiting", { request: autoStartRequest, kind,
-        controlsDisabled, closing, runStarting, targetGrayRunning, issues: scanAssessment.issues });
-      return;
-    }
-    // Let mount cleanup (including React Strict Mode's effect replay) finish
-    // before consuming the request and starting asynchronous authentication.
-    const timer = window.setTimeout(() => {
-      consumedAutoStart.current = autoStartRequest;
-      console.info("[processing] starting live scan", { request: autoStartRequest, kind });
-      void startProcessingLiveRef.current();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [processingMode, autoStartReady, autoStartRequest, streaming, infiniteScanActive,
-    infiniteDisabled, kind, controlsDisabled, closing, runStarting, targetGrayRunning, scanAssessment]);
 
   useEffect(() => {
     let cancelled = false;

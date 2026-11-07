@@ -1416,6 +1416,7 @@ export const en = {
   "tabs.processing": "Processing",
   "card.processingPattern": "Pattern ROI",
   "processing.scan": "Scan",
+  "processing.enable": "Enable",
   "processing.run": "Run",
   "processing.imageInvalid": "The configured Processing image could not be decoded.",
   "processing.imageError": "Processing image: {error}",

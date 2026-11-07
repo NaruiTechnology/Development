@@ -21,7 +21,7 @@ import {
   type RingRoi,
 } from "../lib/processingPatterns";
 import { useAppDispatch, useAppSelector } from "../store";
-import { clearPatternRoi, fetchProcessingPatterns, selectPattern, setPatternParameter, type PatternInstance } from "../store/processingSlice";
+import { fetchProcessingPatterns, selectPattern, setPatternEnabled, setPatternParameter, type PatternInstance } from "../store/processingSlice";
 import { Icon } from "./Icon";
 import { NumberStepperField } from "./NumberStepperField";
 import { PatternIcon } from "./PatternIcon";
@@ -107,6 +107,13 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
       className={`card pattern-card${active ? " pattern-card--active" : ""}`} data-pattern={spec.key}>
       <div className="card__header">
         <span className="card__title">{caption}</span>
+        <label className="checkbox vacuum-switch app-switch pattern-card__enable">
+          <input type="checkbox" checked={instance.enabled !== false} disabled={disabled}
+            aria-label={`${caption}: ${t("processing.enable")}`}
+            onChange={(event) => dispatch(setPatternEnabled({ key: spec.key, enabled: event.target.checked }))} />
+          <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+          <span>{t("processing.enable")}</span>
+        </label>
         <button
           type="button"
           className="card__collapse-btn"
@@ -124,7 +131,7 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
         </button>
       </div>
       <div className="pattern-card__body" hidden={collapsed}>
-        <p className="pattern-card__hint">{t(`processing.hint.${spec.roi}` as TranslationKey)}</p>
+        <div className="pattern-card__parameters">
         {spec.parameters.map((p) => (
           <ParameterField
             key={p.name}
@@ -135,12 +142,8 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
             onChange={(value) => dispatch(setPatternParameter({ key: spec.key, name: p.name, value }))}
           />
         ))}
-        <p className="pattern-card__readout">{roiReadout(spec, instance.roi, unit)}</p>
-        <div className="pattern-card__actions">
-          <button type="button" className="btn btn--ghost" disabled={disabled || !instance.roi} onClick={() => dispatch(clearPatternRoi(spec.key))}>
-            {t("processing.clear")}
-          </button>
         </div>
+        <p className="pattern-card__readout">{roiReadout(spec, instance.roi, unit)}</p>
       </div>
     </div>
   );

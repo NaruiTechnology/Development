@@ -171,8 +171,6 @@ export function App() {
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
   const [processingControlsCollapsed, setProcessingControlsCollapsed] = useState(false);
   const [processingEntryRequest, setProcessingEntryRequest] = useState(0);
-  const [processingStartRequest, setProcessingStartRequest] = useState(0);
-  const [processingImageReady, setProcessingImageReady] = useState(false);
   const [processingImageError, setProcessingImageError] = useState<string | null>(null);
 
   // Slot at the bottom of the scan parameters card (under Validated run
@@ -1146,8 +1144,6 @@ export function App() {
     (imageUrl: string | null) => {
       if (activeTopTab === "processing") {
         setProcessingImageError(null);
-        setProcessingImageReady(true);
-        if (!scanActive) setProcessingStartRequest((value) => value + 1);
       }
       if (kind !== "raster" && kind !== "vector") return;
       const scanKind = kind;
@@ -1167,14 +1163,13 @@ export function App() {
         setScanTargetImagePane((current) => ({ ...current, [scanKind]: pane }));
       }
     },
-    [imagePanelLayoutByKind, kind, selectedImagePane, activeTopTab, scanActive],
+    [imagePanelLayoutByKind, kind, selectedImagePane, activeTopTab],
   );
 
   useEffect(() => {
     if (activeTopTab !== "processing") return;
     const controller = new AbortController();
     let cancelled = false;
-    setProcessingImageReady(false);
     setProcessingImageError(null);
     void (async () => {
       try {
@@ -1195,22 +1190,13 @@ export function App() {
             imageKind: "file", imageBounds: null, roiScanResultUrl: null, scanImageDataUrl: null }));
         }
         if (cancelled) return;
-        console.info("[processing] image ready; requesting live scan", { image: data.image?.name ?? null });
-        setProcessingImageReady(true);
-        setProcessingStartRequest((value) => value + 1);
       } catch (error) {
         if (!cancelled) setProcessingImageError(error instanceof Error ? error.message : String(error));
       }
     })();
     return () => { cancelled = true; controller.abort(); };
-    // A locale change must not reload the source or request another scan.
+    // A locale change must not reload the source.
   }, [activeTopTab, processingEntryRequest, dispatch]);
-
-  const requestProcessingLiveScan = () => {
-    if (activeTopTab === "processing" && !scanActive && processingImageReady && !scanControlsSafetyDisabled) {
-      setProcessingStartRequest((value) => value + 1);
-    }
-  };
 
   const handleTargetGrayPick = useCallback((gray: number, point: { x: number; y: number }) => {
     if (scanControlsSafetyDisabled || targetGrayRunning || phase === "stopping") return;
@@ -1859,8 +1845,6 @@ export function App() {
                         <ScanControls
                           kind={scanSubTab}
                           processingMode={activeTopTab === "processing"}
-                          autoStartRequest={processingStartRequest}
-                          autoStartReady={processingImageReady}
                           disabled={panelDisabled}
                           scanActive={scanActive}
                           zoomDisabled={scanControlsSafetyDisabled}
@@ -2028,9 +2012,7 @@ export function App() {
                   </div>
                 )}
             </div>
-            <div className="card__body" onPointerDownCapture={activeTopTab === "processing" ? (event) => {
-              if ((event.target as Element).closest(".roi-canvas-wrap")) requestProcessingLiveScan();
-            } : undefined}>
+            <div className="card__body">
               <div hidden={activeTopTab !== "processing" || adcView}>
                 <ProcessingImagePanel headerHost={processingHeaderHost}>
                   {activeTopTab === "processing" && !adcView ? roiCanvas : null}

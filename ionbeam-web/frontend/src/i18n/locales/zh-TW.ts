@@ -1274,6 +1274,7 @@ export const zhTW: Partial<TranslationTable> = {
   "tabs.processing": "加工",
   "card.processingPattern": "圖形區域",
   "processing.scan": "掃描",
+  "processing.enable": "啟用",
   "processing.run": "執行",
   "processing.imageInvalid": "無法解碼設定的加工影像。",
   "processing.imageError": "加工影像：{error}",

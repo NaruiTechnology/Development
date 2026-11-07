@@ -4,12 +4,13 @@ import type { ROIRequest } from "../types/api";
 
 /** Acquisition windows are rectangular; keep the pattern's geometry independent. */
 export function processingScanRegions(specs: readonly Pick<PatternSpec, "key">[],
-  instances: Record<string, { roi: PatternRoi | null }>,
+  instances: Record<string, { roi: PatternRoi | null; enabled?: boolean }>,
   field: Pick<ROIState, "x_origin" | "x_end" | "y_origin" | "y_end">,
 ): { keys: string[]; regions: ROIRequest[] } {
   const keys: string[] = [];
   const regions: ROIRequest[] = [];
   for (const spec of specs) {
+    if (instances[spec.key]?.enabled === false) continue;
     const shape = instances[spec.key]?.roi;
     if (!shape) continue;
     let bounds: ROIRequest;

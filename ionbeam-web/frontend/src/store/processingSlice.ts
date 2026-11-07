@@ -15,6 +15,7 @@ import {
 
 /** One live instance per catalogue entry: the parameter values and the ROI the operator drew. */
 export interface PatternInstance {
+  enabled: boolean;
   parameters: PatternParameters;
   roi: PatternRoi | null;
 }
@@ -52,6 +53,10 @@ const slice = createSlice({
     selectPattern(s, a: PayloadAction<string | null>) {
       s.activeKey = a.payload !== null && s.instances[a.payload] ? a.payload : null;
     },
+    setPatternEnabled(s, a: PayloadAction<{ key: string; enabled: boolean }>) {
+      const inst = s.instances[a.payload.key];
+      if (inst) inst.enabled = a.payload.enabled;
+    },
     setPatternParameter(s, a: PayloadAction<{ key: string; name: string; value: ParameterValue | string }>) {
       const spec = s.specs.find((p) => p.key === a.payload.key)?.parameters.find((q) => q.name === a.payload.name);
       const inst = s.instances[a.payload.key];
@@ -87,7 +92,7 @@ const slice = createSlice({
       s.specs = specs;
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
-      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { parameters: defaultParameters(p.parameters), roi: null }]));
+      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
       if (s.activeKey && !s.instances[s.activeKey]) s.activeKey = null;
     });
     b.addCase(fetchProcessingPatterns.rejected, (s, a) => {
@@ -97,5 +102,5 @@ const slice = createSlice({
   },
 });
 
-export const { selectPattern, setPatternParameter, setPatternRoi, clearPatternRoi } = slice.actions;
+export const { setPatternEnabled, selectPattern, setPatternParameter, setPatternRoi, clearPatternRoi } = slice.actions;
 export default slice.reducer;

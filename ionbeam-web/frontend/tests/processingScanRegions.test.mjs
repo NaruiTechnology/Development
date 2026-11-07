@@ -19,3 +19,14 @@ test("Processing acquisition windows follow catalogue order and preserve pattern
   assert.equal(JSON.stringify(shapes), original);
   assert.deepEqual(processingScanRegions(specs, {}, field), { keys: [], regions: [] });
 });
+
+test("disabled patterns are skipped without discarding their ROIs", () => {
+  const roi = { x_start: 10, x_end: 30, y_start: 20, y_end: 40 };
+  const specs = [{ key: "off" }, { key: "on" }];
+  const instances = { off: { enabled: false, roi }, on: { enabled: true, roi } };
+  assert.deepEqual(processingScanRegions(specs, instances, field), { keys: ["on"], regions: [roi] });
+  instances.on.enabled = false;
+  assert.deepEqual(processingScanRegions(specs, instances, field), { keys: [], regions: [] });
+  instances.off.enabled = true;
+  assert.deepEqual(processingScanRegions(specs, instances, field), { keys: ["off"], regions: [roi] });
+});

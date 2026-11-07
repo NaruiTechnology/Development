@@ -1269,6 +1269,7 @@ export const zhCN: Partial<TranslationTable> = {
   "tabs.processing": "加工",
   "card.processingPattern": "图形区域",
   "processing.scan": "扫描",
+  "processing.enable": "启用",
   "processing.run": "运行",
   "processing.imageInvalid": "无法解码配置的加工图像。",
   "processing.imageError": "加工图像：{error}",

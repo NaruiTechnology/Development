@@ -8038,7 +8038,7 @@ body {
 }
 
 .pattern-card .card__collapse-btn {
-  margin-left: auto;
+  margin-left: 0;
   flex-shrink: 0;
 }
 
@@ -8062,7 +8062,6 @@ body {
   display: none;
 }
 
-.pattern-card__hint,
 .pattern-card__readout {
   margin: 0;
   font-size: 12px;
@@ -8070,9 +8069,15 @@ body {
   white-space: pre-line;
 }
 
-.pattern-card__actions {
+.pattern-card__parameters {
   display: flex;
+  align-items: flex-end;
   gap: 8px;
+}
+
+.pattern-card__parameters > * {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .roi-pattern-overlay {
@@ -8118,3 +8123,8 @@ body {
 .processing-parallel-controls { flex: 1 0 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 .roi-canvas-frame > .canvas-image-scale { z-index: 30; }
+
+.pattern-card__enable {
+  margin-left: auto;
+  flex-shrink: 0;
+}

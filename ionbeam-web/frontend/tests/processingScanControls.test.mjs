@@ -5,7 +5,7 @@ import { Provider, useSelector } from "react-redux";
 import { act, create } from "react-test-renderer";
 import { createServer } from "vite";
 
-test("Processing waits for image readiness, starts once, shares its stream and honors Stop", async () => {
+test("Processing waits for Run, shares its stream and honors Stop", async () => {
   const originals = Object.fromEntries(["window", "fetch", "WebSocket", "requestAnimationFrame", "cancelAnimationFrame"]
     .map((key) => [key, globalThis[key]]));
   const sockets = [];
@@ -57,6 +57,12 @@ test("Processing waits for image readiness, starts once, shares its stream and h
     const { store } = await vite.ssrLoadModule("/src/store/index.ts");
     const { ScanControls } = await vite.ssrLoadModule("/src/components/ScanControls.tsx");
     const scan = await vite.ssrLoadModule("/src/store/scanSlice.ts");
+    const processing = await vite.ssrLoadModule("/src/store/processingSlice.ts");
+    store.dispatch(processing.fetchProcessingPatterns.fulfilled({ patterns: [
+      { key: "ring", model: "RingModel", caption: "Ring", icon: "ring", roi: "ring", parameters: [] },
+    ] }, "test"));
+    store.dispatch(processing.setPatternEnabled({ key: "ring", enabled: true }));
+    store.dispatch(processing.setPatternRoi({ key: "ring", roi: { cx: 50, cy: 50, r_outer: 20, r_inner: 10 } }));
     const { VectorScanExecutionSettings } = await vite.ssrLoadModule("/src/components/VectorScanExecutionSettings.tsx");
     const { PresetNumberField } = await vite.ssrLoadModule("/src/components/PresetNumberField.tsx");
     store.dispatch({ type: "status/defaults/fulfilled", payload: { is_production: false, raster: {}, vector: {} } });
@@ -65,7 +71,7 @@ test("Processing waits for image readiness, starts once, shares its stream and h
       const phase = useSelector((state) => state.scan.phase);
       const active = phase === "running" || phase === "stopping";
       return React.createElement(ScanControls, { kind: "vector", disabled: active || blocked,
-        scanActive: active, processingMode: processing, autoStartRequest: request, autoStartReady: ready,
+        scanActive: active, processingMode: processing,
         firstRowContent: React.createElement(VectorScanExecutionSettings, { disabled: active || blocked, showScanPath: !processing }) });
     }
     const render = (ready, request, processing = true, blocked = false) => React.createElement(Provider, { store },
@@ -101,6 +107,14 @@ test("Processing waits for image readiness, starts once, shares its stream and h
     assert.equal(sockets.length, 0, "cleanup cancels the pending auto-start callback");
     await act(async () => { renderer.update(render(true, 1)); });
     await settle();
+    assert.equal(sockets.length, 0, "image readiness and entering Processing must not start acquisition");
+    const clickRun = async () => {
+      const run = renderer.root.findAllByType("button").find((node) => node.props["aria-pressed"] !== undefined);
+      assert.ok(run, "Processing exposes Run");
+      await act(async () => { await run.props.onClick(); });
+      await settle();
+    };
+    await clickRun();
     assert.equal(sockets.length, 1);
     assert.equal(sockets[0].requests[0].continuous, true);
     assert.equal(sockets[0].requests[0].scan_path, "vertical_raster");
@@ -121,7 +135,9 @@ test("Processing waits for image readiness, starts once, shares its stream and h
     assert.notEqual(store.getState().scan.phase, "running");
     await act(async () => { renderer.update(render(true, 3)); });
     await settle();
-    assert.equal(sockets.length, 2, "a new explicit entry or image click may restart acquisition");
+    assert.equal(sockets.length, 1, "returning to Processing must not restart acquisition");
+    await clickRun();
+    assert.equal(sockets.length, 2, "only clicking Run restarts acquisition");
   } finally {
     if (renderer) await act(async () => { renderer.unmount(); });
     await vite.close();
