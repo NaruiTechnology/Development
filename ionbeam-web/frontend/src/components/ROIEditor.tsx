@@ -1,3 +1,6 @@
+import { MODEL_REGISTRY, patternAvgGray } from "../lib/processingPatterns";
+import { pixelGray } from "../lib/roiTargetGray";
+import { setPatternAvgGray } from "../store/processingSlice";
 import { ImageScaleChip } from "./ImageScaleChip";
 import { fullCanvasImageExtent } from "../lib/imageScale";
 import { measuredFieldSpan } from "../lib/dimensionMeasurement";
@@ -408,6 +411,7 @@ export function ROIEditor({
     drawLiveScanPathOverlay();
     drawAnnotationLayer();
   }, [
+    processingPatterns,
     draft,
     grayScaleSelection,
     grayScaleSkipped,
@@ -1017,6 +1021,30 @@ export function ROIEditor({
         ctx.drawImage(live, 0, 0);
       }
     }
+    updatePatternAverages();
+  }
+
+  function updatePatternAverages() {
+    if (!processingPreview) return;
+    const raw = imageRef.current ? rawCanvasRef.current : null;
+    const data = raw?.getContext("2d", { willReadFrequently: true })?.getImageData(0, 0, raw.width, raw.height);
+    const width = processingFilled > 0 ? processingEdge : (data?.width ?? 0);
+    const height = processingFilled > 0 ? processingEdge : (data?.height ?? 0);
+    const values: Record<string, number | null> = {};
+    for (const spec of processingPatterns.specs) {
+      const inst = processingPatterns.instances[spec.key];
+      if (!inst) continue;
+      const value = inst.roi && width > 0 ? patternAvgGray(inst.roi, MODEL_REGISTRY[spec.model], width, height,
+        imageWorldBounds(roi), (index) => {
+          if (processingFilled > 0 && index < processingFilled) return Math.min(255, processingFrame[index] >>> 8);
+          if (!data) return null;
+          const x = index % width, y = Math.floor(index / width);
+          const i = (Math.floor(y * data.height / height) * data.width + Math.floor(x * data.width / width)) * 4;
+          return data.data[i + 3] ? pixelGray(data.data[i], data.data[i + 1], data.data[i + 2]) : null;
+        }) : null;
+      if (inst.AvgGray !== value) values[spec.key] = value;
+    }
+    if (Object.keys(values).length) dispatch(setPatternAvgGray(values));
   }
 
   /** Keep the raw copy and the wedge histogram in step with the current image. */

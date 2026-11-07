@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 
 import {
   MODEL_REGISTRY,
+  patternAvgGray,
+  patternBounds,
   cleaningLines,
   coerceParameter,
   resolveCatalogue,
@@ -99,4 +101,21 @@ test("every processing string exists in all three locales", () => {
   const en = keys("en");
   assert.ok(en.size > 20);
   for (const locale of ["zh-CN", "zh-TW"]) assert.deepEqual([...keys(locale)].sort(), [...en].sort());
+});
+
+
+test("AvgGray follows moved/resized ROI and refreshed samples, excludes ring holes", () => {
+  const world = { x_origin: 0, x_end: 4, y_origin: 0, y_end: 4 };
+  const pixels = Array.from({ length: 16 }, (_, i) => i);
+  const rect = { x_start: 0, x_end: 2, y_start: 0, y_end: 2 };
+  const avg = (roi, model = MODEL_REGISTRY.SolidBoxModel) => patternAvgGray(roi, model, 4, 4, world, i => pixels[i]);
+  assert.equal(avg(rect), 2.5);
+  assert.equal(avg({ ...rect, x_start: 2, x_end: 4 }), 4.5);
+  assert.equal(avg({ ...rect, x_end: 4 }), 3.5);
+  pixels.fill(100);
+  assert.equal(avg(rect), 100);
+  pixels[5] = pixels[6] = pixels[9] = pixels[10] = 0;
+  assert.equal(avg({ cx: 2, cy: 2, r_inner: 1, r_outer: 2 }, MODEL_REGISTRY.RingModel), 100);
+  assert.equal(patternAvgGray(rect, MODEL_REGISTRY.SolidBoxModel, 4, 4, world, () => null), null);
+  assert.deepEqual(patternBounds({ cx: 2, cy: 3, radius: 2 }), { x_start: 0, x_end: 4, y_start: 1, y_end: 5 });
 });

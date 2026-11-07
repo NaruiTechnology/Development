@@ -15,6 +15,7 @@ import {
 
 /** One live instance per catalogue entry: the parameter values and the ROI the operator drew. */
 export interface PatternInstance {
+  AvgGray: number | null;
   enabled: boolean;
   parameters: PatternParameters;
   roi: PatternRoi | null;
@@ -28,9 +29,10 @@ export interface ProcessingState {
   instances: Record<string, PatternInstance>;
   /** Pattern being drawn; its card is the only expanded one. */
   activeKey: string | null;
+  roiHistory: Array<{ key: string; roi: PatternRoi | null }>;
 }
 
-const initialState: ProcessingState = { status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null };
+const initialState: ProcessingState = { status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiHistory: [] };
 
 interface PatternsResponse {
   ok?: boolean;
@@ -67,18 +69,48 @@ const slice = createSlice({
         // not a usable value (e.g. half-typed number): keep the previous one
       }
     },
-    setPatternRoi(s, a: PayloadAction<{ key: string; roi: PatternRoi }>) {
+    setPatternRoi(s, a: PayloadAction<{ key: string; roi: PatternRoi; preview?: boolean }>) {
       const spec = s.specs.find((p) => p.key === a.payload.key);
       const inst = s.instances[a.payload.key];
       if (!spec || !inst) return;
       try {
-        inst.roi = MODEL_REGISTRY[spec.model].validateRoi(a.payload.roi);
+        const next = MODEL_REGISTRY[spec.model].validateRoi(a.payload.roi);
+        if (JSON.stringify(inst.roi) === JSON.stringify(next)) return;
+        if (!a.payload.preview) {
+          s.roiHistory.push({ key: a.payload.key, roi: inst.roi });
+          if (s.roiHistory.length > 100) s.roiHistory.shift();
+        }
+        inst.roi = next;
       } catch {
         // degenerate shape: keep the previous ROI
       }
     },
+    commitPatternRoiEdit(s, a: PayloadAction<{ key: string; original: PatternRoi }>) {
+      const inst = s.instances[a.payload.key];
+      if (!inst || JSON.stringify(inst.roi) === JSON.stringify(a.payload.original)) return;
+      s.roiHistory.push({ key: a.payload.key, roi: a.payload.original });
+      if (s.roiHistory.length > 100) s.roiHistory.shift();
+    },
+    undoPatternRoi(s) {
+      const previous = s.roiHistory.pop();
+      if (!previous || !s.instances[previous.key]) return;
+      s.instances[previous.key].roi = previous.roi;
+      s.instances[previous.key].AvgGray = null;
+      s.activeKey = previous.key;
+    },
+    setPatternAvgGray(s, a: PayloadAction<Record<string, number | null>>) {
+      for (const [key, value] of Object.entries(a.payload)) {
+        if (s.instances[key]) s.instances[key].AvgGray = value;
+      }
+    },
     clearPatternRoi(s, a: PayloadAction<string>) {
-      if (s.instances[a.payload]) s.instances[a.payload].roi = null;
+      const inst = s.instances[a.payload];
+      if (inst?.roi) {
+        s.roiHistory.push({ key: a.payload, roi: inst.roi });
+        if (s.roiHistory.length > 100) s.roiHistory.shift();
+        inst.roi = null;
+        inst.AvgGray = null;
+      }
     },
   },
   extraReducers: (b) => {
@@ -92,7 +124,8 @@ const slice = createSlice({
       s.specs = specs;
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
-      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
+      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
+      s.roiHistory = s.roiHistory.filter(entry => Boolean(s.instances[entry.key]));
       if (s.activeKey && !s.instances[s.activeKey]) s.activeKey = null;
     });
     b.addCase(fetchProcessingPatterns.rejected, (s, a) => {
@@ -102,5 +135,5 @@ const slice = createSlice({
   },
 });
 
-export const { setPatternEnabled, selectPattern, setPatternParameter, setPatternRoi, clearPatternRoi } = slice.actions;
+export const { undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setPatternRoi, clearPatternRoi } = slice.actions;
 export default slice.reducer;

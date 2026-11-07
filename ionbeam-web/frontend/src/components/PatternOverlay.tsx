@@ -13,16 +13,20 @@
  * Shapes are stored in world coordinates (like the ROI selection), radii as world lengths, so a ring stays a true
  * circle whatever the image aspect and survives zoom.
  */
-import { useEffect, useReducer, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useReducer, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
+import { patternBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { useAppDispatch, useAppSelector } from "../store";
-import { setPatternRoi } from "../store/processingSlice";
+import { useTranslation } from "../i18n";
+import { undoPatternRoi, commitPatternRoiEdit, clearPatternRoi, selectPattern, setPatternRoi } from "../store/processingSlice";
 
 const DRAG_THRESHOLD = 8;           // canvas px, same as the rectangle ROI tool
 const ACTIVE_COLOR = "#ffd400";
 const OTHER_COLOR = "#4cc9f0";
+
+type Corner = "nw" | "ne" | "sw" | "se";
+const CORNERS: Corner[] = ["nw", "ne", "sw", "se"];
 
 type Pt = { x: number; y: number };
 
@@ -40,10 +44,13 @@ type Draft =
 
 export function PatternOverlay({ disabled, api }: { disabled: boolean; api: CanvasOverlayApi }) {
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
+  const [menu, setMenu] = useState<{ x: number; y: number; key: string } | null>(null);
   const roi = useAppSelector((s) => s.scan.roi);
   const { specs, instances, activeKey } = useAppSelector((s) => s.processing);
   const [, repaint] = useReducer((n: number) => n + 1, 0);
   const draft = useRef<Draft | null>(null);
+  const edit = useRef<{ key: string; start: Pt; original: PatternRoi; corner: Corner | null } | null>(null);
   const active = specs.find((s) => s.key === activeKey) ?? null;
 
   const bounds = imageWorldBounds(roi);
@@ -54,20 +61,36 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   const sy = Math.abs(cy(1) - cy(0));
 
   function cancel() {
+    if (edit.current) {
+      dispatch(setPatternRoi({ key: edit.current.key, roi: edit.current.original, preview: true }));
+      edit.current = null;
+    }
+    setMenu(null);
     if (draft.current) {
       draft.current = null;
       repaint();
     }
   }
 
-  useEffect(cancel, [activeKey]);              // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (disabled || (edit.current && edit.current.key !== activeKey)) cancel();
+    if (draft.current) { draft.current = null; repaint(); }
+  }, [activeKey, disabled]);              // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]')) return;
       if (e.key === "Escape") cancel();
+      if (!disabled && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        e.stopPropagation?.();
+        if (edit.current || draft.current) cancel();
+        else { setMenu(null); dispatch(undoPatternRoi()); }
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [disabled, dispatch]);
 
   function commit(roiValue: PatternRoi) {
     if (active) dispatch(setPatternRoi({ key: active.key, roi: roiValue }));
@@ -82,9 +105,28 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       cancel();
       return;
     }
-    if (e.button !== 0 || disabled || !active) return;
+    if (e.button !== 0 || disabled) return;
+    if ((e.target as Element | undefined)?.closest("[data-pattern-menu]")) return;
+    e.stopPropagation?.();
+    setMenu(null);
     e.preventDefault();
     const p = api.pointFromClient(e.clientX, e.clientY);
+    const target = (e.target as Element | undefined)?.closest("[data-pattern-key]");
+    const key = target?.getAttribute("data-pattern-key");
+    const original = key ? instances[key]?.roi : null;
+    if (!draft.current && key && original) {
+      const box = patternBounds(original);
+      let corner = (e.target as Element | undefined)?.getAttribute("data-pattern-resize") as Corner | null;
+      if (!corner && e.ctrlKey) {
+        corner = CORNERS.find(c => Math.hypot(p.x - cx(c.endsWith("w") ? box.x_start : box.x_end),
+          p.y - cy(c.startsWith("n") ? box.y_start : box.y_end)) <= 16) ?? null;
+      }
+      edit.current = { key, start: api.toWorld(p), original, corner };
+      if (key !== activeKey) dispatch(selectPattern(key));
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+      return;
+    }
+    if (!active) return;
     const d = draft.current;
     if (active.roi === "ring" && d?.kind === "ring" && !d.dragging) {
       // second step: this click places the inner circle
@@ -106,6 +148,48 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   }
 
   function onPointerMove(e: ReactPointerEvent<SVGSVGElement>) {
+    const editing = edit.current;
+    if (editing && !disabled) {
+      const p = api.toWorld(api.pointFromClient(e.clientX, e.clientY));
+      const box = patternBounds(editing.original);
+      const corner = editing.corner;
+      const xMin = Math.min(bounds.x_origin, bounds.x_end), xMax = Math.max(bounds.x_origin, bounds.x_end);
+      const yMin = Math.min(bounds.y_origin, bounds.y_end), yMax = Math.max(bounds.y_origin, bounds.y_end);
+      const dx = Math.max(xMin - box.x_start, Math.min(xMax - box.x_end, p.x - editing.start.x));
+      const dy = Math.max(yMin - box.y_start, Math.min(yMax - box.y_end, p.y - editing.start.y));
+      const anchor = { x: corner?.endsWith("w") ? box.x_end : box.x_start,
+        y: corner?.startsWith("n") ? box.y_end : box.y_start };
+      const width = box.x_end - box.x_start, height = box.y_end - box.y_start;
+      const minX = 6 / sx, minY = 6 / sy;
+      let scaleX = corner ? Math.max(minX, Math.abs(p.x - anchor.x)) / width : 1;
+      let scaleY = corner ? Math.max(minY, Math.abs(p.y - anchor.y)) / height : 1;
+      // Circular shapes retain their aspect ratio and stay inside the image.
+      if ("cx" in editing.original && corner) {
+        const availableX = corner.endsWith("w") ? anchor.x - xMin : xMax - anchor.x;
+        const availableY = corner.startsWith("n") ? anchor.y - yMin : yMax - anchor.y;
+        scaleX = scaleY = Math.min(Math.max(scaleX, scaleY), availableX / width, availableY / height);
+      }
+      const scale = scaleX;
+      const destination = { x: corner?.endsWith("w") ? anchor.x - width * scaleX : anchor.x,
+        y: corner?.startsWith("n") ? anchor.y - height * scaleY : anchor.y };
+      const point = (x: number, y: number): [number, number] => corner
+        ? [destination.x + (x - box.x_start) * scaleX, destination.y + (y - box.y_start) * scaleY]
+        : [x + dx, y + dy];
+      const original = editing.original;
+      let next: PatternRoi;
+      if ("points" in original) next = { points: original.points.map(([x, y]) => point(x, y)) };
+      else if ("cx" in original) {
+        const [cx, cy] = point(original.cx, original.cy);
+        next = "radius" in original ? { cx, cy, radius: original.radius * scale }
+          : { cx, cy, r_inner: original.r_inner * scale, r_outer: original.r_outer * scale };
+      } else {
+        const [x_start, y_start] = point(original.x_start, original.y_start);
+        const [x_end, y_end] = point(original.x_end, original.y_end);
+        next = { x_start, y_start, x_end, y_end };
+      }
+      dispatch(setPatternRoi({ key: editing.key, roi: next, preview: true }));
+      return;
+    }
     const d = draft.current;
     if (!d || !active || disabled) return;
     const p = api.pointFromClient(e.clientX, e.clientY);
@@ -128,6 +212,12 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   }
 
   function onPointerUp(e: ReactPointerEvent<SVGSVGElement>) {
+    if (edit.current) {
+      onPointerMove(e);
+      dispatch(commitPatternRoiEdit({ key: edit.current.key, original: edit.current.original }));
+      edit.current = null;
+      return;
+    }
     const d = draft.current;
     if (!d || !active || e.button !== 0) return;
     const p = api.pointFromClient(e.clientX, e.clientY);
@@ -171,12 +261,47 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerLeave}
-      onContextMenu={(e) => e.preventDefault()}
+      onPointerCancel={cancel}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation?.();
+        if (disabled) return;
+        if (draft.current || edit.current) { cancel(); return; }
+        const key = (e.target as Element | undefined)?.closest("[data-pattern-key]")?.getAttribute("data-pattern-key");
+        if (key) {
+          dispatch(selectPattern(key));
+          const p = api.pointFromClient(e.clientX, e.clientY);
+          setMenu({ ...p, key });
+        }
+      }}
     >
       {specs.map((spec) => {
         const inst = instances[spec.key];
         return inst?.roi ? (
-          <Shape key={spec.key} spec={spec} params={inst.parameters} roi={inst.roi} active={spec.key === activeKey} cx={cx} cy={cy} sx={sx} sy={sy} />
+          <g key={spec.key} data-pattern-key={spec.key} style={{ cursor: disabled ? "default" : "grab" }}>
+            <Shape spec={spec} params={inst.parameters} roi={inst.roi} active={spec.key === activeKey} cx={cx} cy={cy} sx={sx} sy={sy} />
+            {spec.key === activeKey && (() => {
+              const box = patternBounds(inst.roi);
+              const x = Math.min(cx(box.x_start), cx(box.x_end));
+              const y = Math.max(cy(box.y_start), cy(box.y_end));
+              const unit = roi.scale_unit === "um" ? "µm" : roi.scale_unit;
+              return <g>
+                {!disabled && CORNERS.map(corner => <rect key={corner} data-pattern-resize={corner}
+                  x={cx(corner.endsWith("w") ? box.x_start : box.x_end) - 6}
+                  y={cy(corner.startsWith("n") ? box.y_start : box.y_end) - 6}
+                  width={12} height={12} fill="transparent" stroke="none"
+                  style={{ cursor: corner === "nw" || corner === "se" ? "nwse-resize" : "nesw-resize" }}>
+                  <title>Drag to resize</title>
+                </rect>)}
+                {!disabled && CORNERS.map(corner => <rect key={`marker-${corner}`}
+                  x={cx(corner.endsWith("w") ? box.x_start : box.x_end) - 1}
+                  y={cy(corner.startsWith("n") ? box.y_start : box.y_end) - 1}
+                  width={2} height={2} fill={ACTIVE_COLOR} stroke="#fff" strokeWidth={0.5} pointerEvents="none" />)}
+                <foreignObject x={x - 80 + Math.abs(cx(box.x_end) - cx(box.x_start)) / 2} y={y + 5} width={160} height={65} pointerEvents="none">
+                <div className="scan-roi-layer__dimensions pattern-roi-chip">{`W: ${Math.abs(box.x_end - box.x_start).toFixed(2)} ${unit}\nH: ${Math.abs(box.y_end - box.y_start).toFixed(2)} ${unit}\nAvgGray: ${inst.AvgGray == null ? "—" : inst.AvgGray.toFixed(2)}`}</div>
+              </foreignObject></g>;
+            })()}
+          </g>
         ) : null;
       })}
       {active && d?.kind === "rect" && d.rect && (
@@ -188,6 +313,13 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       {active && d?.kind === "circle" && d.outer > 0 && (
         <Shape spec={active} params={{}} roi={{ cx: d.center.x, cy: d.center.y, radius: d.outer }} active draft cx={cx} cy={cy} sx={sx} sy={sy} />
       )}
+      {menu && <foreignObject x={Math.min(menu.x, ROI_CANVAS_EDGE - 150)} y={Math.min(menu.y, ROI_CANVAS_EDGE - 40)} width={150} height={40} data-pattern-menu="true">
+        <div className="canvas-editor__menu pattern-roi-menu">
+          <button type="button" className="canvas-editor__menu-item" onClick={(e) => {
+            e.stopPropagation?.(); dispatch(clearPatternRoi(menu.key)); setMenu(null);
+          }}>{t("scan.roi.remove")}</button>
+        </div>
+      </foreignObject>}
       {d?.kind === "polygon" && d.points.length > 1 && (
         <polyline
           points={d.points.map((q) => `${q.x},${q.y}`).join(" ")}
@@ -217,6 +349,7 @@ function ellipsePath(x: number, y: number, rx: number, ry: number) {
 function Shape({ spec, params, roi, active, draft = false, cx, cy, sx, sy }: ShapeProps) {
   const color = active ? ACTIVE_COLOR : OTHER_COLOR;
   const common = {
+    pointerEvents: "all" as const,
     stroke: color,
     strokeWidth: active ? 1.6 : 1.1,
     strokeDasharray: draft ? "5 4" : undefined,

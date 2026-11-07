@@ -236,3 +236,40 @@ export function resolveCatalogue(patterns: PatternSpec[], backendErrors: string[
   }
   return { specs, errors };
 }
+
+/** World-space extent shared by the ROI chip and editing handles. */
+export function patternBounds(roi: PatternRoi): RectRoi {
+  if ("x_start" in roi) return roi;
+  if ("cx" in roi) {
+    const r = "radius" in roi ? roi.radius : roi.r_outer;
+    return { x_start: roi.cx - r, x_end: roi.cx + r, y_start: roi.cy - r, y_end: roi.cy + r };
+  }
+  return { x_start: Math.min(...roi.points.map(p => p[0])), x_end: Math.max(...roi.points.map(p => p[0])),
+    y_start: Math.min(...roi.points.map(p => p[1])), y_end: Math.max(...roi.points.map(p => p[1])) };
+}
+
+/** Average raw gray of opaque pixel centres inside the actual ROI shape. */
+export function patternAvgGray(roi: PatternRoi, model: (typeof MODEL_REGISTRY)[string], width: number, height: number,
+  world: { x_origin: number; x_end: number; y_origin: number; y_end: number },
+  sample: (index: number) => number | null): number | null {
+  let sum = 0, count = 0;
+  const bounds = patternBounds(roi);
+  const range = (a: number, b: number, origin: number, end: number, size: number) => {
+    if (origin === end) return [0, 0];
+    const p = (a - origin) / (end - origin) * size;
+    const q = (b - origin) / (end - origin) * size;
+    return [Math.max(0, Math.floor(Math.min(p, q))), Math.min(size, Math.ceil(Math.max(p, q)))];
+  };
+  const [x0, x1] = range(bounds.x_start, bounds.x_end, world.x_origin, world.x_end, width);
+  const [y0, y1] = range(bounds.y_start, bounds.y_end, world.y_origin, world.y_end, height);
+  for (let y = y0; y < y1; y++) {
+    const wy = world.y_origin + (y + 0.5) / height * (world.y_end - world.y_origin);
+    for (let x = x0; x < x1; x++) {
+      const wx = world.x_origin + (x + 0.5) / width * (world.x_end - world.x_origin);
+      if (!model.contains(roi, wx, wy)) continue;
+      const gray = sample(y * width + x);
+      if (gray !== null) { sum += gray; count++; }
+    }
+  }
+  return count ? sum / count : null;
+}

@@ -143,7 +143,7 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
           />
         ))}
         </div>
-        <p className="pattern-card__readout">{roiReadout(spec, instance.roi, unit)}</p>
+        <p className="pattern-card__readout">{roiReadout(spec, instance.roi, unit)}{`\nAvgGray: ${instance.AvgGray == null ? "—" : instance.AvgGray.toFixed(2)}`}</p>
       </div>
     </div>
   );
