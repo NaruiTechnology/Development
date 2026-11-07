@@ -92,6 +92,45 @@ test("pattern mouse selects, moves within bounds, resizes all corners, cancels a
     assert.equal(roi(), null, "undo drawing restores empty ROI");
     await act(async () => undo());
     assert.deepEqual(roi(), restored, "repeated undo walks earlier edits");
+
+    await act(async () => {
+      store.dispatch(actions.fetchProcessingPatterns.fulfilled({patterns:[
+        {key:"ring",caption:"Ring",model:"RingModel",icon:"patternRing",roi:"ring",parameters:[]},
+      ]}, "ring-test"));
+      store.dispatch(actions.selectPattern("ring"));
+    });
+    const blankEvent = (x,y) => ({...event(x,y), target:{closest:()=>null}});
+    const circles = () => renderer.root.findAll(n => n.type === "ellipse" && n.props["data-ring-boundary"]);
+    const assertConcentric = () => {
+      const [outer,inner] = circles();
+      assert.ok(outer && inner, "ring has two circle outlines");
+      assert.equal(outer.props.cx, inner.props.cx);
+      assert.equal(outer.props.cy, inner.props.cy);
+      assert.ok(outer.props.rx > inner.props.rx && inner.props.rx > 0);
+      assert.ok(outer.props.ry > inner.props.ry && inner.props.ry > 0);
+    };
+    await pointer("onPointerDown", blankEvent(300,300));
+    await pointer("onPointerMove", blankEvent(400,300));
+    assertConcentric();
+    await pointer("onPointerUp", blankEvent(400,300));
+    assertConcentric();
+    assert.deepEqual(store.getState().processing.instances.ring.roi, {cx:300,cy:300,r_inner:50,r_outer:100}, "first drag creates donut immediately");
+    const innerEvent = (x,y) => ({...event(x,y), target:{
+      closest: selector => selector === "[data-pattern-key]" ? {getAttribute:()=>"ring"} : null,
+      getAttribute: name => name === "data-pattern-inner" ? "true" : null,
+    }});
+    await pointer("onPointerDown", innerEvent(350,300));
+    await pointer("onPointerMove", innerEvent(340,300));
+    await pointer("onPointerUp", innerEvent(340,300));
+    assert.deepEqual(store.getState().processing.instances.ring.roi, {cx:300,cy:300,r_inner:40,r_outer:100}, "inner handle changes only the hole");
+    assertConcentric();
+    await act(async () => undo());
+    assert.deepEqual(store.getState().processing.instances.ring.roi, {cx:300,cy:300,r_inner:50,r_outer:100});
+    await pointer("onPointerDown", innerEvent(350,300));
+    await pointer("onPointerUp", innerEvent(500,300));
+    assertConcentric();
+    assert.equal(store.getState().processing.instances.ring.roi.r_inner, 95, "hole cannot collapse the annulus");
+
   } finally {
     if (renderer) await act(async () => renderer.unmount());
     await vite.close();

@@ -1277,7 +1277,7 @@ export const zhCN: Partial<TranslationTable> = {
   "processing.patterns": "图形",
   "processing.hint.rect": "在图像上拖动以绘制图形区域。",
   "processing.hint.circle": "从圆心向外拖动以设定半径，松开完成。按 Esc 或右键取消。",
-  "processing.hint.ring": "从圆心向外拖动到外圆，然后单击设定内圆（同一圆心）。按 Esc 或右键取消。",
+  "processing.hint.ring": "从圆心向外拖动到外圆即可创建圆环。拖动内圆控制点可调整内孔，两个圆共用同一圆心。按 Esc 或右键取消。",
   "processing.hint.polygon": "按住并拖动以手绘轮廓，松开即闭合。",
   "processing.roi.none": "尚未绘制区域。",
   "processing.roi.rect": "X {x0} 至 {x1}，Y {y0} 至 {y1} {unit}",

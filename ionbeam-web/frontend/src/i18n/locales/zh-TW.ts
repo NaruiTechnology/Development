@@ -1282,7 +1282,7 @@ export const zhTW: Partial<TranslationTable> = {
   "processing.patterns": "圖形",
   "processing.hint.rect": "在影像上拖曳以繪製圖形區域。",
   "processing.hint.circle": "從圓心向外拖曳以設定半徑，放開完成。按 Esc 或右鍵取消。",
-  "processing.hint.ring": "從圓心向外拖曳到外圓，然後按一下設定內圓（同一圓心）。按 Esc 或右鍵取消。",
+  "processing.hint.ring": "從圓心向外拖曳到外圓即可建立圓環。拖曳內圓控制點可調整內孔，兩個圓共用同一圓心。按 Esc 或右鍵取消。",
   "processing.hint.polygon": "按住並拖曳以手繪輪廓，放開即閉合。",
   "processing.roi.none": "尚未繪製區域。",
   "processing.roi.rect": "X {x0} 至 {x1}，Y {y0} 至 {y1} {unit}",

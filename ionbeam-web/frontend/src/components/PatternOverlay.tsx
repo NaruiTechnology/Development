@@ -6,14 +6,14 @@
  *
  *   rect     drag a rectangle
  *   circle   drag from the centre to the radius; release to finish
- *   ring     drag from the centre to the outer circle, then click for the inner circle; both circles share the
- *            centre and the pattern is the area between them (Esc / right-click cancels)
+ *   ring     drag from the centre to the outer circle; drag the inner-radius handle to adjust the hole
+ *            (both circles share the centre; Esc / right-click cancels)
  *   polygon  press, drag, release: a free-hand outline
  *
  * Shapes are stored in world coordinates (like the ROI selection), radii as world lengths, so a ring stays a true
  * circle whatever the image aspect and survives zoom.
  */
-import { useEffect, useReducer, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useDeferredValue, memo, useEffect, useReducer, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { patternBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
@@ -50,7 +50,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   const { specs, instances, activeKey } = useAppSelector((s) => s.processing);
   const [, repaint] = useReducer((n: number) => n + 1, 0);
   const draft = useRef<Draft | null>(null);
-  const edit = useRef<{ key: string; start: Pt; original: PatternRoi; corner: Corner | null } | null>(null);
+  const edit = useRef<{ key: string; start: Pt; original: PatternRoi; corner: Corner | null; inner: boolean } | null>(null);
   const active = specs.find((s) => s.key === activeKey) ?? null;
 
   const bounds = imageWorldBounds(roi);
@@ -121,21 +121,13 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         corner = CORNERS.find(c => Math.hypot(p.x - cx(c.endsWith("w") ? box.x_start : box.x_end),
           p.y - cy(c.startsWith("n") ? box.y_start : box.y_end)) <= 16) ?? null;
       }
-      edit.current = { key, start: api.toWorld(p), original, corner };
+      edit.current = { key, start: api.toWorld(p), original, corner,
+        inner: (e.target as Element | undefined)?.getAttribute("data-pattern-inner") === "true" };
       if (key !== activeKey) dispatch(selectPattern(key));
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
       return;
     }
     if (!active) return;
-    const d = draft.current;
-    if (active.roi === "ring" && d?.kind === "ring" && !d.dragging) {
-      // second step: this click places the inner circle
-      const dist = worldDistance(api.toWorld(p), d.center);
-      commit({ cx: d.center.x, cy: d.center.y, r_inner: Math.min(dist, d.outer * 0.999), r_outer: d.outer });
-      draft.current = null;
-      repaint();
-      return;
-    }
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -151,6 +143,13 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     const editing = edit.current;
     if (editing && !disabled) {
       const p = api.toWorld(api.pointFromClient(e.clientX, e.clientY));
+      if (editing.inner && "r_inner" in editing.original) {
+        const original = editing.original;
+        const radius = worldDistance(p, { x: original.cx, y: original.cy });
+        dispatch(setPatternRoi({ key: editing.key, roi: { ...original,
+          r_inner: Math.max(original.r_outer * 0.05, Math.min(radius, original.r_outer * 0.95)) }, preview: true }));
+        return;
+      }
       const box = patternBounds(editing.original);
       const corner = editing.corner;
       const xMin = Math.min(bounds.x_origin, bounds.x_end), xMax = Math.max(bounds.x_origin, bounds.x_end);
@@ -202,7 +201,10 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     } else if (d.kind === "circle" || d.kind === "ring") {
       const dist = worldDistance(api.toWorld(p), d.center);
       if (d.dragging) d.outer = dist;
-      else d.inner = Math.min(dist, d.outer * 0.999);
+      else {
+        const gap = Math.min(d.outer / 4, 2 / Math.max(sx, sy));
+        d.inner = Math.max(gap, Math.min(dist, d.outer - gap));
+      }
     } else if (d.kind === "polygon") {
       const last = d.points[d.points.length - 1];
       const spacing = Number(instances[active.key]?.parameters.smoothing ?? 2);
@@ -232,8 +234,8 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
           commit({ cx: d.center.x, cy: d.center.y, radius: d.outer });
           draft.current = null;
         } else {
-          d.dragging = false;                     // wait for the inner-circle click
-          d.inner = d.outer * 0.5;
+          commit({ cx: d.center.x, cy: d.center.y, r_inner: d.outer * 0.5, r_outer: d.outer });
+          draft.current = null;
         }
       } else {
         draft.current = null;
@@ -246,8 +248,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   }
 
   function onPointerLeave() {
-    const d = draft.current;
-    if (d && !(d.kind === "ring" && !d.dragging)) cancel();   // a pending inner-circle click survives the cursor leaving
+    if (draft.current) cancel();
   }
 
   const d = draft.current;
@@ -297,8 +298,14 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
                   x={cx(corner.endsWith("w") ? box.x_start : box.x_end) - 1}
                   y={cy(corner.startsWith("n") ? box.y_start : box.y_end) - 1}
                   width={2} height={2} fill={ACTIVE_COLOR} stroke="#fff" strokeWidth={0.5} pointerEvents="none" />)}
+                {!disabled && "r_inner" in inst.roi && <g>
+                  <circle data-pattern-inner="true" cx={cx(inst.roi.cx + inst.roi.r_inner)} cy={cy(inst.roi.cy)}
+                    r={6} fill="transparent" style={{ cursor: "ew-resize" }}><title>Drag to adjust inner radius</title></circle>
+                  <circle cx={cx(inst.roi.cx + inst.roi.r_inner)} cy={cy(inst.roi.cy)} r={1.5}
+                    fill={ACTIVE_COLOR} stroke="#fff" strokeWidth={0.5} pointerEvents="none" />
+                </g>}
                 <foreignObject x={x - 80 + Math.abs(cx(box.x_end) - cx(box.x_start)) / 2} y={y + 5} width={160} height={65} pointerEvents="none">
-                <div className="scan-roi-layer__dimensions pattern-roi-chip">{`W: ${Math.abs(box.x_end - box.x_start).toFixed(2)} ${unit}\nH: ${Math.abs(box.y_end - box.y_start).toFixed(2)} ${unit}\nAvgGray: ${inst.AvgGray == null ? "—" : inst.AvgGray.toFixed(2)}`}</div>
+                <PatternMessageChip text={`W: ${Math.abs(box.x_end - box.x_start).toFixed(2)} ${unit}\nH: ${Math.abs(box.y_end - box.y_start).toFixed(2)} ${unit}\nAvgGray: ${inst.AvgGray == null ? "—" : inst.AvgGray.toFixed(2)}`} />
               </foreignObject></g>;
             })()}
           </g>
@@ -308,7 +315,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         <Shape spec={active} params={instances[active.key]?.parameters ?? {}} roi={d.rect} active draft cx={cx} cy={cy} sx={sx} sy={sy} />
       )}
       {active && d?.kind === "ring" && d.outer > 0 && (
-        <Shape spec={active} params={{}} roi={{ cx: d.center.x, cy: d.center.y, r_inner: d.dragging ? 0 : d.inner, r_outer: d.outer }} active draft cx={cx} cy={cy} sx={sx} sy={sy} />
+        <Shape spec={active} params={{}} roi={{ cx: d.center.x, cy: d.center.y, r_inner: d.dragging ? d.outer * 0.5 : d.inner, r_outer: d.outer }} active draft cx={cx} cy={cy} sx={sx} sy={sy} />
       )}
       {active && d?.kind === "circle" && d.outer > 0 && (
         <Shape spec={active} params={{}} roi={{ cx: d.center.x, cy: d.center.y, radius: d.outer }} active draft cx={cx} cy={cy} sx={sx} sy={sy} />
@@ -366,7 +373,11 @@ function Shape({ spec, params, roi, active, draft = false, cx, cy, sx, sy }: Sha
     const r = roi as RingRoi;
     const x = cx(r.cx);
     const y = cy(r.cy);
-    return <path d={ellipsePath(x, y, r.r_outer * sx, r.r_outer * sy) + ellipsePath(x, y, r.r_inner * sx, r.r_inner * sy)} fillRule="evenodd" {...fill} {...common} />;
+    return <g>
+      <path d={ellipsePath(x, y, r.r_outer * sx, r.r_outer * sy) + ellipsePath(x, y, r.r_inner * sx, r.r_inner * sy)} fillRule="evenodd" {...fill} stroke="none" />
+      <ellipse data-ring-boundary="outer" cx={x} cy={y} rx={r.r_outer * sx} ry={r.r_outer * sy} fill="none" {...common} />
+      <ellipse data-ring-boundary="inner" cx={x} cy={y} rx={r.r_inner * sx} ry={r.r_inner * sy} fill="none" {...common} />
+    </g>;
   }
   if (spec.roi === "polygon") {
     const pts = (roi as PolygonRoi).points.map(([x, y]) => `${cx(x)},${cy(y)}`).join(" ");
@@ -403,3 +414,9 @@ function Shape({ spec, params, roi, active, draft = false, cx, cy, sx, sy }: Sha
   }
   return <rect {...box} {...fill} {...common} />;
 }
+
+/** Let pointer-driven geometry render before the readout text. */
+const PatternMessageChip = memo(function PatternMessageChip({ text }: { text: string }) {
+  const deferredText = useDeferredValue(text);
+  return <div className="scan-roi-layer__dimensions pattern-roi-chip">{deferredText}</div>;
+});

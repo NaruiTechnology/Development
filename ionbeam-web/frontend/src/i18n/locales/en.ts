@@ -1424,7 +1424,7 @@ export const en = {
   "processing.patterns": "Patterns",
   "processing.hint.rect": "Drag on the image to draw the pattern area.",
   "processing.hint.circle": "Drag from the centre to set the radius; release to finish. Esc or right-click cancels.",
-  "processing.hint.ring": "Drag from the centre out to the outer circle, then click to set the inner circle (same centre). Esc or right-click cancels.",
+  "processing.hint.ring": "Drag from the centre to the outer circle to create a ring. Drag the inner-circle handle to adjust the hole; both circles share the same centre. Esc or right-click cancels.",
   "processing.hint.polygon": "Press and drag to draw the outline freehand; release to close it.",
   "processing.roi.none": "No area drawn yet.",
   "processing.roi.rect": "X {x0} to {x1}, Y {y0} to {y1} {unit}",

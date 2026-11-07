@@ -249,9 +249,9 @@ export function patternBounds(roi: PatternRoi): RectRoi {
 }
 
 /** Average raw gray of opaque pixel centres inside the actual ROI shape. */
-export function patternAvgGray(roi: PatternRoi, model: (typeof MODEL_REGISTRY)[string], width: number, height: number,
+export function* patternAvgGraySteps(roi: PatternRoi, model: (typeof MODEL_REGISTRY)[string], width: number, height: number,
   world: { x_origin: number; x_end: number; y_origin: number; y_end: number },
-  sample: (index: number) => number | null): number | null {
+  sample: (index: number) => number | null): Generator<void, number | null> {
   let sum = 0, count = 0;
   const bounds = patternBounds(roi);
   const range = (a: number, b: number, origin: number, end: number, size: number) => {
@@ -263,8 +263,10 @@ export function patternAvgGray(roi: PatternRoi, model: (typeof MODEL_REGISTRY)[s
   const [x0, x1] = range(bounds.x_start, bounds.x_end, world.x_origin, world.x_end, width);
   const [y0, y1] = range(bounds.y_start, bounds.y_end, world.y_origin, world.y_end, height);
   for (let y = y0; y < y1; y++) {
+    yield;
     const wy = world.y_origin + (y + 0.5) / height * (world.y_end - world.y_origin);
     for (let x = x0; x < x1; x++) {
+      if (x > x0 && (x - x0) % 128 === 0) yield;
       const wx = world.x_origin + (x + 0.5) / width * (world.x_end - world.x_origin);
       if (!model.contains(roi, wx, wy)) continue;
       const gray = sample(y * width + x);
@@ -272,4 +274,12 @@ export function patternAvgGray(roi: PatternRoi, model: (typeof MODEL_REGISTRY)[s
     }
   }
   return count ? sum / count : null;
+}
+
+/** Synchronous helper for small measurements and callers without an idle scheduler. */
+export function patternAvgGray(...args: Parameters<typeof patternAvgGraySteps>): number | null {
+  const steps = patternAvgGraySteps(...args);
+  let result = steps.next();
+  while (!result.done) result = steps.next();
+  return result.value;
 }

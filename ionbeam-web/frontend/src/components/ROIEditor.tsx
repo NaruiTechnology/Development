@@ -1,4 +1,5 @@
-import { MODEL_REGISTRY, patternAvgGray } from "../lib/processingPatterns";
+import { createIdleWorkQueue } from "../lib/idleWork";
+import { MODEL_REGISTRY, patternAvgGraySteps } from "../lib/processingPatterns";
 import { pixelGray } from "../lib/roiTargetGray";
 import { setPatternAvgGray } from "../store/processingSlice";
 import { ImageScaleChip } from "./ImageScaleChip";
@@ -131,6 +132,18 @@ export function ROIEditor({
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
   const processingPatterns = useAppSelector((s) => s.processing);
+  // Gray readouts must not invalidate canvas painting or shape clipping.
+  const processingRoiKey = JSON.stringify(processingPatterns.specs.map(spec =>
+    [spec.key, spec.model, processingPatterns.instances[spec.key]?.roi]));
+  const measurementKey = JSON.stringify([processingRoiKey, imageWorldBounds(roi), roi.imageDataUrl, roi.scanImageDataUrl, processingPreview]);
+  const measurementKeyRef = useRef(measurementKey);
+  measurementKeyRef.current = measurementKey;
+  const averageQueueRef = useRef<ReturnType<typeof createIdleWorkQueue> | null>(null);
+  useEffect(() => () => {
+    averageQueueRef.current?.dispose();
+    averageQueueRef.current = null;
+  }, []);
+  useEffect(() => { schedulePatternAverages(); }, [measurementKey]);
   const calibratedPixelSize = useAppSelector(selectGlobalPixelSize);
   // Native size of the image on the canvas, known once it has loaded.
   const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null);
@@ -411,7 +424,6 @@ export function ROIEditor({
     drawLiveScanPathOverlay();
     drawAnnotationLayer();
   }, [
-    processingPatterns,
     draft,
     grayScaleSelection,
     grayScaleSkipped,
@@ -505,7 +517,7 @@ export function ROIEditor({
     draw(performance.now());
     return () => cancelAnimationFrame(animationFrame);
   }, [processingPreview, processingEdge, processingCursor, processingROI, processingRegions,
-    vectorScanPath, vectorPhase, roi, processingPatterns]);
+    vectorScanPath, vectorPhase, roi, processingRoiKey]);
 
   // Action run toward the target gray level. Each pass compares every pixel
   // inside the ROI area with `selectedTargetGray` and decides its beam state
@@ -1021,20 +1033,29 @@ export function ROIEditor({
         ctx.drawImage(live, 0, 0);
       }
     }
-    updatePatternAverages();
+    schedulePatternAverages();
   }
 
-  function updatePatternAverages() {
+  function schedulePatternAverages() {
     if (!processingPreview) return;
+    averageQueueRef.current ??= createIdleWorkQueue();
+    averageQueueRef.current.schedule(updatePatternAverages);
+  }
+
+  function* updatePatternAverages(): Generator<void, void> {
+    if (!processingPreview || !processingPatterns.specs.some(spec => processingPatterns.instances[spec.key]?.roi)) return;
+    const key = measurementKey;
+    if (measurementKeyRef.current !== key) return;
     const raw = imageRef.current ? rawCanvasRef.current : null;
     const data = raw?.getContext("2d", { willReadFrequently: true })?.getImageData(0, 0, raw.width, raw.height);
+    yield;
     const width = processingFilled > 0 ? processingEdge : (data?.width ?? 0);
     const height = processingFilled > 0 ? processingEdge : (data?.height ?? 0);
     const values: Record<string, number | null> = {};
     for (const spec of processingPatterns.specs) {
       const inst = processingPatterns.instances[spec.key];
       if (!inst) continue;
-      const value = inst.roi && width > 0 ? patternAvgGray(inst.roi, MODEL_REGISTRY[spec.model], width, height,
+      const steps = inst.roi && width > 0 ? patternAvgGraySteps(inst.roi, MODEL_REGISTRY[spec.model], width, height,
         imageWorldBounds(roi), (index) => {
           if (processingFilled > 0 && index < processingFilled) return Math.min(255, processingFrame[index] >>> 8);
           if (!data) return null;
@@ -1042,9 +1063,19 @@ export function ROIEditor({
           const i = (Math.floor(y * data.height / height) * data.width + Math.floor(x * data.width / width)) * 4;
           return data.data[i + 3] ? pixelGray(data.data[i], data.data[i + 1], data.data[i + 2]) : null;
         }) : null;
-      if (inst.AvgGray !== value) values[spec.key] = value;
+      let value: number | null = null;
+      if (steps) {
+        let next = steps.next();
+        while (!next.done) {
+          yield;
+          if (measurementKeyRef.current !== key) return;
+          next = steps.next();
+        }
+        value = next.value;
+      }
+      values[spec.key] = value;
     }
-    if (Object.keys(values).length) dispatch(setPatternAvgGray(values));
+    if (measurementKeyRef.current === key && Object.keys(values).length) dispatch(setPatternAvgGray(values));
   }
 
   /** Keep the raw copy and the wedge histogram in step with the current image. */
