@@ -68,7 +68,7 @@ test("pattern mouse selects, moves within bounds, resizes all corners, cancels a
     assert.deepEqual(roi(), {x_start:100,x_end:230,y_start:100,y_end:240});
     assert.equal(store.getState().processing.roiHistory.length, historyBeforeDrag, "cancelled drag adds no history");
     await pointer("onContextMenu", event(150,150));
-    const remove = renderer.root.findByProps({className:"canvas-editor__menu-item"});
+    const remove = renderer.root.findByProps({className:"canvas-editor__menu-item scan-roi-layer__menu-item"});
     await act(async () => remove.props.onClick({stopPropagation(){}}));
     assert.equal(roi(), null);
     assert.equal(store.getState().processing.instances.box.AvgGray, null);

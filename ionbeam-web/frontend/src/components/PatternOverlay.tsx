@@ -253,6 +253,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
 
   const d = draft.current;
   return (
+    <>
     <svg
       className={`roi-canvas-layer roi-pattern-overlay${active ? "" : " roi-pattern-overlay--idle"}`}
       viewBox={`0 0 ${ROI_CANVAS_EDGE} ${ROI_CANVAS_EDGE}`}
@@ -320,13 +321,6 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       {active && d?.kind === "circle" && d.outer > 0 && (
         <Shape spec={active} params={{}} roi={{ cx: d.center.x, cy: d.center.y, radius: d.outer }} active draft cx={cx} cy={cy} sx={sx} sy={sy} />
       )}
-      {menu && <foreignObject x={Math.min(menu.x, ROI_CANVAS_EDGE - 150)} y={Math.min(menu.y, ROI_CANVAS_EDGE - 40)} width={150} height={40} data-pattern-menu="true">
-        <div className="canvas-editor__menu pattern-roi-menu">
-          <button type="button" className="canvas-editor__menu-item" onClick={(e) => {
-            e.stopPropagation?.(); dispatch(clearPatternRoi(menu.key)); setMenu(null);
-          }}>{t("scan.roi.remove")}</button>
-        </div>
-      </foreignObject>}
       {d?.kind === "polygon" && d.points.length > 1 && (
         <polyline
           points={d.points.map((q) => `${q.x},${q.y}`).join(" ")}
@@ -334,6 +328,14 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         />
       )}
     </svg>
+    {menu && <div className="canvas-editor__menu scan-roi-layer__menu pattern-roi-menu" data-pattern-menu="true"
+      style={{ left: `clamp(0px, ${menu.x / ROI_CANVAS_EDGE * 100}%, calc(100% - 190px))`,
+        top: `clamp(0px, ${menu.y / ROI_CANVAS_EDGE * 100}%, calc(100% - 60px))` }}>
+      <button type="button" className="canvas-editor__menu-item scan-roi-layer__menu-item" onClick={(e) => {
+        e.stopPropagation(); dispatch(clearPatternRoi(menu.key)); setMenu(null);
+      }}>{t("scan.roi.remove")}</button>
+    </div>}
+    </>
   );
 }
 

@@ -89,7 +89,8 @@ export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
 export function ProcessingPatternCards({ disabled }: { disabled: boolean }) {
   const { specs, instances, activeKey } = useAppSelector((s) => s.processing);
   return <>{specs.map((spec) => (
-    <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key} disabled={disabled} />
+    <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key}
+      disabled={disabled || !instances[spec.key]?.roi} />
   ))}</>;
 }
 
@@ -103,7 +104,7 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
   if (!instance) return null;
 
   return (
-    <div id={`processing-pattern-${encodeURIComponent(spec.key)}`} tabIndex={-1} role="region" aria-label={caption}
+    <div id={`processing-pattern-${encodeURIComponent(spec.key)}`} tabIndex={-1} role="region" aria-label={caption} aria-disabled={disabled}
       className={`card pattern-card${active ? " pattern-card--active" : ""}`} data-pattern={spec.key}>
       <div className="card__header">
         <span className="card__title">{caption}</span>
