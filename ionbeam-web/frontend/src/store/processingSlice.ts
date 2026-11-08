@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
+import { DEFAULT_WORKFLOW, type WorkflowSpec, type WorkflowProgress } from "../lib/processingWorkflows";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
 import {
@@ -15,6 +16,8 @@ import {
 
 /** One live instance per catalogue entry: the parameter values and the ROI the operator drew. */
 export interface PatternInstance {
+  workflow: string;
+  workflowEnabled: boolean;
   AvgGray: number | null;
   enabled: boolean;
   parameters: PatternParameters;
@@ -22,6 +25,9 @@ export interface PatternInstance {
 }
 
 export interface ProcessingState {
+  workflows: WorkflowSpec[];
+  materials: { name: string; brightness: number }[];
+  workflowProgress: WorkflowProgress[];
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
   entryErrors: string[];
@@ -32,12 +38,14 @@ export interface ProcessingState {
   roiHistory: Array<{ key: string; roi: PatternRoi | null }>;
 }
 
-const initialState: ProcessingState = { status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiHistory: [] };
+const initialState: ProcessingState = { workflows: [DEFAULT_WORKFLOW], materials: [], workflowProgress: [], status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiHistory: [] };
 
 interface PatternsResponse {
   ok?: boolean;
   error?: string;
   patterns?: PatternSpec[];
+  workflows?: WorkflowSpec[];
+  materials?: { name: string; brightness: number }[];
   errors?: string[];
 }
 
@@ -52,12 +60,44 @@ const slice = createSlice({
   name: "processing",
   initialState,
   reducers: {
+    setPatternWorkflow(s, a: PayloadAction<{ key: string; workflow?: string; enabled?: boolean }>) {
+      const inst = s.instances[a.payload.key];
+      if (!inst) return;
+      if (a.payload.workflow && s.workflows.some(w => w.name === a.payload.workflow)) inst.workflow = a.payload.workflow;
+      if (a.payload.enabled !== undefined) inst.workflowEnabled = a.payload.enabled;
+      s.workflowProgress = [];
+    },
+    setWorkflowProgress: {
+      prepare(steps: WorkflowProgress[]) {
+        const at = Date.now();
+        return { payload: steps.map(step => step.status === "current" ? { ...step, startedAt: step.startedAt ?? at } : step) };
+      },
+      reducer(s, a: PayloadAction<WorkflowProgress[]>) { s.workflowProgress = a.payload; },
+    },
+    updateWorkflowStep: {
+      prepare(payload: { id?: string; status: WorkflowProgress["status"] }) {
+        return { payload: { ...payload, at: Date.now() } };
+      },
+      reducer(s, a: PayloadAction<{ id?: string; status: WorkflowProgress["status"]; at: number }>) {
+        for (const step of s.workflowProgress) {
+          if (!(a.payload.id ? step.id === a.payload.id : step.status === "current")) continue;
+          if (a.payload.status === "current" && step.status !== "current") {
+            step.startedAt = a.payload.at;
+            delete step.finishedAt;
+          } else if (["completed", "stopped", "error"].includes(a.payload.status) && step.startedAt !== undefined && step.finishedAt === undefined) {
+            step.finishedAt = a.payload.at;
+          }
+          step.status = a.payload.status;
+        }
+      },
+    },
     selectPattern(s, a: PayloadAction<string | null>) {
       s.activeKey = a.payload !== null && s.instances[a.payload] ? a.payload : null;
     },
     setPatternEnabled(s, a: PayloadAction<{ key: string; enabled: boolean }>) {
       const inst = s.instances[a.payload.key];
       if (inst) inst.enabled = a.payload.enabled;
+      s.workflowProgress = [];
     },
     setPatternParameter(s, a: PayloadAction<{ key: string; name: string; value: ParameterValue | string }>) {
       const spec = s.specs.find((p) => p.key === a.payload.key)?.parameters.find((q) => q.name === a.payload.name);
@@ -81,6 +121,7 @@ const slice = createSlice({
           if (s.roiHistory.length > 100) s.roiHistory.shift();
         }
         inst.roi = next;
+        s.workflowProgress = [];
       } catch {
         // degenerate shape: keep the previous ROI
       }
@@ -122,9 +163,11 @@ const slice = createSlice({
       const { specs, errors } = resolveCatalogue(a.payload.patterns ?? [], a.payload.errors ?? []);
       s.status = "ready";
       s.specs = specs;
+      s.workflows = [DEFAULT_WORKFLOW, ...(a.payload.workflows ?? []).filter(w => w.name !== "default")];
+      s.materials = a.payload.materials ?? [];
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
-      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
+      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { workflow: "default", workflowEnabled: true, AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
       s.roiHistory = s.roiHistory.filter(entry => Boolean(s.instances[entry.key]));
       if (s.activeKey && !s.instances[s.activeKey]) s.activeKey = null;
     });
@@ -135,5 +178,5 @@ const slice = createSlice({
   },
 });
 
-export const { undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setPatternRoi, clearPatternRoi } = slice.actions;
+export const { setPatternWorkflow, setWorkflowProgress, updateWorkflowStep, undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setPatternRoi, clearPatternRoi } = slice.actions;
 export default slice.reducer;

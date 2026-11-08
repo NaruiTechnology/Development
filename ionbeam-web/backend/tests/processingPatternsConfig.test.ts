@@ -41,3 +41,14 @@ test("unusable files raise ConfigError", () => {
   assert.throws(() => parseProcessingPatterns({ nope: 1 }), ConfigError);
   assert.throws(() => readProcessingPatterns("/nonexistent/processingPatterns.json"), ConfigError);
 });
+
+
+test("pilot workflows expose validated materials and one/two Spot steps", () => {
+  const cfg = readProcessingPatterns(shipped);
+  assert.deepEqual(cfg.workflows.map(w => w.name), ["default", "OxideLinelCut", "MetalLinelCut", "EvenLinelCut"]);
+  assert.deepEqual(cfg.workflows.map(w => w.steps.length), [1, 1, 1, 2]);
+  assert.equal(cfg.materials.find(m => m.name === "SiO2")?.brightness, 1);
+  assert.deepEqual(cfg.workflows[3].steps.map(s => s.actions[0].selection), ["dark", "bright"]);
+  assert.throws(() => parseProcessingPatterns({ Patterns: [], Materials: [{ name: "SiO2", brightness: -1 }] }), ConfigError);
+  assert.throws(() => parseProcessingPatterns({ Patterns: [], Workflows: [{ name: "bad", steps: [{name: "step", actions: [{name: "spot", mode: "spot", selection: "dark", thresholdMaterial: "missing"}]}] }] }), ConfigError);
+});

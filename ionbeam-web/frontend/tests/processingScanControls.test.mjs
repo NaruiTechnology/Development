@@ -138,6 +138,55 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     assert.equal(sockets.length, 1, "returning to Processing must not restart acquisition");
     await clickRun();
     assert.equal(sockets.length, 2, "only clicking Run restarts acquisition");
+    // Pilot workflow: source pixels are frozen, and stream completion advances steps.
+    await act(async () => { renderer.root.findAllByType("button").find(n => n.props.className === "btn btn--stop").props.onClick(); });
+    await settle();
+    const workflows = [{ name: "EvenLinelCut", caption: "Even", steps: ["dark", "bright"].map(selection => ({
+      name: selection, caption: selection, actions: [{name: "spot", caption: "Spot", mode: "spot", selection, thresholdMaterial: "SiO2"}],
+    })) }];
+    const image = await vite.ssrLoadModule("/src/store/imageSlice.ts");
+    await act(async () => {
+      store.dispatch(processing.fetchProcessingPatterns.fulfilled({ patterns: store.getState().processing.specs,
+        workflows, materials: [{name: "SiO2", brightness: 1}] }, "pilot"));
+      store.dispatch(processing.setPatternWorkflow({ key: "ring", workflow: "EvenLinelCut" }));
+      store.dispatch(image.setupVector({ pattern: "default", edge: 128,
+        initialImage: Uint16Array.from({length: 128 * 128}, (_, i) => (i % 128 < 64 ? 40 : 200) << 8) }));
+    });
+    await clickRun();
+    assert.equal(sockets.length, 3);
+    assert.equal(sockets[2].requests[0].continuous, false, "cut workflows do not repeat indefinitely");
+    assert.equal(sockets[2].requests[0].pattern, "custom");
+    assert.deepEqual(store.getState().processing.workflowProgress.map(p => p.status), ["current", "upcoming"]);
+    const darkStarted = store.getState().processing.workflowProgress[0].startedAt;
+    assert.equal(typeof darkStarted, "number");
+    assert.equal(store.getState().processing.workflowProgress[1].startedAt, undefined);
+    assert.ok(sockets[2].requests[0].points.some(p => p[3]));
+    assert.ok(sockets[2].requests[0].points.some(p => !p[3]));
+    await act(async () => {
+      sockets[2].onmessage({data: JSON.stringify({event: "done", chunks: 1})});
+      sockets[2].close();
+    });
+    await settle();
+    assert.equal(sockets.length, 4, "only completion advances to bright step");
+    const [darkDone, brightStarted] = store.getState().processing.workflowProgress;
+    assert.ok(darkDone.finishedAt >= darkStarted);
+    assert.ok(brightStarted.startedAt >= darkDone.finishedAt);
+    assert.deepEqual(store.getState().processing.workflowProgress.map(p => p.status), ["completed", "current"]);
+    await act(async () => { renderer.root.findAllByType("button").find(n => n.props.className === "btn btn--stop").props.onClick(); });
+    await settle();
+    assert.equal(sockets.length, 4, "Stop does not advance or repeat the cut");
+    const stoppedSteps = store.getState().processing.workflowProgress;
+    assert.equal(stoppedSteps[0].finishedAt, darkDone.finishedAt);
+    assert.ok(stoppedSteps[1].finishedAt >= brightStarted.startedAt);
+    assert.deepEqual(store.getState().processing.workflowProgress.map(p => p.status), ["completed", "stopped"]);
+    // Toggle retains the selected workflow but restores an ordinary continuous scan.
+    await act(async () => { store.dispatch(processing.setPatternWorkflow({key: "ring", enabled: false})); });
+    await clickRun();
+    assert.equal(sockets.length, 5);
+    assert.equal(sockets[4].requests[0].pattern, "default");
+    assert.equal(sockets[4].requests[0].continuous, true);
+    assert.equal(store.getState().processing.instances.ring.workflow, "EvenLinelCut");
+
   } finally {
     if (renderer) await act(async () => { renderer.unmount(); });
     await vite.close();

@@ -261,6 +261,9 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             "STATIC_DIR=../frontend/dist",
             "GLASGOW_CONFIG={}".format(
                 self.resolveDeployPath(os.path.join("Development", "GlasgowDataIO", "Json", "streamData.json"))),
+            "PROCESSING_PATTERNS_CONFIG={}".format(
+                self.resolveDeployPath(actionData.get(
+                    "processingPatternsConfig", "Development/GlasgowDataIO/Json/processingPatterns.json"))),
             "SBC_VACUUM_CONFIG={}".format(
                 self.resolveDeployPath(actionData.get(
                     "vacuumConfig", "Development/GlasgowDataIO/Json/vacuumSystem.json"))),

@@ -21,10 +21,11 @@ import {
   type RingRoi,
 } from "../lib/processingPatterns";
 import { useAppDispatch, useAppSelector } from "../store";
-import { fetchProcessingPatterns, selectPattern, setPatternEnabled, setPatternParameter, type PatternInstance } from "../store/processingSlice";
+import { fetchProcessingPatterns, setPatternWorkflow, selectPattern, setPatternEnabled, setPatternParameter, type PatternInstance } from "../store/processingSlice";
 import { Icon } from "./Icon";
 import { NumberStepperField } from "./NumberStepperField";
 import { PatternIcon } from "./PatternIcon";
+import { ProcessingWorkflowPanel } from "./ProcessingWorkflowPanel";
 import { unitLabel } from "./ROIEditor";
 
 /** Translation with the JSON's English text as fallback for keys the locale tables do not know. */
@@ -98,6 +99,7 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
   const dispatch = useAppDispatch();
   const { t, tr } = useTr();
   const unit = unitLabel(useAppSelector((s) => s.scan.roi.scale_unit));
+  const workflows = useAppSelector(s => s.processing.workflows);
   const [collapsed, setCollapsed] = useState(true);
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
   const label = collapsed ? t("processing.expand") : t("processing.collapse");
@@ -132,6 +134,23 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
         </button>
       </div>
       <div className="pattern-card__body" hidden={collapsed}>
+        <div className="pattern-workflow-controls">
+          <label className="field">Workflow
+            <select className="select" aria-label={`${caption}: Workflow`} value={instance.workflow} disabled={disabled}
+              onChange={e => dispatch(setPatternWorkflow({ key: spec.key, workflow: e.target.value }))}>
+              {workflows.map(w => <option key={w.name} value={w.name}>{w.caption}</option>)}
+            </select>
+          </label>
+          <label className="field pattern-workflow-toggle">
+            <span>Use workflow</span>
+            <span className="checkbox vacuum-switch app-switch">
+              <input type="checkbox" aria-label={`${caption}: Use selected workflow`} checked={instance.workflowEnabled} disabled={disabled}
+                onChange={e => dispatch(setPatternWorkflow({ key: spec.key, enabled: e.target.checked }))} />
+              <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+            </span>
+          </label>
+        </div>
+        <ProcessingWorkflowPanel patternKey={spec.key} />
         <div className="pattern-card__parameters">
         {spec.parameters.map((p) => (
           <ParameterField

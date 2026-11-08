@@ -76,18 +76,87 @@
     "Workflows": [
         {
             "name": "default",
-            "caption": "Default workflow",
-            "comment": "The default workflow is a simple, single,step process. It is the only workflow currently implemented.",
+            "caption": "Default",
+            "comment": "Scan the ROI without workflow gray filtering.",
             "steps": [
                 {
-                    "name": "defaultStep",
-                    "caption": "Default step",
-                    "comment": "The default step is a simple, single,step process. It is the only step currently implemented.",
+                    "name": "scan",
+                    "caption": "Scan ROI",
                     "actions": [
                         {
-                            "name": "defaultAction",
-                            "caption": "Default action",
-                            "comment": "The default action is a simple, single,step process. It is the only action currently implemented."
+                            "name": "scan",
+                            "caption": "Scan ROI",
+                            "mode": "scan"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "OxideLinelCut",
+            "caption": "OxideLinelCut",
+            "steps": [
+                {
+                    "name": "cutDark",
+                    "caption": "Cut dark pixels",
+                    "actions": [
+                        {
+                            "name": "spot",
+                            "caption": "Spot selected ROI pixels",
+                            "mode": "spot",
+                            "selection": "dark",
+                            "thresholdMaterial": "SiO2"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "MetalLinelCut",
+            "caption": "MetalLinelCut",
+            "steps": [
+                {
+                    "name": "cutBright",
+                    "caption": "Cut bright pixels",
+                    "actions": [
+                        {
+                            "name": "spot",
+                            "caption": "Spot selected ROI pixels",
+                            "mode": "spot",
+                            "selection": "bright",
+                            "thresholdMaterial": "SiO2"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "EvenLinelCut",
+            "caption": "EvenLinelCut",
+            "steps": [
+                {
+                    "name": "cutDark",
+                    "caption": "Cut dark pixels",
+                    "actions": [
+                        {
+                            "name": "spot",
+                            "caption": "Spot selected ROI pixels",
+                            "mode": "spot",
+                            "selection": "dark",
+                            "thresholdMaterial": "SiO2"
+                        }
+                    ]
+                },
+                {
+                    "name": "cutBright",
+                    "caption": "Cut bright pixels",
+                    "actions": [
+                        {
+                            "name": "spot",
+                            "caption": "Spot selected ROI pixels",
+                            "mode": "spot",
+                            "selection": "bright",
+                            "thresholdMaterial": "SiO2"
                         }
                     ]
                 }

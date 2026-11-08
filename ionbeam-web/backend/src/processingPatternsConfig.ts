@@ -39,10 +39,49 @@ export interface PatternSpec {
   parameters: PatternParameterSpec[];
 }
 
+export interface WorkflowSpec {
+  name: string;
+  caption: string;
+  steps: { name: string; caption: string; actions: {
+    name: string; caption: string; mode: "scan" | "spot";
+    selection?: "dark" | "bright"; thresholdMaterial?: string;
+  }[] }[];
+}
+
+function parseWorkflows(data: Record<string, unknown>): Pick<ProcessingPatternsConfig, "materials" | "workflows"> {
+  const materials = (Array.isArray(data.Materials) ? data.Materials : []).map((m: unknown) => {
+    if (!isObject(m) || typeof m.name !== "string" || typeof m.brightness !== "number" || !Number.isFinite(m.brightness) || m.brightness <= 0)
+      throw new ConfigError("Invalid workflow material brightness", 500);
+    return { name: m.name, brightness: m.brightness };
+  });
+  const names = new Set<string>();
+  const workflows = (Array.isArray(data.Workflows) ? data.Workflows : []).map((w: unknown): WorkflowSpec => {
+    if (!isObject(w) || typeof w.name !== "string" || names.has(w.name) || !Array.isArray(w.steps) || !w.steps.length)
+      throw new ConfigError("Invalid or duplicate processing workflow", 500);
+    names.add(w.name);
+    const stepNames = new Set<string>();
+    return { name: w.name, caption: String(w.caption ?? w.name), steps: w.steps.map((s: unknown) => {
+      if (!isObject(s) || typeof s.name !== "string" || stepNames.has(s.name) || !Array.isArray(s.actions) || s.actions.length !== 1)
+        throw new ConfigError("Workflow steps require one scan or Spot action and a unique name", 500);
+      stepNames.add(s.name);
+      return { name: s.name, caption: String(s.caption ?? s.name), actions: s.actions.map((a: unknown) => {
+        if (!isObject(a) || typeof a.name !== "string" || !["scan", "spot"].includes(String(a.mode)) ||
+          (a.mode === "spot" && (!["dark", "bright"].includes(String(a.selection)) || !materials.some(m => m.name === a.thresholdMaterial))))
+          throw new ConfigError("Invalid processing workflow action or threshold material", 500);
+        return { name: a.name, caption: String(a.caption ?? a.name), mode: a.mode as "scan" | "spot",
+          ...(a.mode === "spot" ? { selection: a.selection as "dark" | "bright", thresholdMaterial: String(a.thresholdMaterial) } : {}) };
+      }) };
+    }) };
+  });
+  return { materials, workflows };
+}
+
 export interface ProcessingPatternsConfig {
   header: Record<string, unknown>;
   patterns: PatternSpec[];
   errors: string[];
+  materials: { name: string; brightness: number }[];
+  workflows: WorkflowSpec[];
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -90,7 +129,7 @@ export function parseProcessingPatterns(data: unknown): ProcessingPatternsConfig
   if (!isObject(data) || !Array.isArray(data.Patterns)) {
     throw new ConfigError("processing patterns file needs a top-level 'Patterns' list", 500);
   }
-  const out: ProcessingPatternsConfig = { header: isObject(data.Header) ? data.Header : {}, patterns: [], errors: [] };
+  const out: ProcessingPatternsConfig = { header: isObject(data.Header) ? data.Header : {}, patterns: [], errors: [], ...parseWorkflows(data) };
   const seen = new Set<string>();
   data.Patterns.forEach((entry, i) => {
     try {

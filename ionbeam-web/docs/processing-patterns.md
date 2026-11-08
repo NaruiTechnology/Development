@@ -16,19 +16,14 @@ A **Processing** tab sits next to Scan. It draws pattern ROIs on the ROI canvas;
 Processing shares the Scan controller and Transform settings. At the bottom,
 Transform starts collapsed; Controls opens on Processing entry. Controls shares Pattern Path, Resolution, Dwell, Region, Equipment and Zoom with
 the Scan tab, including the same validation and enabled/disabled behavior.
-Controls offers Scan (one acquisition),
-Stop, and Run (continuous/live acquisition). Entering Processing starts live
-acquisition once the configured image is ready, unless a stream is already
-running; clicking the image while stopped also requests live acquisition. These
-requests use the same permission, vacuum readiness, validation and start guards
-as the Scan tab. Stop consumes the pending start request and is not followed by
-an automatic restart; another tab entry or image click is required.
-
-The existing stream remains mounted while switching between Scan and Processing.
-The last raster/vector subtab chooses the acquisition type. Samples are shown
-under the pattern drawing layer; pattern editing remains available during live
-acquisition. Scan and Run acquire images; this change does not implement pattern
-milling or interpret pattern Dose/Passes as beam execution commands.
+Controls offers Scan (one acquisition), Stop, and Run (continuous Default
+acquisition, or one finite selected pixel workflow). Entering Processing and
+clicking the image do not start acquisition. Start actions use the same
+permission, vacuum readiness and validation guards as the Scan tab.
+The stream stays mounted while switching between Scan and Processing.
+Selecting a pixel workflow switches Processing to vector acquisition while idle.
+Dose and Passes remain pattern metadata; the pilot uses the configured vector
+dwell and one pass for each workflow step.
 
 When `streamData.json` has **IsProduction exactly false**, the backend reads
 `GlasgowDataIO/Json/processingPatterns.json` → `Header.LoadImage`. Paths can be
@@ -65,7 +60,7 @@ The existing live geometry/restart path applies edits, region-count changes and
 Zoom to these windows. Rectangles use their drawn bounds; circles, rings and freehand
 patterns use clipped bounding rectangles because the acquisition API supports
 rectangular windows. Pattern shapes are preserved; this is image acquisition,
-not a shape-specific milling executor. Parallel uses the same switch, default,
+not a shape-specific milling executor in Default. Selected pilot workflows use the shape mask for vector blanking. Parallel uses the same switch, default,
 interleaving and sequential fallback as Scan, and is available with two or more
 valid pattern regions.
 
@@ -73,4 +68,43 @@ The bottom-right scale uses the same calibration, unit conversion and Zoom label
 as Scan. Its line width is fixed as Zoom changes, and it stays upright outside
 the transformed image layer. Processing Split snapshots also include this scale.
 
-The Processing scan-path preview clips its sweep and marker to the current drawn shapes, including ring holes and freehand boundaries. Editing or clearing shapes refreshes the mask immediately. This is a display mask: acquisition still uses the rectangular windows described above, so the clipped preview is not evidence of beam blanking outside a pattern.
+The Processing scan-path preview clips its sweep and marker to the current drawn shapes, including ring holes and freehand boundaries. Editing or clearing shapes refreshes the mask immediately. This is a display mask: acquisition still uses the rectangular windows described above, so the clipped preview alone is not evidence of beam blanking outside a pattern. The selected pixel workflows independently apply the shape mask to actual vector points.
+
+
+## Pilot pixel workflows
+
+The API now returns validated `Workflows` and `Materials` alongside `Patterns`.
+Each pattern card has a Workflow dropdown (initially Default) and a switch.
+Switching off retains the selected workflow and executes Default instead.
+Default is an ordinary acquisition with no workflow or global gray filter.
+
+`OxideLinelCut` Spots dark pixels (`gray < AvgGray × SiO2.brightness`).
+`MetalLinelCut` Spots bright pixels (`gray >= AvgGray × SiO2.brightness`).
+`EvenLinelCut` executes those two steps in that order. Equality belongs to
+bright, so the two masks cover every sampled pixel inside the ROI once.
+The current SiO2 ratio is the JSON's uncalibrated 1.0 placeholder; replace it
+with a measured ratio in Materials when available. The dark/bright interpretation
+resolves the conflicting initial description of oxide as dark but “brighter than”.
+
+For a selected cut workflow, Scan and Run execute one finite sequential plan,
+including when Parallel is selected. The plan uses Vector Spot point blanking
+in hardware and simulation, preserving scan path and dwell. Each step blanks
+pixels outside its selected gray class and outside the drawn ROI shape,
+including ring holes. The average is measured over sampled shape pixels from
+one frozen complete acquired image, or the loaded bitmap if no complete frame
+exists. Both Even steps use that same source and threshold. Workflow pixel
+coordinates follow the FOV/calibration transform; workflow masks use the drawn
+ROI without the acquisition Zoom crop. The executor rejects missing source data,
+unknown materials, and ROIs exceeding 250,000 vector points. It does not convert
+Dose to dwell or repeat Passes; those remain pattern metadata.
+
+Each pattern card shows its own Workflow timeline directly below its workflow
+dropdown and switch. Steps run left to right, connected by arrows; narrow cards
+scroll horizontally. Each step and the workflow summary show elapsed time, updated
+while running and frozen on completion, Stop, or error. Timing starts when the
+step is dispatched to the scan stream and includes connection/transfer time.
+It follows actual stream completion for that pattern, with current,
+completed, stopped, and error states plus sample progress. Stop cancels the
+remaining sequence. Cut steps run through the existing persisted scan queue.
+The deployment environment explicitly points `PROCESSING_PATTERNS_CONFIG` at
+the packaged catalogue; the distribution builder already requires this file.

@@ -45,6 +45,9 @@ import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
 import { Icon } from "./Icon";
 import { TransformCard } from "./TransformCard";
+import { imageWorldBounds } from "../lib/roiGeometry";
+import { workflowPoints, type WorkflowProgress } from "../lib/processingWorkflows";
+import { setWorkflowProgress, updateWorkflowStep } from "../store/processingSlice";
 import { processingScanRegions } from "../lib/processingScanRegions";
 import { VectorScanPathField } from "./VectorScanPathField";
 import { LoadingSpinner } from "./LoadingSpinner";
@@ -89,7 +92,7 @@ import { targetGrayFilter } from "../lib/roiTargetGray";
 import { assessScan, assessTypedZoom, hasScanErrors, type ScanIssue } from "../lib/scanValidation";
 import { ScanZoomStatus } from "./ScanZoomStatus";
 
-type RegionScanEntry =
+type RegionScanEntry = { workflowStepIds?: string[] } & (
   | {
       kind: "raster";
       req: RasterRequest;
@@ -114,7 +117,7 @@ type RegionScanEntry =
       initialFrame: Uint16Array | null;
       /** Zoomed source picture to seed under this entry's display ROI before its next pass. */
       pendingUnderlay?: Uint16Array | null;
-    };
+    });
 
 const FULL_DAC_ROI: ROIRequest = {
   x_start: 0, x_end: 16383, y_start: 0, y_end: 16383,
@@ -267,6 +270,8 @@ export function ScanControls({
   const preview = useAppSelector((s) => s.scan.preview);
   const baseROIState = useAppSelector((s) => s.scan.roi);
   const patterns = useAppSelector((s) => s.processing);
+  const cutWorkflowRunning = patterns.workflowProgress.some(step => step.threshold !== null) &&
+    patterns.workflowProgress.some(step => step.status === "current");
   // Parameter edits and pattern selection do not change acquisition bounds.
   const shapeKey = JSON.stringify(patterns.specs.map((spec) => [spec.key, patterns.instances[spec.key]?.enabled, patterns.instances[spec.key]?.roi ?? null]));
   const processingPlan = useMemo(() => processingScanRegions(patterns.specs, patterns.instances, baseROIState),
@@ -315,7 +320,7 @@ export function ScanControls({
   useEffect(() => {
     setParallelRegions(canParallelRegions);
   }, [canParallelRegions]);
-  const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
+  const selectedTargetGray = useAppSelector((s) => processingMode ? null : s.scan.selectedTargetGray);
   const defaults = useAppSelector((s) => s.status.defaults);
   const sessionSimulation = useAppSelector((s) => s.status.sessionSimulation);
   const settingsSaving = useAppSelector((s) => s.settings.saving);
@@ -396,8 +401,8 @@ export function ScanControls({
   const targetGraySelection = selectedTargetGray === null
     ? null
     : targetGrayFilter(selectedTargetGray).selection;
-  const scanGrayScaleSelection = targetGraySelection ?? activeVectorGrayScaleSelection;
-  const scanGrayScaleSkipped = selectedTargetGray !== null
+  const scanGrayScaleSelection = processingMode ? null : targetGraySelection ?? activeVectorGrayScaleSelection;
+  const scanGrayScaleSkipped = processingMode ? null : selectedTargetGray !== null
     ? vectorGrayScaleSkipped ?? true
     : activeVectorGrayScaleSkipped;
   const liveGrayRule: LiveGrayRule = {
@@ -592,7 +597,9 @@ export function ScanControls({
   const startRegionScanEntry = useCallback(function startEntry(entry: RegionScanEntry, preserveFrame = false) {
     // Advance from the stream event, not React phase renders: a fast stream
     // may start and complete before React renders the intermediate phase.
+    entry.workflowStepIds?.forEach(id => dispatch(updateWorkflowStep({ id, status: "current" })));
     const onComplete = () => {
+      entry.workflowStepIds?.forEach(id => dispatch(updateWorkflowStep({ id, status: "completed" })));
       // Live sequences have no persisted queue to refresh on every ROI pass.
       if (!regionScanRepeatRef.current.length) {
         void latestScanQueue().then(setPendingQueue).catch(() => {});
@@ -671,6 +678,11 @@ export function ScanControls({
     }
   }
 
+  function defaultWorkflowProgress(): WorkflowProgress[] {
+    return processingPlan.keys.map(key => ({ id: `${key}:default`, pattern: patterns.specs.find(spec => spec.key === key)?.caption ?? key,
+      caption: "Scan ROI", action: "Scan ROI", status: "upcoming", threshold: null, spot: 0, total: 0 }));
+  }
+
   async function startRunRequest(repeatRegions = false, preserveCurrentFrame = false) {
     if (startBlocked || scanHasErrors || (processingMode && !processingPlan.regions.length)) return;
     runningROIScanEnabledRef.current = roiState.roi_scan_enabled;
@@ -679,12 +691,62 @@ export function ScanControls({
     // outside the ROI instead of sending an extra full-field pass to the DAC.
     const allowed = await refreshScanPrivilege();
     if (!allowed) return;
-    if (!repeatRegions && !isProduction && selectedTargetGray !== null && roiState.imageDataUrl) {
+    if (processingMode && patterns.workflows.length && processingPlan.keys.some(key => {
+      const inst = patterns.instances[key];
+      return inst.workflowEnabled && inst.workflow !== "default";
+    })) {
+      try {
+        // Prepare every step before opening a stream; an invalid plan cannot mill partially.
+        const edge = vector.vector_resolution;
+        const useAcquired = vectorImageFilled >= vectorImageEdge * vectorImageEdge && vectorImageEdge > 0;
+        const source = useAcquired
+          ? resizeImageFrame(vectorImageFrame, vectorImageEdge, edge)
+          : await bitmapImageFrame(roiState, edge);
+        if (!source) throw new Error("Load or acquire a complete image before running a workflow.");
+        const bounds = useAcquired ? roiState : imageWorldBounds(roiState);
+        const field = { x_start: bounds.x_origin, x_end: bounds.x_end, y_start: bounds.y_origin, y_end: bounds.y_end };
+        const entries: RegionScanEntry[] = [];
+        const progress: WorkflowProgress[] = [];
+        for (let index = 0; index < processingPlan.keys.length; index++) {
+          const key = processingPlan.keys[index], inst = patterns.instances[key];
+          const spec = patterns.specs.find(p => p.key === key)!;
+          const name = inst.workflowEnabled ? inst.workflow : "default";
+          const workflow = patterns.workflows.find(w => w.name === name);
+          if (!workflow) throw new Error(`Unknown workflow: ${name}`);
+          const steps = workflowPoints(spec, inst.roi!, processingPlan.regions[index], field, source, edge,
+            workflow, patterns.materials, vector.dwell, vector.scan_path, (x, y) => {
+              const point = worldSelectionToDacROI({ x_start: x, x_end: x, y_start: y, y_end: y }, roiState);
+              return { x: point.x_start, y: point.y_start };
+            });
+          for (const [stepIndex, result] of steps.entries()) {
+            const id = `${key}:${stepIndex}`;
+            progress.push({ id, pattern: spec.caption, caption: result.step.caption,
+              action: result.step.actions[0].caption, status: "upcoming", threshold: result.threshold,
+              spot: result.spot, total: result.points.length });
+            entries.push({ kind: "vector", scanType: ScanType.VECTOR, workflowStepIds: [id],
+              req: { ...vector, pattern: "custom", points: result.points, roi: worldSelectionToDacROI(processingPlan.regions[index], roiState),
+                continuous: false, pre_process: false, feedback_mode: "standard", simulation_bitmap: null,
+                target_gray_level: null, gray_level_range: null, gray_level_skipped: null },
+              displayROI: worldSelectionToDacROI(processingPlan.regions[index], roiState), initialFrame: source,
+              simulationBitmapInfo: { width: edge, height: edge }, hasSimulationBitmap: true });
+          }
+        }
+        const prepared = await persistScanSequence(entries, false);
+        dispatch(setWorkflowProgress(progress));
+        onScanRunStart?.(ScanType.VECTOR);
+        startRegionScanSequence(prepared, true, false);
+      } catch (e) {
+        dispatch(streamErrored(e instanceof Error ? e.message : String(e)));
+      }
+      return;
+    }
+    if (processingMode) dispatch(setWorkflowProgress(defaultWorkflowProgress()));
+    if (!processingMode && !repeatRegions && !isProduction && selectedTargetGray !== null && roiState.imageDataUrl) {
       dispatch(requestROITargetGrayRun());
       return;
     }
     if (
-      selectedTargetGray !== null &&
+      !processingMode && selectedTargetGray !== null &&
       ((!isProduction && !roiState.imageDataUrl) ||
         (kind === "vector" && isProduction && !vectorPixelFallbackBlank && !roiState.imageDataUrl))
     ) {
@@ -725,6 +787,7 @@ export function ScanControls({
           req,
           displayROI: displayRegions[index] ?? null,
           initialFrame: initialFrames[index] ?? null,
+          workflowStepIds: processingMode ? [`${processingPlan.keys[index]}:default`] : undefined,
         }));
         const scanEntries = parallelRegions && requests.length > 1
           ? [{
@@ -733,6 +796,7 @@ export function ScanControls({
               displayROI: null,
               displayROIs: displayRegions as ROIRequest[],
               initialFrame: initialFrames[0] ?? null,
+              workflowStepIds: processingMode ? processingPlan.keys.map(key => `${key}:default`) : undefined,
             }]
           : entries;
         startRegionScanSequence(await persistScanSequence(scanEntries, repeatRegions), preserveCurrentFrame || (roiAreaDefined && rasterBackground !== null && (isProduction || !roiState.imageDataUrl)), repeatRegions);
@@ -763,6 +827,7 @@ export function ScanControls({
           scanType: resolveVectorScanType(req),
           displayROI: displayRegions[index] ?? null,
           initialFrame: initialFrames[index] ?? null,
+          workflowStepIds: processingMode ? [`${processingPlan.keys[index]}:default`] : undefined,
         }));
         onScanRunStart?.(entries[0]?.scanType ?? ScanType.VECTOR);
         const scanEntries = parallelRegions && requests.length > 1
@@ -777,6 +842,7 @@ export function ScanControls({
               customPointROIs: requests.every((request) => request.pattern === "custom" && request.points)
                 ? requests.map((request) => request.roi ?? null) : undefined,
               initialFrame: initialFrames[0] ?? null,
+              workflowStepIds: processingMode ? processingPlan.keys.map(key => `${key}:default`) : undefined,
             }]
           : entries;
         startRegionScanSequence(await persistScanSequence(scanEntries, repeatRegions), preserveCurrentFrame || (roiAreaDefined && vectorBackground !== null && (isProduction || !roiState.imageDataUrl)), repeatRegions);
@@ -787,6 +853,10 @@ export function ScanControls({
   }
 
   async function startInfiniteRequest(preserveCurrentFrame = false): Promise<void> {
+    if (processingMode && processingPlan.keys.some(key => patterns.instances[key].workflowEnabled && patterns.instances[key].workflow !== "default")) {
+      await startRunRequest(false, preserveCurrentFrame);
+      return;
+    }
     if (processingMode && !processingPlan.regions.length) return;
     if ((kind !== "raster" && kind !== "vector") || startBlocked || infiniteScanActiveRef.current || scanHasErrors) return;
     const startGeneration = zoomRestartGenerationRef.current;
@@ -804,6 +874,7 @@ export function ScanControls({
     if (!allowed || startGeneration !== zoomRestartGenerationRef.current) return;
     // Zoom remains editable while authentication/request preparation awaits.
     // A render's closure can be older than the value currently in the control.
+    if (processingMode) dispatch(setWorkflowProgress(defaultWorkflowProgress().map(step => ({ ...step, status: "current" }))));
     const scanZoom = roiStateRef.current.scan_zoom;
     const zoomGeneration = zoomUpdateGenerationRef.current;
     try {
@@ -932,6 +1003,7 @@ export function ScanControls({
 
   function onStop() {
     if (!stopAvailable) return;
+    dispatch(updateWorkflowStep({ status: "stopped" }));
     if (targetGrayRunning) {
       dispatch(finishROITargetGrayRun("stopped"));
       return;
@@ -956,6 +1028,7 @@ export function ScanControls({
   }
 
   async function onZoomChange(value: string) {
+    if (cutWorkflowRunning) return;
     setZoomError(null);
     // A restart can already be queued by something else, e.g. a gray-level
     // change that needs the prepared bitmaps rebuilt. Cancelling it here would
@@ -1634,7 +1707,7 @@ export function ScanControls({
     }
     if (phase === "error" || phase === "idle") {
       clearInfiniteScanState();
-      if (phase === "error") regionScanQueueRef.current = [];
+      if (phase === "error") { regionScanQueueRef.current = []; dispatch(updateWorkflowStep({ status: "error" })); }
     }
   }, [clearInfiniteScanState, dispatch, phase, roiState.imageDataUrl, roiSelectionKey, startInfiniteScanRun, startRegionScanEntry]);
 
@@ -1792,7 +1865,7 @@ export function ScanControls({
               <span className="scan-zoom-label"><Icon name="zoomIn" />{t("scan.zoom")}</span>
               <NumberStepperInput
                 value={roiState.scan_zoom}
-                disabled={zoomDisabled || settingsSaving || backendRestarting}
+                disabled={zoomDisabled || settingsSaving || backendRestarting || cutWorkflowRunning}
                 min={1}
                 max={zoomMaximum}
                 step={1}

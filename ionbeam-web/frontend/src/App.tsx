@@ -620,7 +620,16 @@ export function App() {
   // A live-scan handover (for example switching Parallel/Sequential) briefly
   // stops one stream and starts the next. Keep the panel in its live-scan state
   // across that gap so wedge borders and enable/disable colors do not change.
+  const workflowRunning = useAppSelector(s => s.processing.workflowProgress.some(step => step.threshold !== null) &&
+    s.processing.workflowProgress.some(step => step.status === "current"));
   const scanActive = phase === "running" || phase === "stopping" || streamRestarting;
+  const pixelWorkflowSelected = useAppSelector(s => s.processing.specs.some(spec => {
+    const inst = s.processing.instances[spec.key];
+    return inst?.enabled && inst.roi && inst.workflowEnabled && inst.workflow !== "default";
+  }));
+  useEffect(() => {
+    if (activeTopTab === "processing" && pixelWorkflowSelected && !scanActive) setScanSubTab("vector");
+  }, [activeTopTab, pixelWorkflowSelected, scanActive]);
   const scanControlsSafetyDisabled = shouldDisableScanPanel({
     scanActive: adcActive,
     signedIn: isSignedIn,
@@ -1492,7 +1501,7 @@ export function App() {
       processingPreview={activeTopTab === "processing" ? scanSubTab : null}
       hideSelectionOverlay={activeTopTab === "processing"}
       renderCanvasOverlay={activeTopTab === "processing"
-        ? (api) => <PatternOverlay disabled={scanControlsSafetyDisabled || phase === "stopping"} api={api} />
+        ? (api) => <PatternOverlay disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} api={api} />
         : undefined}
     />
   );
@@ -1659,7 +1668,7 @@ export function App() {
                   role="tab"
                   className="tab tab--top"
                   aria-selected={activeTopTab === "scan"}
-                  disabled={scanControlsSafetyDisabled || phase === "stopping"}
+                  disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning}
                   onClick={activateScanTopTab}
                 >
                   <Icon name="scan" tone="tab" />
@@ -1673,7 +1682,7 @@ export function App() {
                 aria-selected={activeTopTab === "processing"}
                 title={t("tabs.processing")}
                 aria-label={t("tabs.processing")}
-                disabled={scanControlsSafetyDisabled || phase === "stopping"}
+                disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning}
                 onClick={activateProcessingTopTab}
               >
                 <Icon name="target" tone="tab" />
@@ -1756,7 +1765,7 @@ export function App() {
                     onImageChange={handleSimulationImageChange}
                   />
                   {processingImageError && <p className="scan-inline-error" role="alert">{t("processing.imageError", { error: processingImageError })}</p>}
-                  <ProcessingPatternsPanel disabled={scanControlsSafetyDisabled || phase === "stopping"} />
+                  <ProcessingPatternsPanel disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} />
                 </>
               ) : activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
@@ -1866,7 +1875,7 @@ export function App() {
                         />
                       </div>
                     </div>
-                  {activeTopTab === "processing" && <ProcessingPatternCards disabled={scanControlsSafetyDisabled || phase === "stopping"} />}
+                  {activeTopTab === "processing" && <ProcessingPatternCards disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} />}
                   {activeTopTab === "scan" && <div className="card save-results-card">
                     <div className="card__header">
                       <span className="card__title">{t("card.runReport")}</span>
