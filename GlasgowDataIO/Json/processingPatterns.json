@@ -156,7 +156,7 @@
                             "caption": "Spot selected ROI pixels",
                             "mode": "spot",
                             "selection": "bright",
-                            "thresholdMaterial": "SiO2"
+                            "thresholdMaterial": "Cu"
                         }
                     ]
                 }
