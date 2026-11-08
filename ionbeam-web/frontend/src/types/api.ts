@@ -125,6 +125,8 @@ export interface VectorRequest {
    *  list pass after pass on one FPGA command stream until Stop. Samples
    *  wrap at the pass end; `done` arrives only after Stop. */
   continuous?: boolean;
+  /** Finite replay count for a continuous vector scan session. */
+  frames?: number;
   /** Default-pattern density on each axis. Valid range: 1..2048.
    *  Coverage stays the full DAC range; smaller values just sample
    *  sparser. Ignored when pattern=custom. */

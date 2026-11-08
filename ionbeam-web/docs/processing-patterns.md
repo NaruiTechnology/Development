@@ -4,6 +4,10 @@ A **Processing** tab sits next to Scan. It draws pattern ROIs on the ROI canvas;
 
 **Config.** `GlasgowDataIO/Json/processingPatterns.json` (shared with the native app; override with `PROCESSING_PATTERNS_CONFIG`). The backend serves it, validated, at `GET /api/processing/patterns` (`backend/src/processingPatternsConfig.ts`). `Patterns` is a list of one-key objects like the deploy workflow's `Actions`: the key is the pattern name, the value has `skip`, `model`, `roi` (`rect` / `circle` / `ring` / `polygon`), `caption`, `icon` and a `parameters` schema. `skip: true` entries are never sent to the browser. A bad entry is reported in the Patterns card and does not hide the others.
 
+Workflows may omit `steps` or provide an empty list. `AreaRemoval` is parameterless but defines a Spot action: it uses the average gray level of the full source field as its target, spots ROI pixels above that level, and repeats until the target range is reached.
+
+Workflow JSON keeps only the fields the web executor consumes: workflow and display captions, step actions, `mode`, and the Spot selection/threshold source. Action and step names are omitted. A Spot threshold uses exactly one of `thresholdMaterial`, `thresholdSource: "selectedMaterial"`, or `thresholdSource: "fullScaleAverage"`.
+
 **Models.** `frontend/src/lib/processingPatterns.ts` has `MODEL_REGISTRY` (SolidBoxModel, OpenBoxModel, StairCutModel, CleaningLineModel, CircleModel, RingModel, FreeHandModel): ROI validation, area, containment, preview geometry. The processing slice (`store/processingSlice.ts`) holds one instance (parameters + ROI) per catalogue entry; the catalogue is fetched at app launch.
 
 **UI.** `ProcessingPatternsPanel` renders the non-collapsible *Patterns* card (icon strip). The shared Controls card sits directly below it, followed by `ProcessingPatternCards` with one card per pattern, collapsed by default. Picking an icon arms drawing; picking it again disarms. Icon selection leaves card expansion and scroll position unchanged. Each card is expanded or collapsed independently using its chevron; expanding a card also selects its drawing tool. `PatternOverlay` is mounted inside the ROI canvas through `ROIEditor`'s `renderCanvasOverlay`: rect = drag; circle = drag centre to radius and release (open outline); ring = drag centre to outer circle, then click for the inner circle (same centre), Esc / right-click cancels; free hand = press-drag-release.
@@ -81,13 +85,24 @@ Each pattern card has a Workflow dropdown (initially Default) and a switch.
 Switching off retains the selected workflow and executes Default instead.
 Default is an ordinary acquisition with no workflow or global gray filter.
 
-`OxideLinelCut` Spots dark pixels (`gray < AvgGray × SiO2.brightness`).
-`MetalLinelCut` Spots bright pixels (`gray >= AvgGray × SiO2.brightness`).
-`EvenLinelCut` executes those two steps in that order. Equality belongs to
-bright, so the two masks cover every sampled pixel inside the ROI once.
-The current SiO2 ratio is the JSON's uncalibrated 1.0 placeholder; replace it
-with a measured ratio in Materials when available. The dark/bright interpretation
-resolves the conflicting initial description of oxide as dark but “brighter than”.
+`EvenLinelCut` freezes one source image and runs two finite Vector Spot steps
+using the ROI gray-level range filter. The dark step spots `[0, AvgGray]`; the
+bright step spots `[AvgGray, 255]`. `AvgGray` is the rounded average measured
+over the sampled ROI, and both intervals include that boundary value. The
+ranges use the complete 8-bit gray spectrum.
+
+`MaterialLinelCut` spots bright pixels against the selected material's brightness
+ratio. Its Material selector sits next to Workflow, is populated from the JSON
+`Materials` list, and is hidden until that workflow is selected. A Target gray
+level row appears below the selectors for this workflow and displays
+`AvgGray × selected material brightness`. This calculated target is also used as
+the workflow threshold.
+
+`AreaRemoval` uses the rounded average of every pixel in the full source field
+as its target. It uses the ROI gray filter in Spot mode over `[target + 1, 255]`
+and repeats passes using the ROI target-gray two-level convergence cadence.
+Production runs use adaptive gray feedback from the live ADC; simulation runs
+advance their bitmap toward the same target.
 
 For a selected cut workflow, Scan and Run execute one finite sequential plan,
 including when Parallel is selected. The plan uses Vector Spot point blanking

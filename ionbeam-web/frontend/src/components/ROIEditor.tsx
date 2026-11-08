@@ -123,7 +123,11 @@ export function ROIEditor({
   hideSelectionOverlay?: boolean;
   graySelectionResetToken?: number;
   /** Extra layer drawn over the canvas (the Processing tab's pattern drawing). Receives pointer/world mapping. */
-  renderCanvasOverlay?: (api: { pointFromClient: (clientX: number, clientY: number) => { x: number; y: number }; toWorld: (point: { x: number; y: number }) => { x: number; y: number } }) => ReactNode;
+  renderCanvasOverlay?: (api: {
+    pointFromClient: (clientX: number, clientY: number) => { x: number; y: number };
+    toWorld: (point: { x: number; y: number }) => { x: number; y: number };
+    sampleGrayAtClient: (clientX: number, clientY: number) => { value: number; x: number; y: number } | null;
+  }) => ReactNode;
   onLoadLastScan?: () => void;
   onImageChange?: (imageUrl: string | null) => void;
 }) {
@@ -1981,6 +1985,7 @@ export function ROIEditor({
           {renderCanvasOverlay?.({
             pointFromClient: (clientX, clientY) => canvasPointFromClient(clientX, clientY, true),
             toWorld: toDut,
+            sampleGrayAtClient: rawGrayAtClient,
           })}
           {ctrlCursor && !roi.calibration_enabled && (
               <span

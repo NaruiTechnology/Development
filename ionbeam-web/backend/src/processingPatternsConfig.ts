@@ -42,9 +42,9 @@ export interface PatternSpec {
 export interface WorkflowSpec {
   name: string;
   caption: string;
-  steps: { name: string; caption: string; actions: {
-    name: string; caption: string; mode: "scan" | "spot";
-    selection?: "dark" | "bright"; thresholdMaterial?: string;
+  steps: { caption: string; actions: {
+    caption: string; mode: "scan" | "spot";
+    selection?: "dark" | "bright"; thresholdMaterial?: string; thresholdSource?: "fullScaleAverage" | "selectedMaterial" | "roiAverage";
   }[] }[];
 }
 
@@ -52,24 +52,36 @@ function parseWorkflows(data: Record<string, unknown>): Pick<ProcessingPatternsC
   const materials = (Array.isArray(data.Materials) ? data.Materials : []).map((m: unknown) => {
     if (!isObject(m) || typeof m.name !== "string" || typeof m.brightness !== "number" || !Number.isFinite(m.brightness) || m.brightness <= 0)
       throw new ConfigError("Invalid workflow material brightness", 500);
-    return { name: m.name, brightness: m.brightness };
+    return { name: m.name, caption: typeof m.caption === "string" && m.caption ? m.caption : m.name, brightness: m.brightness };
   });
   const names = new Set<string>();
   const workflows = (Array.isArray(data.Workflows) ? data.Workflows : []).map((w: unknown): WorkflowSpec => {
-    if (!isObject(w) || typeof w.name !== "string" || names.has(w.name) || !Array.isArray(w.steps) || !w.steps.length)
+    if (!isObject(w) || typeof w.name !== "string" || names.has(w.name) || (w.steps !== undefined && !Array.isArray(w.steps)))
       throw new ConfigError("Invalid or duplicate processing workflow", 500);
     names.add(w.name);
-    const stepNames = new Set<string>();
-    return { name: w.name, caption: String(w.caption ?? w.name), steps: w.steps.map((s: unknown) => {
-      if (!isObject(s) || typeof s.name !== "string" || stepNames.has(s.name) || !Array.isArray(s.actions) || s.actions.length !== 1)
-        throw new ConfigError("Workflow steps require one scan or Spot action and a unique name", 500);
-      stepNames.add(s.name);
-      return { name: s.name, caption: String(s.caption ?? s.name), actions: s.actions.map((a: unknown) => {
-        if (!isObject(a) || typeof a.name !== "string" || !["scan", "spot"].includes(String(a.mode)) ||
-          (a.mode === "spot" && (!["dark", "bright"].includes(String(a.selection)) || !materials.some(m => m.name === a.thresholdMaterial))))
+    return { name: w.name, caption: String(w.caption ?? w.name), steps: (Array.isArray(w.steps) ? w.steps : []).map((s: unknown, index: number) => {
+      if (!isObject(s) || !Array.isArray(s.actions) || s.actions.length !== 1)
+        throw new ConfigError("Workflow steps require exactly one scan or Spot action", 500);
+      return { caption: String(s.caption ?? `Step ${index + 1}`), actions: s.actions.map((a: unknown) => {
+        if (!isObject(a) || !["scan", "spot"].includes(String(a.mode)))
+          throw new ConfigError("Invalid processing workflow action", 500);
+        const thresholdSource = a.thresholdSource;
+        const usesFullScaleAverage = thresholdSource === "fullScaleAverage";
+        const usesSelectedMaterial = thresholdSource === "selectedMaterial";
+        const usesRoiAverage = thresholdSource === "roiAverage";
+        const hasKnownThresholdSource = usesFullScaleAverage || usesSelectedMaterial || usesRoiAverage;
+        const hasKnownThresholdMaterial = typeof a.thresholdMaterial === "string" && materials.some(m => m.name === a.thresholdMaterial);
+        const invalidSpotSource = a.mode === "spot" && (thresholdSource !== undefined
+          ? !hasKnownThresholdSource || a.thresholdMaterial !== undefined
+          : !hasKnownThresholdMaterial);
+        const invalidScanOptions = a.mode === "scan" &&
+          (a.selection !== undefined || thresholdSource !== undefined || a.thresholdMaterial !== undefined);
+        if ((a.mode === "spot" && !["dark", "bright"].includes(String(a.selection))) || invalidSpotSource || invalidScanOptions)
           throw new ConfigError("Invalid processing workflow action or threshold material", 500);
-        return { name: a.name, caption: String(a.caption ?? a.name), mode: a.mode as "scan" | "spot",
-          ...(a.mode === "spot" ? { selection: a.selection as "dark" | "bright", thresholdMaterial: String(a.thresholdMaterial) } : {}) };
+        return { caption: String(a.caption ?? (a.mode === "spot" ? "Spot" : "Scan")), mode: a.mode as "scan" | "spot",
+          ...(a.mode === "spot" ? { selection: a.selection as "dark" | "bright",
+            ...(hasKnownThresholdSource ? { thresholdSource: thresholdSource as "fullScaleAverage" | "selectedMaterial" | "roiAverage" } :
+              { thresholdMaterial: a.thresholdMaterial as string }) } : {}) };
       }) };
     }) };
   });
@@ -80,7 +92,7 @@ export interface ProcessingPatternsConfig {
   header: Record<string, unknown>;
   patterns: PatternSpec[];
   errors: string[];
-  materials: { name: string; brightness: number }[];
+  materials: { name: string; caption: string; brightness: number }[];
   workflows: WorkflowSpec[];
 }
 

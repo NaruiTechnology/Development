@@ -109,6 +109,7 @@ function stepTargetBitmap(
   for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
     const index = y * bitmap.width + x;
     const pixel = bitmap.pixels[index];
+    if (typeof pixel !== "number" && pixel.isSkipped === true) continue;
     const value = typeof pixel === "number" ? pixel : pixel.value;
     if (value <= target) continue;
     const next = Math.max(target, value - 2);
@@ -312,6 +313,7 @@ function sampleSimulationBitmap(
   const x = Math.max(0, Math.min(bitmap.width - 1, Math.round(xNorm * (bitmap.width - 1))));
   const y = Math.max(0, Math.min(bitmap.height - 1, Math.round(yNorm * (bitmap.height - 1))));
   const px = bitmap.pixels[y * bitmap.width + x];
+  if (rawTarget && isSkippedPixel(px) === true) return 0;
   return rawTarget ? Math.min(Math.max(0, pixelValue(px) & 0xff) * 64, ADC_MAX) : sampleBitmapPixel(px, mode);
 }
 
@@ -591,7 +593,7 @@ export async function streamMockVector(
       const bitmap = p.parallel_simulation_bitmaps?.[regionIndex] ?? p.simulation_bitmap;
       const sample = bitmap
         ? p.pattern !== "custom" || (p.points && p.points.length)
-            ? blank === true && p.target_gray_level == null
+            ? blank === true
             ? 0
             : sampleSimulationBitmapPoint(bitmap, activeGeometry.parallel_rois?.[regionIndex] ?? activeGeometry.roi, x, y, bitmapMode(bitmap), p.target_gray_level !== null && p.target_gray_level !== undefined)
           : sampleSimulationBitmap(

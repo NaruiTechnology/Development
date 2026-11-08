@@ -725,6 +725,8 @@ def _target_gray_step_bitmap(bitmap, roi, target: int, steps: int = 1) -> None:
         for x in range(x0, x1):
             index = y * bitmap.width + x
             pixel = bitmap.pixels[index]
+            if isinstance(pixel, SimulationBitmapPixel) and pixel.isSkipped is True:
+                continue
             value = _bitmap_pixel_value(pixel)
             if value <= target:
                 continue

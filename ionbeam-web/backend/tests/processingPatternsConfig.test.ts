@@ -45,10 +45,14 @@ test("unusable files raise ConfigError", () => {
 
 test("pilot workflows expose validated materials and one/two Spot steps", () => {
   const cfg = readProcessingPatterns(shipped);
-  assert.deepEqual(cfg.workflows.map(w => w.name), ["default", "OxideLinelCut", "MetalLinelCut", "EvenLinelCut"]);
+  assert.deepEqual(cfg.workflows.map(w => w.name), ["default", "AreaRemoval", "MaterialLinelCut", "EvenLinelCut"]);
   assert.deepEqual(cfg.workflows.map(w => w.steps.length), [1, 1, 1, 2]);
   assert.equal(cfg.materials.find(m => m.name === "SiO2")?.brightness, 1);
   assert.deepEqual(cfg.workflows[3].steps.map(s => s.actions[0].selection), ["dark", "bright"]);
+  assert.equal(cfg.workflows[1].steps[0].actions[0].thresholdSource, "fullScaleAverage");
+  assert.equal(cfg.workflows[2].steps[0].actions[0].thresholdSource, "selectedMaterial");
+  assert.ok(cfg.workflows[3].steps.every(s => s.actions[0].thresholdMaterial === undefined));
+  assert.deepEqual(cfg.workflows[3].steps.map(s => s.actions[0].thresholdSource), ["roiAverage", "roiAverage"]);
   assert.throws(() => parseProcessingPatterns({ Patterns: [], Materials: [{ name: "SiO2", brightness: -1 }] }), ConfigError);
   assert.throws(() => parseProcessingPatterns({ Patterns: [], Workflows: [{ name: "bad", steps: [{name: "step", actions: [{name: "spot", mode: "spot", selection: "dark", thresholdMaterial: "missing"}]}] }] }), ConfigError);
 });

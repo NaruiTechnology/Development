@@ -14,8 +14,9 @@
  * circle whatever the image aspect and survives zoom.
  */
 import { useDeferredValue, memo, useEffect, useReducer, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 
-import { patternBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
+import { MODEL_REGISTRY, patternBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { useAppDispatch, useAppSelector, useWorkspaceActive } from "../store";
 import { useTranslation } from "../i18n";
@@ -35,6 +36,8 @@ export interface CanvasOverlayApi {
   pointFromClient(clientX: number, clientY: number): Pt;
   /** Canvas pixels to world coordinates. */
   toWorld(point: Pt): Pt;
+  /** Raw gray value and canvas pixel under a client point. */
+  sampleGrayAtClient(clientX: number, clientY: number): { value: number; x: number; y: number } | null;
 }
 
 type Draft =
@@ -47,6 +50,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   const workspaceActive = useWorkspaceActive();
   const { t } = useTranslation();
   const [menu, setMenu] = useState<{ x: number; y: number; key: string } | null>(null);
+  const [grayTooltip, setGrayTooltip] = useState<{ x: number; y: number; value: number } | null>(null);
   const roi = useAppSelector((s) => s.scan.roi);
   const { specs, instances, activeKey } = useAppSelector((s) => s.processing);
   const [, repaint] = useReducer((n: number) => n + 1, 0);
@@ -142,6 +146,12 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   }
 
   function onPointerMove(e: ReactPointerEvent<SVGSVGElement>) {
+    if (e.pointerType === "touch") {
+      setGrayTooltip(null);
+    } else {
+      const sample = api.sampleGrayAtClient(e.clientX, e.clientY);
+      setGrayTooltip(sample ? { x: e.clientX, y: e.clientY, value: sample.value } : null);
+    }
     const editing = edit.current;
     if (editing && !disabled) {
       const p = api.toWorld(api.pointFromClient(e.clientX, e.clientY));
@@ -250,6 +260,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   }
 
   function onPointerLeave() {
+    setGrayTooltip(null);
     if (draft.current) cancel();
   }
 
@@ -330,6 +341,13 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         />
       )}
     </svg>
+    {workspaceActive && grayTooltip && createPortal(
+      <div className="roi-gray-tooltip" style={{ left: grayTooltip.x, top: grayTooltip.y }} role="tooltip">
+        <span className="roi-gray-tooltip__swatch" style={{ background: `rgb(${grayTooltip.value}, ${grayTooltip.value}, ${grayTooltip.value})` }} />
+        {t("roi.targetGray.tooltip", { value: grayTooltip.value })}
+      </div>,
+      document.body,
+    )}
     {menu && <div className="canvas-editor__menu scan-roi-layer__menu pattern-roi-menu" data-pattern-menu="true"
       style={{ left: `clamp(0px, ${menu.x / ROI_CANVAS_EDGE * 100}%, calc(100% - 190px))`,
         top: `clamp(0px, ${menu.y / ROI_CANVAS_EDGE * 100}%, calc(100% - 60px))` }}>

@@ -725,22 +725,48 @@ export function ScanControls({
             workflow, patterns.materials, vector.dwell, vector.scan_path, (x, y) => {
               const point = worldSelectionToDacROI({ x_start: x, x_end: x, y_start: y, y_end: y }, roiState);
               return { x: point.x_start, y: point.y_start };
-            });
+            }, inst.material);
           for (const [stepIndex, result] of steps.entries()) {
             const id = `${key}:${stepIndex}`;
+            const areaRemoval = result.step.actions[0].thresholdSource === "fullScaleAverage";
+            const roiAverageFilter = result.step.actions[0].thresholdSource === "roiAverage";
+            const materialTarget = result.step.actions[0].thresholdSource === "selectedMaterial" ? result.threshold : null;
+            const hasWork = !areaRemoval || result.spot > 0;
             progress.push({ id, pattern: spec.caption, caption: result.step.caption,
-              action: result.step.actions[0].caption, status: "upcoming", threshold: result.threshold,
+              action: result.step.actions[0].caption, status: hasWork ? "upcoming" : "completed", threshold: result.threshold,
+              ...(!hasWork ? { finishedAt: Date.now() } : {}),
               spot: result.spot, total: result.points.length });
-            entries.push({ kind: "vector", scanType: ScanType.VECTOR, workflowStepIds: [id],
+            if (!hasWork) continue;
+            if ((areaRemoval || roiAverageFilter) && isProduction && !vectorPixelFallbackBlank)
+              throw new Error("This workflow requires live ADC gray-level feedback on this instrument.");
+            const areaTarget = areaRemoval ? result.threshold : null;
+            const grayRange: [number, number] | null = areaRemoval && areaTarget !== null
+              ? [Math.min(255, Math.floor(areaTarget) + 1), 255]
+              : roiAverageFilter ? result.grayRange
+              : materialTarget === null ? null : [0, materialTarget];
+            const adaptiveGrayWorkflow = (areaRemoval || roiAverageFilter) && isProduction;
+            entries.push({ kind: "vector", scanType: adaptiveGrayWorkflow ? ScanType.VECTOR_ADAPTIVE_GRAN_FEED_BLANK : ScanType.VECTOR, workflowStepIds: [id],
               req: { ...vector, pattern: "custom", points: result.points, roi: result.simulationBitmap.source_roi,
-                continuous: false, pre_process: false, feedback_mode: "standard",
+                continuous: areaRemoval || (!isProduction && materialTarget !== null),
+                frames: areaRemoval || (!isProduction && materialTarget !== null) ? result.targetGrayFrames : undefined,
+                pre_process: false, feedback_mode: adaptiveGrayWorkflow ? "adaptive_gray_feedback" : "standard",
+                ...(adaptiveGrayWorkflow ? { output_mode: "SixteenBit" as const } : {}),
+                ...(adaptiveGrayWorkflow ? { adc_valid: true } : {}),
+                // In simulation the loaded ROI image is the ADC source. Keep
+                // it paired with the bitmap-derived gray filter and points.
                 simulation_bitmap: isProduction ? null : result.simulationBitmap, simulation_bitmap_id: null,
                 parallel_rois: null, parallel_simulation_bitmaps: null, parallel_simulation_bitmap_ids: null,
-                target_gray_level: null, gray_level_range: null, gray_level_skipped: null },
+                target_gray_level: !isProduction ? areaTarget ?? materialTarget : null,
+                gray_level_range: grayRange,
+                gray_level_skipped: areaRemoval || roiAverageFilter ? false : materialTarget === null ? null : true },
               displayROI: worldSelectionToDacROI(processingPlan.regions[index], roiState), initialFrame: source,
               simulationBitmapInfo: { width: edge, height: edge }, hasSimulationBitmap: !isProduction,
               pointPixelIndices: result.pointPixelIndices });
           }
+        }
+        if (!entries.length) {
+          dispatch(setWorkflowProgress(progress));
+          return;
         }
         const prepared = await persistScanSequence(entries, false);
         dispatch(setWorkflowProgress(progress));

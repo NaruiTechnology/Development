@@ -17,7 +17,7 @@ from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
 from GlasgowDataIO.IobeamControl.commands.structs import OutputMode
 from GlasgowDataIO.IobeamControl.macros.raster import RasterScanCommand
 from GlasgowDataIO.IobeamControl.macros.vector import VectorScanCommand
-from glasgow_service.models import ROIRequest, RasterRequest, SimulationBitmap, VectorRequest
+from glasgow_service.models import ROIRequest, RasterRequest, SimulationBitmap, SimulationBitmapPixel, VectorRequest
 from glasgow_service.service import DeviceService, _FrameRing, _SimulatedCommand, _bitmap_vector_chunks, _target_gray_step_bitmap, _target_gray_chunk
 
 
@@ -124,6 +124,15 @@ def test_target_gray_pass_changes_only_brighter_roi_pixels():
     assert background.pixels == [120, 102, 80, 200]
     _target_gray_step_bitmap(roi_bitmap, roi, 100)
     assert roi_bitmap.pixels == [116, 100, 80, 200]
+
+
+def test_target_gray_pass_preserves_skipped_shape_pixels():
+    bitmap = SimulationBitmap(width=2, height=1, pixels=[
+        SimulationBitmapPixel(value=200), SimulationBitmapPixel(value=200, isSkipped=True),
+    ])
+    _target_gray_step_bitmap(bitmap, None, 100)
+    assert bitmap.pixels[0].value == 198
+    assert bitmap.pixels[1].value == 200
 
 
 def test_simulated_target_gray_updates_the_roi_on_the_next_pass():

@@ -77,14 +77,11 @@
         {
             "name": "default",
             "caption": "Default",
-            "comment": "Scan the ROI without workflow gray filtering.",
             "steps": [
                 {
-                    "name": "scan",
                     "caption": "Scan ROI",
                     "actions": [
                         {
-                            "name": "scan",
                             "caption": "Scan ROI",
                             "mode": "scan"
                         }
@@ -93,38 +90,34 @@
             ]
         },
         {
-            "name": "OxideLinelCut",
-            "caption": "OxideLinelCut",
+            "name": "AreaRemoval",
+            "caption": "Area removal",
             "steps": [
                 {
-                    "name": "cutDark",
-                    "caption": "Cut dark pixels",
+                    "caption": "Match full-field average",
                     "actions": [
                         {
-                            "name": "spot",
-                            "caption": "Spot selected ROI pixels",
+                            "caption": "Spot above full-field average",
                             "mode": "spot",
-                            "selection": "dark",
-                            "thresholdMaterial": "SiO2"
+                            "selection": "bright",
+                            "thresholdSource": "fullScaleAverage"
                         }
                     ]
                 }
             ]
         },
         {
-            "name": "MetalLinelCut",
-            "caption": "MetalLinelCut",
+            "name": "MaterialLinelCut",
+            "caption": "MaterialLinelCut",
             "steps": [
                 {
-                    "name": "cutBright",
                     "caption": "Cut bright pixels",
                     "actions": [
                         {
-                            "name": "spot",
-                            "caption": "Spot selected ROI pixels",
+                            "caption": "Spot bright pixels",
                             "mode": "spot",
                             "selection": "bright",
-                            "thresholdMaterial": "SiO2"
+                            "thresholdSource": "selectedMaterial"
                         }
                     ]
                 }
@@ -135,28 +128,24 @@
             "caption": "EvenLinelCut",
             "steps": [
                 {
-                    "name": "cutDark",
                     "caption": "Cut dark pixels",
                     "actions": [
                         {
-                            "name": "spot",
-                            "caption": "Spot selected ROI pixels",
+                            "caption": "Spot dark pixels",
                             "mode": "spot",
                             "selection": "dark",
-                            "thresholdMaterial": "SiO2"
+                            "thresholdSource": "roiAverage"
                         }
                     ]
                 },
                 {
-                    "name": "cutBright",
                     "caption": "Cut bright pixels",
                     "actions": [
                         {
-                            "name": "spot",
-                            "caption": "Spot selected ROI pixels",
+                            "caption": "Spot bright pixels",
                             "mode": "spot",
                             "selection": "bright",
-                            "thresholdMaterial": "Cu"
+                            "thresholdSource": "roiAverage"
                         }
                     ]
                 }

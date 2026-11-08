@@ -6,6 +6,8 @@ import { useAppSelector } from "../store";
 export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) {
   const { workflowProgress, specs, instances, workflows } = useAppSelector(s => s.processing);
   const cursor = useAppSelector(s => s.image.vectorCursor);
+  const instance = instances[patternKey];
+  const selectedWorkflow = workflows.find(w => w.name === (instance?.workflowEnabled ? instance.workflow : "default"));
   const recordedNodes = workflowProgress.filter(step => step.id.startsWith(`${patternKey}:`));
   const nodes: WorkflowProgress[] = recordedNodes.length ? recordedNodes : specs.filter(spec => spec.key === patternKey).flatMap(spec => {
     const inst = instances[spec.key];
@@ -27,7 +29,9 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
   const caption = specs.find(spec => spec.key === patternKey)?.caption ?? patternKey;
   return <section className="processing-workflow" aria-label={`${caption}: Workflow progress`}>
     <p className="processing-workflow__elapsed">Elapsed: {formatWorkflowElapsed(elapsed)}</p>
-    {!nodes.length && <p>Enable a pattern and draw its ROI to preview the workflow.</p>}
+    {!nodes.length && <p>{selectedWorkflow && selectedWorkflow.steps.length === 0
+      ? "This workflow has no steps configured."
+      : "Enable a pattern and draw its ROI to preview the workflow."}</p>}
     <ol className="processing-workflow__tree" aria-label="Workflow steps, left to right">{nodes.map((node, i) => <li key={node.id}
       className={`processing-workflow__node processing-workflow__node--${node.status}`} aria-current={node.status === "current" ? "step" : undefined}>
       <span className="processing-workflow__number">{String(i + 1).padStart(2, "0")}</span>
@@ -38,7 +42,7 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
       <div className="processing-workflow__step"><small>{node.status}</small><strong>{node.caption}</strong>
         <span className="processing-workflow__elapsed">Elapsed: {node.startedAt === undefined ? "—" : formatWorkflowElapsed(workflowElapsedMs(node, now))}</span>
         <span>{node.pattern}</span><span>{node.action}</span>
-        {node.threshold !== null && <span>AvgGray × SiO2: {node.threshold.toFixed(2)}</span>}
+        {node.threshold !== null && <span>Gray threshold: {node.threshold.toFixed(2)}</span>}
         {node.total > 0 && <span>Spot {node.spot.toLocaleString()} / {node.total.toLocaleString()} pixels</span>}
         {node.status === "current" && <progress aria-label="Current step progress" value={node.total > 0 ? Math.min(cursor, node.total) : undefined} max={Math.max(1, node.total)} />}
       </div>

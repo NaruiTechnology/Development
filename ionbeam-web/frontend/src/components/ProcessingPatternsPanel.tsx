@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
+import { materialTargetGrayLevel } from "../lib/processingWorkflows";
 import {
   MODEL_REGISTRY,
   type CircleRoi,
@@ -21,12 +22,14 @@ import {
   type RingRoi,
 } from "../lib/processingPatterns";
 import { useAppDispatch, useAppSelector } from "../store";
-import { fetchProcessingPatterns, setPatternWorkflow, selectPattern, setPatternEnabled, setPatternParameter, type PatternInstance } from "../store/processingSlice";
+import { fetchProcessingPatterns, setPatternMaterial, setPatternWorkflow, selectPattern, setPatternEnabled, setPatternParameter, type PatternInstance } from "../store/processingSlice";
 import { Icon } from "./Icon";
 import { NumberStepperField } from "./NumberStepperField";
 import { PatternIcon } from "./PatternIcon";
 import { ProcessingWorkflowPanel } from "./ProcessingWorkflowPanel";
 import { unitLabel } from "./ROIEditor";
+
+const MATERIAL_WORKFLOW = "MaterialLinelCut";
 
 /** Translation with the JSON's English text as fallback for keys the locale tables do not know. */
 function useTr() {
@@ -100,10 +103,15 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
   const { t, tr } = useTr();
   const unit = unitLabel(useAppSelector((s) => s.scan.roi.scale_unit));
   const workflows = useAppSelector(s => s.processing.workflows);
+  const materials = useAppSelector(s => s.processing.materials);
   const [collapsed, setCollapsed] = useState(true);
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
   const label = collapsed ? t("processing.expand") : t("processing.collapse");
   if (!instance) return null;
+  const materialBrightness = materials.find(material => material.name === instance.material)?.brightness;
+  const targetGrayLevel = instance.AvgGray !== null && materialBrightness !== undefined
+    ? materialTargetGrayLevel(instance.AvgGray, materialBrightness)
+    : null;
 
   return (
     <div id={`processing-pattern-${encodeURIComponent(spec.key)}`} tabIndex={-1} role="region" aria-label={caption} aria-disabled={disabled}
@@ -141,6 +149,14 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
               {workflows.map(w => <option key={w.name} value={w.name}>{w.caption}</option>)}
             </select>
           </label>
+          {instance.workflow === MATERIAL_WORKFLOW && (
+            <label className="field">Material
+              <select className="select" aria-label={`${caption}: Material`} value={instance.material} disabled={disabled}
+                onChange={e => dispatch(setPatternMaterial({ key: spec.key, material: e.target.value }))}>
+                {materials.map(m => <option key={m.name} value={m.name}>{m.caption ?? m.name}</option>)}
+              </select>
+            </label>
+          )}
           <label className="field pattern-workflow-toggle">
             <span>Use workflow</span>
             <span className="checkbox vacuum-switch app-switch">
@@ -150,6 +166,15 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
             </span>
           </label>
         </div>
+        {instance.workflow === MATERIAL_WORKFLOW && (
+          <div className="pattern-target-gray-row">
+            <span>{t("roi.targetGray")}</span>
+            <output className="pattern-target-gray-value" aria-label={`${caption}: ${t("roi.targetGray")}`}>
+              {targetGrayLevel === null ? "—" : targetGrayLevel.toFixed(2)}
+            </output>
+            <small>AvgGray × {materials.find(material => material.name === instance.material)?.caption ?? instance.material}</small>
+          </div>
+        )}
         <ProcessingWorkflowPanel patternKey={spec.key} />
         <div className="pattern-card__parameters">
         {spec.parameters.map((p) => (

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import React from "react";
 import { Provider, useSelector } from "react-redux";
 import { act, create } from "react-test-renderer";
@@ -158,13 +159,12 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     // Pilot workflow: source pixels are frozen, and stream completion advances steps.
     await act(async () => { renderer.root.findAllByType("button").find(n => n.props.className === "btn btn--stop").props.onClick(); });
     await settle();
-    const workflows = [{ name: "EvenLinelCut", caption: "Even", steps: ["dark", "bright"].map(selection => ({
-      name: selection, caption: selection, actions: [{name: "spot", caption: "Spot", mode: "spot", selection, thresholdMaterial: "SiO2"}],
-    })) }];
+    const config = JSON.parse(readFileSync(new URL("../../../GlasgowDataIO/Json/processingPatterns.json", import.meta.url)));
+    const workflows = [config.Workflows.find(w => w.name === "EvenLinelCut")];
     const image = await vite.ssrLoadModule("/src/store/imageSlice.ts");
     await act(async () => {
       store.dispatch(processing.fetchProcessingPatterns.fulfilled({ patterns: store.getState().processing.specs,
-        workflows, materials: [{name: "SiO2", brightness: 1}] }, "pilot"));
+        workflows, materials: config.Materials }, "pilot"));
       store.dispatch(processing.setPatternWorkflow({ key: "ring", workflow: "EvenLinelCut" }));
       store.dispatch(image.setupVector({ pattern: "default", edge: 128,
         initialImage: Uint16Array.from({length: 128 * 128}, (_, i) => (i % 128 < 64 ? 40 : 200) << 8) }));
@@ -173,10 +173,16 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     assert.equal(sockets.length, 3);
     assert.equal(sockets[2].requests[0].continuous, false, "cut workflows do not repeat indefinitely");
     assert.equal(sockets[2].requests[0].pattern, "custom");
+    assert.equal(sockets[2].requests[0].feedback_mode, "standard");
+    assert.equal(sockets[2].requests[0].gray_level_range, null);
+    assert.equal(sockets[2].requests[0].target_gray_level, null);
     const uploadedBitmap = assetUploads.get(sockets[2].requests[0].simulation_bitmap_id)?.bitmap;
     assert.ok(uploadedBitmap, "workflow attaches the frozen ROI image instead of falling back to fake ADC data");
     assert.deepEqual(sockets[2].requests[0].roi, uploadedBitmap.source_roi, "ROI spans the actual sampled crop so custom ADC values use the same DAC coordinates");
-    assert.ok(uploadedBitmap.pixels.every(value => value === 40 || value === 200));
+    assert.ok(uploadedBitmap.pixels.every(pixel => {
+      const value = typeof pixel === "number" ? pixel : pixel.value;
+      return value === 40 || value === 200;
+    }));
     assert.ok(uploadedBitmap.pixels.length < 128 * 128, "upload only the sampled ROI crop");
     assert.equal(store.getState().image.vectorCustomRenderInFrame, true);
     assert.equal(store.getState().image.vectorEdge, 128, "crop dimensions must not change full-frame display size");
@@ -202,6 +208,11 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     });
     await settle();
     assert.equal(sockets.length, 4, "only completion advances to bright step");
+    assert.equal(sockets[3].requests[0].continuous, false);
+    assert.equal(sockets[3].requests[0].feedback_mode, "standard");
+    assert.equal(sockets[3].requests[0].gray_level_range, null);
+    assert.equal(store.getState().processing.workflowProgress[1].threshold,
+      store.getState().processing.workflowProgress[0].threshold * config.Materials.find(m => m.name === "Cu").brightness);
     const [darkDone, brightStarted] = store.getState().processing.workflowProgress;
     assert.ok(darkDone.finishedAt >= darkStarted);
     assert.ok(brightStarted.startedAt >= darkDone.finishedAt);

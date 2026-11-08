@@ -18,6 +18,8 @@ import {
 export interface PatternInstance {
   workflow: string;
   workflowEnabled: boolean;
+  /** Selected entry in the Materials catalogue for MaterialLinelCut. */
+  material: string;
   AvgGray: number | null;
   enabled: boolean;
   parameters: PatternParameters;
@@ -26,7 +28,7 @@ export interface PatternInstance {
 
 export interface ProcessingState {
   workflows: WorkflowSpec[];
-  materials: { name: string; brightness: number }[];
+  materials: { name: string; caption?: string; brightness: number }[];
   workflowProgress: WorkflowProgress[];
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
@@ -45,7 +47,7 @@ interface PatternsResponse {
   error?: string;
   patterns?: PatternSpec[];
   workflows?: WorkflowSpec[];
-  materials?: { name: string; brightness: number }[];
+  materials?: { name: string; caption?: string; brightness: number }[];
   errors?: string[];
 }
 
@@ -66,6 +68,10 @@ const slice = createSlice({
       if (a.payload.workflow && s.workflows.some(w => w.name === a.payload.workflow)) inst.workflow = a.payload.workflow;
       if (a.payload.enabled !== undefined) inst.workflowEnabled = a.payload.enabled;
       s.workflowProgress = [];
+    },
+    setPatternMaterial(s, a: PayloadAction<{ key: string; material: string }>) {
+      const inst = s.instances[a.payload.key];
+      if (inst && s.materials.some(m => m.name === a.payload.material)) inst.material = a.payload.material;
     },
     setWorkflowProgress: {
       prepare(steps: WorkflowProgress[]) {
@@ -171,7 +177,10 @@ const slice = createSlice({
       s.materials = a.payload.materials ?? [];
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
-      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { workflow: "default", workflowEnabled: true, AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
+      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { workflow: "default", workflowEnabled: true, material: "", AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
+      for (const inst of Object.values(s.instances)) {
+        if (!s.materials.some(m => m.name === inst.material)) inst.material = s.materials[0]?.name ?? "";
+      }
       s.roiHistory = s.roiHistory.filter(entry => Boolean(s.instances[entry.key]));
       if (s.activeKey && !s.instances[s.activeKey]) s.activeKey = null;
     });
@@ -182,5 +191,5 @@ const slice = createSlice({
   },
 });
 
-export const { setPatternWorkflow, setWorkflowProgress, updateWorkflowStep, undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setPatternRoi, clearPatternRoi } = slice.actions;
+export const { setPatternWorkflow, setPatternMaterial, setWorkflowProgress, updateWorkflowStep, undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setPatternRoi, clearPatternRoi } = slice.actions;
 export default slice.reducer;

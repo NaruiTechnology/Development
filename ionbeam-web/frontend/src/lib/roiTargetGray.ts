@@ -1,8 +1,8 @@
 /**
  * Target gray level helpers for the ROI image canvas.
  *
- * The operator right-clicks a pixel to pick a target gray level. Pixels at
- * or below the target are skipped; brighter pixels are exposed and move down
+ * A target may be selected from a pixel or calculated from a material. Pixels
+ * at or below it are skipped; brighter pixels are exposed and move down
  * toward it over repeated simulated passes.
  */
 
