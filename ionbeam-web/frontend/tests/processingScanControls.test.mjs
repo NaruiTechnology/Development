@@ -171,11 +171,15 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     });
     await clickRun();
     assert.equal(sockets.length, 3);
-    assert.equal(sockets[2].requests[0].continuous, false, "cut workflows do not repeat indefinitely");
+    // Even range-filters Spot: dark = [spectrum min, ROI average]; simulation mills it a finite number of passes.
+    const darkAvg = store.getState().processing.workflowProgress[0].threshold;
+    assert.equal(sockets[2].requests[0].continuous, true);
+    assert.ok(Number.isFinite(sockets[2].requests[0].frames), "cut workflows repeat a finite number of passes");
     assert.equal(sockets[2].requests[0].pattern, "custom");
     assert.equal(sockets[2].requests[0].feedback_mode, "standard");
-    assert.equal(sockets[2].requests[0].gray_level_range, null);
-    assert.equal(sockets[2].requests[0].target_gray_level, null);
+    assert.deepEqual(sockets[2].requests[0].gray_level_range, [40, darkAvg]);
+    assert.equal(sockets[2].requests[0].gray_level_skipped, false);
+    assert.equal(sockets[2].requests[0].target_gray_level, darkAvg);
     const uploadedBitmap = assetUploads.get(sockets[2].requests[0].simulation_bitmap_id)?.bitmap;
     assert.ok(uploadedBitmap, "workflow attaches the frozen ROI image instead of falling back to fake ADC data");
     assert.deepEqual(sockets[2].requests[0].roi, uploadedBitmap.source_roi, "ROI spans the actual sampled crop so custom ADC values use the same DAC coordinates");
@@ -194,36 +198,58 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     assert.ok(sockets[2].requests[0].points.some(p => !p[3]));
     const pointSamples = new Uint8Array(sockets[2].requests[0].points.length * 2);
     sockets[2].requests[0].points.forEach((point, index) => {
-      const sample = point[3] ? 0x1234 : 40 << 8;
+      const sample = point[3] ? 0x1234 : darkAvg << 8;
       pointSamples[index * 2] = sample >>> 8;
       pointSamples[index * 2 + 1] = sample & 255;
     });
     await act(async () => { sockets[2].onmessage({data: pointSamples.buffer}); });
     await settle();
-    assert.ok(store.getState().image.vectorImage.every((sample, index) => sample === (index % 128 < 64 ? 40 : 200) << 8),
-      "samples preserve the original image, including blanked ring holes and unselected pixels");
+    const darkResult = store.getState().image.vectorImage.slice();
+    assert.ok(darkResult.some(sample => sample === darkAvg << 8), "Spot feedback changes selected dark pixels");
+    assert.ok(darkResult.some(sample => sample === 200 << 8), "unselected bright pixels keep their gray level");
     await act(async () => {
       sockets[2].onmessage({data: JSON.stringify({event: "done", chunks: 1})});
       sockets[2].close();
     });
     await settle();
     assert.equal(sockets.length, 4, "only completion advances to bright step");
-    assert.equal(sockets[3].requests[0].continuous, false);
+    assert.deepEqual(store.getState().image.vectorImage, darkResult, "starting bright preserves the dark action result");
+    assert.equal(sockets[3].requests[0].continuous, true);
     assert.equal(sockets[3].requests[0].feedback_mode, "standard");
-    assert.equal(sockets[3].requests[0].gray_level_range, null);
-    assert.equal(store.getState().processing.workflowProgress[1].threshold,
-      store.getState().processing.workflowProgress[0].threshold * config.Materials.find(m => m.name === "Cu").brightness);
+    assert.deepEqual(sockets[3].requests[0].gray_level_range, [darkAvg, 200]);
+    assert.equal(sockets[3].requests[0].gray_level_skipped, false);
+    assert.equal(sockets[3].requests[0].target_gray_level, darkAvg);
+    assert.equal(store.getState().processing.workflowProgress[1].threshold, darkAvg, "both steps split at the ROI average");
+    const brightSamples = new Uint8Array(sockets[3].requests[0].points.length * 2);
+    sockets[3].requests[0].points.forEach((point, index) => {
+      const value = point[3] ? 0x1234 : darkAvg << 8;
+      brightSamples[index * 2] = value >>> 8;
+      brightSamples[index * 2 + 1] = value & 255;
+    });
+    await act(async () => { sockets[3].onmessage({data: brightSamples.buffer}); });
+    await settle();
+    const equalized = store.getState().image;
+    for (let i = 0; i < equalized.vectorCustomCount; i++) {
+      const x = equalized.vectorCustomRenderPoints[2 * i];
+      const y = equalized.vectorCustomRenderPoints[2 * i + 1];
+      assert.equal(equalized.vectorImage[y * 128 + x], darkAvg << 8,
+        "every sampled ROI pixel ends at the same frozen average");
+    }
     const [darkDone, brightStarted] = store.getState().processing.workflowProgress;
     assert.ok(darkDone.finishedAt >= darkStarted);
     assert.ok(brightStarted.startedAt >= darkDone.finishedAt);
     assert.deepEqual(store.getState().processing.workflowProgress.map(p => p.status), ["completed", "current"]);
+    assert.equal(store.getState().processing.instances.ring.workflowEnabled, true,
+      "Use workflow remains enabled when a step is in progress");
     await act(async () => { renderer.root.findAllByType("button").find(n => n.props.className === "btn btn--stop").props.onClick(); });
     await settle();
     assert.equal(sockets.length, 4, "Stop does not advance or repeat the cut");
     const stoppedSteps = store.getState().processing.workflowProgress;
     assert.equal(stoppedSteps[0].finishedAt, darkDone.finishedAt);
     assert.ok(stoppedSteps[1].finishedAt >= brightStarted.startedAt);
-    assert.deepEqual(store.getState().processing.workflowProgress.map(p => p.status), ["completed", "stopped"]);
+    assert.deepEqual(stoppedSteps.map(p => p.status), ["completed", "stopped"]);
+    assert.equal(store.getState().processing.instances.ring.workflowEnabled, true,
+      "an interrupted workflow remains enabled");
     // Toggle retains the selected workflow but restores an ordinary continuous scan.
     await act(async () => { store.dispatch(processing.setPatternWorkflow({key: "ring", enabled: false})); });
     await clickRun();
@@ -235,6 +261,7 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
       .findAllByType("input")[0];
     const parallelToggle = () => renderer.root.findByProps({ className: "checkbox vacuum-switch app-switch scan-parallel-toggle" })
       .findByType("input");
+    assert.equal(roiToggle().props.checked, true, "ROI scan remains enabled");
     assert.equal(roiToggle().props.disabled, false, "ROI Scan stays editable during Run");
     assert.ok(sockets.at(-1).requests[0].roi, "ROI Run uses the pattern bounds");
     const switchROI = async checked => {

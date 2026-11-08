@@ -711,7 +711,7 @@ def _bitmap_sample_grid(bitmap, mode=None):
     ).reshape(bitmap.height, bitmap.width)
 
 
-def _target_gray_step_bitmap(bitmap, roi, target: int, steps: int = 1) -> None:
+def _target_gray_step_bitmap(bitmap, roi, target: int, steps: int = 1, gray_range=None, skipped=None) -> None:
     """Advance one simulated ROI pass using the old ROI tab's two-level step."""
     source = _roi_bounds(bitmap.source_roi) or (0, 16383, 0, 16383)
     selected = _roi_bounds(roi) or source
@@ -728,14 +728,20 @@ def _target_gray_step_bitmap(bitmap, roi, target: int, steps: int = 1) -> None:
             if isinstance(pixel, SimulationBitmapPixel) and pixel.isSkipped is True:
                 continue
             value = _bitmap_pixel_value(pixel)
-            if value <= target:
+            spot_range = gray_range is not None and skipped is False
+            if (value == target if spot_range else value <= target):
                 continue
-            next_value = max(target, value - 2 * max(1, steps))
+            if gray_range is not None:
+                inside = min(gray_range) <= value <= max(gray_range)
+                if (inside if skipped is True else not inside):
+                    continue
+            delta = 2 * max(1, steps)
+            next_value = min(target, value + delta) if spot_range and value < target else max(target, value - delta)
             if isinstance(pixel, int):
                 bitmap.pixels[index] = next_value
             else:
                 pixel.value = next_value
-                if next_value <= target:
+                if next_value <= target and not spot_range:
                     pixel.isHighlighted = True
                     pixel.isSkipped = True
                     pixel.blank = True
@@ -743,6 +749,9 @@ def _target_gray_step_bitmap(bitmap, roi, target: int, steps: int = 1) -> None:
 
 def _target_gray_chunk(chunk, req, offset: int, steps: int):
     """Fade acquired ROI samples at the preview's 60 Hz, two-level cadence."""
+    # Spot ranges advance the source bitmap per pass; do not fade blanked samples.
+    if req.gray_level_range is not None and req.gray_level_skipped is False:
+        return chunk
     if steps <= 0 or req.target_gray_level is None:
         return chunk
     values = np.asarray(chunk, dtype=np.uint16).astype(np.int32)
@@ -1618,9 +1627,9 @@ class DeviceService:
                         for index, (region, bitmap) in enumerate(zip(req.parallel_rois, req.parallel_simulation_bitmaps)):
                             if index == 0 and len(req.parallel_rois) > 1 and _roi_bounds(region) == (0, 16383, 0, 16383):
                                 continue  # normal full-field background is never processed
-                            _target_gray_step_bitmap(bitmap, region, req.target_gray_level, steps)
+                            _target_gray_step_bitmap(bitmap, region, req.target_gray_level, steps, req.gray_level_range, req.gray_level_skipped)
                     elif req.simulation_bitmap is not None:
-                        _target_gray_step_bitmap(req.simulation_bitmap, req.roi, req.target_gray_level, steps)
+                        _target_gray_step_bitmap(req.simulation_bitmap, req.roi, req.target_gray_level, steps, req.gray_level_range, req.gray_level_skipped)
                     return None
                 await asyncio.to_thread(advance_target)
                 bitmap_chunks = await asyncio.to_thread(build_bitmap, req, transforms)

@@ -12,12 +12,14 @@ const even = { name: "EvenLinelCut", caption: "Even", steps: [step("dark"), step
 const build = (workflow = even, shape = field, pattern = spec, frame = Uint16Array.from([0, 100, 100, 200], x => x << 8), ratios = materials) =>
   workflowPoints(pattern, shape, field, field, frame, 2, workflow, ratios, 3, "horizontal_sawtooth");
 
-test("Even uses the ROI average as the gray-range boundary for dark and bright Spot actions", () => {
+test("Even range-filters Spot: dark is [spectrum min, ROI average], bright is [ROI average, spectrum max]", () => {
   const [dark, bright] = build();
   assert.equal(dark.threshold, 100);
   assert.equal(bright.threshold, 100);
   assert.deepEqual(dark.grayRange, [0, 100]);
-  assert.deepEqual(bright.grayRange, [100, 255]);
+  assert.deepEqual(bright.grayRange, [100, 200]);
+  assert.equal(dark.targetGrayLevel, 100);
+  assert.equal(bright.targetGrayLevel, 100);
   assert.equal(dark.spot, 3);
   assert.equal(bright.spot, 3);
   assert.deepEqual(dark.points.map(p => p[3]), [false, false, false, true]);
@@ -26,7 +28,26 @@ test("Even uses the ROI average as the gray-range boundary for dark and bright S
   assert.deepEqual(dark.points.map(p => p.slice(0, 2)), [[0,0],[16383,0],[0,16383],[16383,16383]]);
 });
 
-test("shipped EvenLinelCut uses the ROI average and full gray spectrum for both Spot steps", () => {
+test("Even bounds come from the image spectrum, not 0..255", () => {
+  // spectrum 40..200 with ROI average 120 -> dark [40,120], bright [120,200]; 40 and 200 are the extremes present.
+  const frame = Uint16Array.from([40, 100, 140, 200], x => x << 8);
+  const [dark, bright] = build(even, field, spec, frame);
+  assert.deepEqual(dark.grayRange, [40, 120]);
+  assert.deepEqual(bright.grayRange, [120, 200]);
+  assert.deepEqual(dark.points.map(p => p[3]), [false, false, true, true]);
+  assert.deepEqual(bright.points.map(p => p[3]), [true, true, false, false]);
+  assert.equal(dark.targetGrayLevel, 120);
+  assert.equal(bright.targetGrayLevel, 120);
+  assert.equal(dark.targetGrayFrames, Math.ceil((120 - 40) / 2) + 1);
+});
+
+test("Even includes the boundary level in both ranges, like the ROI gray-level selection", () => {
+  const [dark, bright] = build();
+  assert.deepEqual([dark.points[1][3], dark.points[2][3]], [false, false]);
+  assert.deepEqual([bright.points[1][3], bright.points[2][3]], [false, false]);
+});
+
+test("shipped EvenLinelCut uses the ROI average and image spectrum for both Spot steps", () => {
   const config = JSON.parse(readFileSync(new URL("../../../GlasgowDataIO/Json/processingPatterns.json", import.meta.url)));
   const workflow = config.Workflows.find(w => w.name === "EvenLinelCut");
   const [dark, bright] = build(workflow, field, spec, Uint16Array.from([0, 100, 100, 200], x => x << 8),
@@ -34,11 +55,11 @@ test("shipped EvenLinelCut uses the ROI average and full gray spectrum for both 
   assert.equal(dark.threshold, 100);
   assert.equal(bright.threshold, 100);
   assert.deepEqual(dark.grayRange, [0, 100]);
-  assert.deepEqual(bright.grayRange, [100, 255]);
+  assert.deepEqual(bright.grayRange, [100, 200]);
   assert.deepEqual(dark.points.map(p => p[3]), [false, false, false, true]);
   assert.deepEqual(bright.points.map(p => p[3]), [true, false, false, false]);
   for (const result of [dark, bright]) {
-    assert.equal(result.targetGrayFrames, 1);
+    assert.ok(result.targetGrayFrames >= 1);
     assert.equal(result.step.actions[0].thresholdSource, "roiAverage");
   }
 });
@@ -110,5 +131,5 @@ test("ROI image and render pixel indices share the exact workflow point order", 
   assert.equal(dark.simulationBitmap.height, 2);
   assert.deepEqual(dark.simulationBitmap.source_roi, {x_start:5461,x_end:10922,y_start:5461,y_end:10922});
   assert.equal(dark.simulationBitmap, bright.simulationBitmap);
-  assert.equal(dark.pointPixelIndices, bright.pointPixelIndices);
+  assert.deepEqual(dark.pointPixelIndices, bright.pointPixelIndices);
 });

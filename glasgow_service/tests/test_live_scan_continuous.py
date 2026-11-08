@@ -6,6 +6,7 @@ one synchronize, a RasterRegion re-arm in-band at each new frame, and the
 pipeline drain only after Stop.
 """
 import asyncio
+import array
 from pathlib import Path
 import pytest
 
@@ -535,3 +536,23 @@ def test_live_range_filter_never_blanks_composite_background():
     assert all(value == 120 * 256 for value in values[::2])
     assert all(value == 0 for value in values[1::2])
     assert not command.abort.is_set()
+
+
+def test_even_spot_ranges_converge_to_original_roi_average():
+    bitmap = SimulationBitmap(width=6, height=1, pixels=[
+        0, 39, 100, 161, SimulationBitmapPixel(value=200, isSkipped=False),
+        SimulationBitmapPixel(value=255, isSkipped=True),
+    ])
+    for gray_range in ([0, 100], [100, 255]):
+        for _ in range(130):
+            _target_gray_step_bitmap(bitmap, None, 100, gray_range=gray_range, skipped=False)
+    assert bitmap.pixels[:4] == [100] * 4
+    assert bitmap.pixels[4].value == 100
+    assert bitmap.pixels[4].isSkipped is False
+    assert bitmap.pixels[5].value == 255
+
+
+def test_even_dark_spot_chunk_does_not_fade_or_brighten_blanked_samples():
+    req = VectorRequest(target_gray_level=100, gray_level_range=[0, 100], gray_level_skipped=False)
+    original = array.array("H", [0, 39 * 256, 100 * 256, 200 * 256])
+    assert list(_target_gray_chunk(original, req, 0, 128)) == list(original)

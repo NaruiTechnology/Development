@@ -473,6 +473,9 @@ function handleMock(
           simulation_bitmap: body.simulation_bitmap ?? undefined,
           target_gray_level: Number.isInteger(body.target_gray_level) && body.target_gray_level >= 0 && body.target_gray_level <= 255
             ? body.target_gray_level : null,
+          gray_level_range: Array.isArray(body.gray_level_range) && body.gray_level_range.length === 2
+            ? [Number(body.gray_level_range[0]), Number(body.gray_level_range[1])] : null,
+          gray_level_skipped: typeof body.gray_level_skipped === "boolean" ? body.gray_level_skipped : null,
           parallel_rois: Array.isArray(body.parallel_rois) ? body.parallel_rois : undefined,
           parallel_simulation_bitmaps: Array.isArray(body.parallel_simulation_bitmaps) ? body.parallel_simulation_bitmaps : undefined,
           simulation: body.simulation && typeof body.simulation === "object" ? body.simulation : undefined,

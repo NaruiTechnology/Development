@@ -68,6 +68,9 @@ interface VectorParams {
   parallel_simulation_bitmaps?: SimulationBitmapPayload[] | null;
   simulation_bitmap?: SimulationBitmapPayload | null;
   target_gray_level?: number | null;
+  /** ROI gray-level range filter; with gray_level_skipped=false (Spot) only pixels inside it are milled. */
+  gray_level_range?: [number, number] | null;
+  gray_level_skipped?: boolean | null;
   simulation?: Record<string, unknown>;
   /** Live (Infinite) scan: replay the pass until the client closes. */
   continuous?: boolean;
@@ -86,6 +89,7 @@ interface SimulationBitmapPayload {
   height: number;
   pixels: Array<number | SimulationBitmapPixel>;
   source_roi?: { x_start: number; x_end: number; y_start: number; y_end: number } | null;
+  gray_level_range?: [number, number] | null;
 }
 
 interface SimulationBitmapPixel {
@@ -95,10 +99,12 @@ interface SimulationBitmapPixel {
   blank?: boolean | null;
 }
 
-function stepTargetBitmap(
+export function stepTargetBitmap(
   bitmap: SimulationBitmapPayload,
   region: VectorParams["roi"],
   target: number,
+  range?: [number, number] | null,
+  skipped?: boolean | null,
 ): void {
   const source = bitmap.source_roi ?? { x_start: 0, x_end: ADC_MAX, y_start: 0, y_end: ADC_MAX };
   const selected = region ?? source;
@@ -111,11 +117,17 @@ function stepTargetBitmap(
     const pixel = bitmap.pixels[index];
     if (typeof pixel !== "number" && pixel.isSkipped === true) continue;
     const value = typeof pixel === "number" ? pixel : pixel.value;
-    if (value <= target) continue;
-    const next = Math.max(target, value - 2);
+    const convergeBothWays = Boolean(range && skipped === false);
+    if (convergeBothWays ? value === target : value <= target) continue;
+    if (range) {
+      // Range filter: Spot mills pixels inside it, Skip mills the ones outside.
+      const inside = value >= Math.min(range[0], range[1]) && value <= Math.max(range[0], range[1]);
+      if (skipped === true ? inside : !inside) continue;
+    }
+    const next = convergeBothWays && value < target ? Math.min(target, value + 2) : Math.max(target, value - 2);
     bitmap.pixels[index] = typeof pixel === "number" ? next : {
       ...pixel, value: next,
-      ...(next <= target ? { isHighlighted: true, isSkipped: true, blank: true } : {}),
+      ...(next <= target && !(range && skipped === false) ? { isHighlighted: true, isSkipped: true, blank: true } : {}),
     };
   }
 }
@@ -309,11 +321,20 @@ function sampleSimulationBitmap(
   yNorm: number,
   mode: "skip" | "spot" | null,
   rawTarget = false,
+  targetGrayLevel: number | null = null,
 ): number {
   const x = Math.max(0, Math.min(bitmap.width - 1, Math.round(xNorm * (bitmap.width - 1))));
   const y = Math.max(0, Math.min(bitmap.height - 1, Math.round(yNorm * (bitmap.height - 1))));
   const px = bitmap.pixels[y * bitmap.width + x];
   if (rawTarget && isSkippedPixel(px) === true) return 0;
+  if (rawTarget && isSkippedPixel(px) === false && targetGrayLevel !== null) {
+    const value = pixelValue(px) & 0xff;
+    const range = bitmap.gray_level_range;
+    if (range && value >= Math.min(...range) && value <= Math.max(...range)) {
+      return Math.min(Math.max(0, targetGrayLevel) * 256, 0xFFFF);
+    }
+    return Math.min(value * 256, 0xFFFF);
+  }
   return rawTarget ? Math.min(Math.max(0, pixelValue(px) & 0xff) * 64, ADC_MAX) : sampleBitmapPixel(px, mode);
 }
 
@@ -324,9 +345,10 @@ function sampleSimulationBitmapPoint(
   y: number,
   mode: "skip" | "spot" | null,
   rawTarget = false,
+  targetGrayLevel: number | null = null,
 ): number {
   roi = bitmap.source_roi ?? roi;
-  if (!roi) return sampleSimulationBitmap(bitmap, x / ADC_MAX, y / ADC_MAX, mode, rawTarget);
+  if (!roi) return sampleSimulationBitmap(bitmap, x / ADC_MAX, y / ADC_MAX, mode, rawTarget, targetGrayLevel);
   const x0 = Math.min(roi.x_start, roi.x_end);
   const x1 = Math.max(roi.x_start, roi.x_end);
   const y0 = Math.min(roi.y_start, roi.y_end);
@@ -337,6 +359,7 @@ function sampleSimulationBitmapPoint(
     (y - y0) / Math.max(1, y1 - y0),
     mode,
     rawTarget,
+    targetGrayLevel,
   );
 }
 
@@ -569,10 +592,10 @@ export async function streamMockVector(
           p.parallel_simulation_bitmaps.forEach((bitmap, index) => {
             const region = p.parallel_rois?.[index];
             if (index === 0 && p.parallel_rois!.length > 1 && region?.x_start === 0 && region.x_end === ADC_MAX && region.y_start === 0 && region.y_end === ADC_MAX) return;
-            stepTargetBitmap(bitmap, region, p.target_gray_level!);
+            stepTargetBitmap(bitmap, region, p.target_gray_level!, p.gray_level_range, p.gray_level_skipped);
           });
         } else if (p.simulation_bitmap) {
-          stepTargetBitmap(p.simulation_bitmap, p.roi, p.target_gray_level);
+          stepTargetBitmap(p.simulation_bitmap, p.roi, p.target_gray_level, p.gray_level_range, p.gray_level_skipped);
         }
       }
       i = 0;
@@ -595,13 +618,14 @@ export async function streamMockVector(
         ? p.pattern !== "custom" || (p.points && p.points.length)
             ? blank === true
             ? 0
-            : sampleSimulationBitmapPoint(bitmap, activeGeometry.parallel_rois?.[regionIndex] ?? activeGeometry.roi, x, y, bitmapMode(bitmap), p.target_gray_level !== null && p.target_gray_level !== undefined)
+            : sampleSimulationBitmapPoint(bitmap, activeGeometry.parallel_rois?.[regionIndex] ?? activeGeometry.roi, x, y, bitmapMode(bitmap), p.target_gray_level !== null && p.target_gray_level !== undefined, p.target_gray_level ?? null)
           : sampleSimulationBitmap(
               bitmap,
               bitmap.width <= 1 ? 0 : x / (bitmap.width - 1),
               bitmap.height <= 1 ? 0 : y / (bitmap.height - 1),
               bitmapMode(bitmap),
               p.target_gray_level !== null && p.target_gray_level !== undefined,
+              p.target_gray_level ?? null,
             )
         : sampleFakeAdc(x, y, simulation, simulationImage);
       writeSampleBE(buf, k, sample);

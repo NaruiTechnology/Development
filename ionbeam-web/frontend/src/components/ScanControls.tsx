@@ -747,8 +747,8 @@ export function ScanControls({
             const adaptiveGrayWorkflow = (areaRemoval || roiAverageFilter) && isProduction;
             entries.push({ kind: "vector", scanType: adaptiveGrayWorkflow ? ScanType.VECTOR_ADAPTIVE_GRAN_FEED_BLANK : ScanType.VECTOR, workflowStepIds: [id],
               req: { ...vector, pattern: "custom", points: result.points, roi: result.simulationBitmap.source_roi,
-                continuous: areaRemoval || (!isProduction && materialTarget !== null),
-                frames: areaRemoval || (!isProduction && materialTarget !== null) ? result.targetGrayFrames : undefined,
+                continuous: areaRemoval || (!isProduction && (materialTarget !== null || roiAverageFilter)),
+                frames: areaRemoval || (!isProduction && (materialTarget !== null || roiAverageFilter)) ? result.targetGrayFrames : undefined,
                 pre_process: false, feedback_mode: adaptiveGrayWorkflow ? "adaptive_gray_feedback" : "standard",
                 ...(adaptiveGrayWorkflow ? { output_mode: "SixteenBit" as const } : {}),
                 ...(adaptiveGrayWorkflow ? { adc_valid: true } : {}),
@@ -756,7 +756,8 @@ export function ScanControls({
                 // it paired with the bitmap-derived gray filter and points.
                 simulation_bitmap: isProduction ? null : result.simulationBitmap, simulation_bitmap_id: null,
                 parallel_rois: null, parallel_simulation_bitmaps: null, parallel_simulation_bitmap_ids: null,
-                target_gray_level: !isProduction ? areaTarget ?? materialTarget : null,
+                // Simulation has no live ADC: mill the spotted range toward its target so gray levels actually change.
+                target_gray_level: !isProduction ? areaTarget ?? materialTarget ?? (roiAverageFilter ? result.targetGrayLevel : null) : null,
                 gray_level_range: grayRange,
                 gray_level_skipped: areaRemoval || roiAverageFilter ? false : materialTarget === null ? null : true },
               displayROI: worldSelectionToDacROI(processingPlan.regions[index], roiState), initialFrame: source,

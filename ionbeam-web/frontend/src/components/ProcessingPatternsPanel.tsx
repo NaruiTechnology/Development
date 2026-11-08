@@ -4,9 +4,9 @@
  * (entries marked skip never arrive), and every card is bound to its pattern instance in the processing slice.
  *
  * Picking an icon arms drawing on the image canvas (PatternOverlay); picking it again disarms.
- * Card expansion is independent of the drawing tool. Cards start collapsed.
+ * Cards start collapsed and expand when their ROI is drawn or edited.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { materialTargetGrayLevel } from "../lib/processingWorkflows";
@@ -105,6 +105,11 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
   const workflows = useAppSelector(s => s.processing.workflows);
   const materials = useAppSelector(s => s.processing.materials);
   const [collapsed, setCollapsed] = useState(true);
+  const previousRoi = useRef(instance?.roi);
+  useEffect(() => {
+    if (instance?.roi && previousRoi.current !== instance.roi) setCollapsed(false);
+    previousRoi.current = instance?.roi;
+  }, [instance?.roi]);
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
   const label = collapsed ? t("processing.expand") : t("processing.collapse");
   if (!instance) return null;

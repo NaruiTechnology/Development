@@ -10,7 +10,7 @@ Workflow JSON keeps only the fields the web executor consumes: workflow and disp
 
 **Models.** `frontend/src/lib/processingPatterns.ts` has `MODEL_REGISTRY` (SolidBoxModel, OpenBoxModel, StairCutModel, CleaningLineModel, CircleModel, RingModel, FreeHandModel): ROI validation, area, containment, preview geometry. The processing slice (`store/processingSlice.ts`) holds one instance (parameters + ROI) per catalogue entry; the catalogue is fetched at app launch.
 
-**UI.** `ProcessingPatternsPanel` renders the non-collapsible *Patterns* card (icon strip). The shared Controls card sits directly below it, followed by `ProcessingPatternCards` with one card per pattern, collapsed by default. Picking an icon arms drawing; picking it again disarms. Icon selection leaves card expansion and scroll position unchanged. Each card is expanded or collapsed independently using its chevron; expanding a card also selects its drawing tool. `PatternOverlay` is mounted inside the ROI canvas through `ROIEditor`'s `renderCanvasOverlay`: rect = drag; circle = drag centre to radius and release (open outline); ring = drag centre to outer circle, then click for the inner circle (same centre), Esc / right-click cancels; free hand = press-drag-release.
+**UI.** `ProcessingPatternsPanel` renders the non-collapsible *Patterns* card (icon strip). The shared Controls card sits directly below it, followed by `ProcessingPatternCards` with one card per pattern, collapsed by default. Picking an icon arms drawing; picking it again disarms. Icon selection leaves card expansion and scroll position unchanged. Drawing or editing a pattern ROI automatically expands its corresponding card. Each card is expanded or collapsed independently using its chevron; expanding a card also selects its drawing tool. `PatternOverlay` is mounted inside the ROI canvas through `ROIEditor`'s `renderCanvasOverlay`: rect = drag; circle = drag centre to radius and release (open outline); ring = drag centre to outer circle, then click for the inner circle (same centre), Esc / right-click cancels; free hand = press-drag-release.
 
 **New pattern:** add a model to `MODEL_REGISTRY` and an entry to the JSON; the card form is generated from `parameters`.
 
@@ -86,10 +86,19 @@ Switching off retains the selected workflow and executes Default instead.
 Default is an ordinary acquisition with no workflow or global gray filter.
 
 `EvenLinelCut` freezes one source image and runs two finite Vector Spot steps
-using the ROI gray-level range filter. The dark step spots `[0, AvgGray]`; the
-bright step spots `[AvgGray, 255]`. `AvgGray` is the rounded average measured
-over the sampled ROI, and both intervals include that boundary value. The
-ranges use the complete 8-bit gray spectrum.
+using the ROI gray-level range filter (Spot mode: a pixel is spotted when its
+gray level lies inside the range, ends included). The dark step spots
+`[spectrum min, AvgGray]`; the bright step spots `[AvgGray, spectrum max]`.
+`AvgGray` is the rounded average measured over the sampled ROI; the spectrum
+min/max are the lowest and highest gray levels of the frozen source image.
+Both intervals include the `AvgGray` level, so pixels exactly at that level are
+spotted by both steps. Both steps target the same frozen `AvgGray`. In simulation,
+dark pixels brighten and bright pixels darken by at most two levels per pass,
+clamping exactly at `AvgGray`; pixels already at that level stay unchanged.
+Pixels outside the pattern remain unchanged. Production uses adaptive gray
+feedback from the live ADC.
+Spot dwell is at least two clock cycles, matching the ROI Spot action in
+commit `15f6a0a9`. The display preserves the dark result when the bright step starts.
 
 `MaterialLinelCut` spots bright pixels against the selected material's brightness
 ratio. Its Material selector sits next to Workflow, is populated from the JSON

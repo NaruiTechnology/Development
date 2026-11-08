@@ -1,5 +1,6 @@
 import { MODEL_REGISTRY, type PatternSpec, type PatternRoi } from "./processingPatterns.js";
 import { ROI_TARGET_GRAY_STEP } from "./roiTargetGray.js";
+import { grayScaleSelectionContains, normalizeGrayScaleSelection } from "./grayScaleSelection.js";
 import { bitmapScanCoordinates } from "./vectorScanPath.js";
 import type { ROIRequest, SimulationBitmap, VectorPointTuple, VectorScanPath } from "../types/api";
 
@@ -31,11 +32,18 @@ export function workflowPoints(spec: PatternSpec, shape: PatternRoi, region: ROI
   toDac?: (x: number, y: number) => { x: number; y: number },
   selectedMaterial?: string,
 ): { step: WorkflowSpec["steps"][number]; points: VectorPointTuple[]; threshold: number | null; targetGrayFrames: number;
-  grayRange: [number, number] | null; spot: number; simulationBitmap: SimulationBitmap; pointPixelIndices: number[] }[] {
+  grayRange: [number, number] | null; targetGrayLevel: number | null; spot: number; simulationBitmap: SimulationBitmap; pointPixelIndices: number[] }[] {
   if (frame.length !== edge * edge || !frame.length) throw new Error("Workflow needs a complete source image.");
   const samples: { x: number; y: number; gray: number; inside: boolean; index: number }[] = [];
   let fullScaleSum = 0;
-  for (const value of frame) fullScaleSum += value >>> 8;
+  // Lowest/highest level of the source image's gray spectrum (the range filter's outer bounds).
+  let spectrumMin = 255, spectrumMax = 0;
+  for (const value of frame) {
+    const level = value >>> 8;
+    fullScaleSum += level;
+    if (level < spectrumMin) spectrumMin = level;
+    if (level > spectrumMax) spectrumMax = level;
+  }
   const fullScaleAverage = Math.round(fullScaleSum / frame.length);
   let sum = 0, count = 0;
   let maxGray = 0;
@@ -91,25 +99,33 @@ export function workflowPoints(spec: PatternSpec, shape: PatternRoi, region: ROI
       : action.thresholdSource === "selectedMaterial" ? materialTargetGrayLevel(avgGray, ratio!)
       : action.thresholdSource === "roiAverage" ? Math.round(avgGray)
       : avgGray * ratio!;
+    // Range filter (Spot mode): dark = [spectrum min, ROI average], bright = [ROI average, spectrum max].
+    // Both ends are inclusive, as in the ROI gray-level selection.
     const grayRange: [number, number] | null = action.thresholdSource === "roiAverage" && threshold !== null
-      ? action.selection === "dark" ? [0, threshold] : [threshold, 255]
+      ? normalizeGrayScaleSelection(action.selection === "dark" ? [spectrumMin, threshold] : [threshold, spectrumMax])
       : null;
+    // Both Spot actions converge to the same frozen ROI average.
+    const targetGrayLevel = grayRange ? threshold : null;
     // AreaRemoval follows the ROI target-gray loop's two-level-per-pass convergence cadence.
     const targetGrayFrames = (action.thresholdSource === "selectedMaterial" || action.thresholdSource === "fullScaleAverage") && threshold !== null
       ? Math.max(1, Math.ceil(Math.max(0, maxGray - threshold) / ROI_TARGET_GRAY_STEP) + 1)
+      : grayRange && targetGrayLevel !== null
+      ? Math.max(1, Math.ceil(Math.max(Math.abs(grayRange[0] - targetGrayLevel), Math.abs(grayRange[1] - targetGrayLevel)) / ROI_TARGET_GRAY_STEP) + 1)
       : 1;
     let spot = 0;
     const actionSamples = action.thresholdSource === "fullScaleAverage" || action.thresholdSource === "roiAverage"
       ? samples.filter(p => p.inside) : samples;
     const points: VectorPointTuple[] = actionSamples.map(p => {
-      const active = p.inside && (threshold === null || (action.selection === "dark"
-        ? action.thresholdSource === "roiAverage" ? p.gray <= threshold : p.gray < threshold
+      const active = p.inside && (threshold === null || (grayRange
+        ? grayScaleSelectionContains(grayRange, p.gray)
+        : action.selection === "dark"
+        ? p.gray < threshold
         : action.thresholdSource === "fullScaleAverage" || action.thresholdSource === "selectedMaterial" ? p.gray > threshold : p.gray >= threshold));
       if (active) spot++;
-      return [p.x, p.y, action.thresholdSource === "fullScaleAverage" ? Math.max(2, dwell) : dwell,
+      return [p.x, p.y, action.thresholdSource === "fullScaleAverage" || grayRange ? Math.max(2, dwell) : dwell,
         !active, active ? 1 : 2];
     });
-    return { step, points, threshold, targetGrayFrames, grayRange, spot, simulationBitmap,
+    return { step, points, threshold, targetGrayFrames, grayRange, targetGrayLevel, spot, simulationBitmap,
       pointPixelIndices: action.thresholdSource === "fullScaleAverage" || action.thresholdSource === "roiAverage"
         ? actionSamples.map(sample => sample.index) : pointPixelIndices };
   });
