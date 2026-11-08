@@ -73,6 +73,27 @@
             "grayValueRange": "140,180"
         }
     ],
+    "Workflows": [
+        {
+            "name": "default",
+            "caption": "Default workflow",
+            "comment": "The default workflow is a simple, single,step process. It is the only workflow currently implemented.",
+            "steps": [
+                {
+                    "name": "defaultStep",
+                    "caption": "Default step",
+                    "comment": "The default step is a simple, single,step process. It is the only step currently implemented.",
+                    "actions": [
+                        {
+                            "name": "defaultAction",
+                            "caption": "Default action",
+                            "comment": "The default action is a simple, single,step process. It is the only action currently implemented."
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
     "Patterns": [
         {
             "solidBox": {
