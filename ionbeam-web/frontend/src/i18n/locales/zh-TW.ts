@@ -1278,7 +1278,7 @@ export const zhTW: Partial<TranslationTable> = {
   "processing.run": "執行",
   "processing.imageInvalid": "無法解碼設定的加工影像。",
   "processing.imageError": "加工影像：{error}",
-  "processing.roiAutomatic": "ROI 掃描模式依繪製的圖案自動切換。",
+  "processing.roiScan.title": "掃描已啟用圖案的 ROI。關閉後掃描整個視野。執行時可切換。",
   "processing.patterns": "圖形",
   "processing.hint.rect": "在影像上拖曳以繪製圖形區域。",
   "processing.hint.circle": "從圓心向外拖曳以設定半徑，放開完成。按 Esc 或右鍵取消。",

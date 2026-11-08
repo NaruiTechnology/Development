@@ -46,6 +46,7 @@ import { ImageCanvas, type CapturedScanImage } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { PatternOverlay } from "./components/PatternOverlay";
+import { ProcessingScanStatus } from "./components/ProcessingScanStatus";
 import { ProcessingPatternCards, ProcessingPatternsPanel } from "./components/ProcessingPatternsPanel";
 import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
@@ -2026,6 +2027,7 @@ export function App() {
                 <ProcessingImagePanel headerHost={processingHeaderHost}>
                   {activeTopTab === "processing" && !adcView ? roiCanvas : null}
                 </ProcessingImagePanel>
+                {activeTopTab === "processing" && !adcView && <ProcessingScanStatus kind={scanSubTab} />}
               </div>
                 {adcView ? (
                   <AdcTimelineCanvas state={adcTest.state} />

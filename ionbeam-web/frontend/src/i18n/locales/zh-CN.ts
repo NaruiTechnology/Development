@@ -1273,7 +1273,7 @@ export const zhCN: Partial<TranslationTable> = {
   "processing.run": "运行",
   "processing.imageInvalid": "无法解码配置的加工图像。",
   "processing.imageError": "加工图像：{error}",
-  "processing.roiAutomatic": "ROI 扫描模式根据绘制的图案自动切换。",
+  "processing.roiScan.title": "扫描已启用图案的 ROI。关闭后扫描整个视野。运行时可切换。",
   "processing.patterns": "图形",
   "processing.hint.rect": "在图像上拖动以绘制图形区域。",
   "processing.hint.circle": "从圆心向外拖动以设定半径，松开完成。按 Esc 或右键取消。",

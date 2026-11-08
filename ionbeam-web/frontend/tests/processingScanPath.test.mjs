@@ -26,6 +26,7 @@ for (const kind of ["raster", "vector"]) {
       const { store } = await vite.ssrLoadModule("/src/store/index.ts");
       const { ROIEditor } = await vite.ssrLoadModule("/src/components/ROIEditor.tsx");
       const scan = await vite.ssrLoadModule("/src/store/scanSlice.ts");
+      const image = await vite.ssrLoadModule("/src/store/imageSlice.ts");
       store.dispatch(scan.updateROI({ selection: null, raster_show_scan_path: kind === "raster", vector_show_scan_path: kind === "vector" }));
       store.dispatch(scan.streamStarted());
       await act(async () => {
@@ -52,14 +53,47 @@ for (const kind of ["raster", "vector"]) {
         store.dispatch(processing.setPatternRoi({ key: "ring", roi: { cx: 100, cy: 100, r_outer: 30, r_inner: 10 } }));
         store.dispatch(processing.setPatternRoi({ key: "free", roi: { points: [[150, 150], [180, 150], [170, 180]] } }));
       });
+      // Drawn shapes must not clip a full-field acquisition.
+      const setup = (roi = null, parallelROIs = null) => kind === "raster"
+        ? image.resetRaster({ resolution: 128, roi, parallelROIs, continuous: true })
+        : image.setupVector({ pattern: "default", edge: 128, roi, parallelROIs,
+            continuous: true, scanPath: "horizontal_sawtooth" });
+      const assertFullField = () => {
+        assert.equal(operations.filter(([op]) => op === "ellipse").length, 0,
+          "full-field sweep ignores the ring, including its hole");
+        assert.equal(operations.filter(([op]) => op === "closePath").length, 0,
+          "full-field sweep ignores the freehand outline");
+        const rectangles = operations.filter(([op]) => op === "rect");
+        assert.deepEqual(rectangles, [["rect", 0, 0, 640, 640]], "one full-canvas sweep, not parallel ROI sweeps");
+        const lineXs = operations.filter(([op]) => op === "lineTo").map(([,x]) => x);
+        assert.ok(lineXs.includes(639), "scan path crosses the full canvas width");
+      };
+      operations.length = 0;
+      await act(async () => { store.dispatch(setup()); });
+      assertFullField();
+      const region = { x_start: 4096, x_end: 8191, y_start: 4096, y_end: 8191 };
+      const other = { x_start: 8192, x_end: 12287, y_start: 8192, y_end: 12287 };
+      operations.length = 0;
+      await act(async () => { store.dispatch(setup(null, [region, other])); });
       const ellipses = operations.filter(([op]) => op === "ellipse");
       assert.ok(ellipses.some((op) => op.at(-1) === true), "ring hole clips in the reverse direction");
       assert.ok(ellipses.some((op) => op.at(-1) === false), "ring exterior clips the sweep");
       assert.ok(operations.some(([op]) => op === "closePath"), "freehand outline closes the clipping mask");
       assert.equal(callbacks.size, 1, "editing patterns replaces the animation loop");
 
+      // Sequential acquisition draws only its active ROI. Turning ROI Scan
+      // off clears both display mappings while the two pattern shapes remain.
+      operations.length = 0;
+      await act(async () => { store.dispatch(setup(region)); });
+      assert.equal(operations.filter(([op]) => op === "rect").length, 1);
+      assert.ok(operations.some(([op]) => op === "ellipse"), "ROI sweep retains its shape mask");
+      operations.length = 0;
+      await act(async () => { store.dispatch(setup()); });
+      assertFullField();
+      assert.ok(store.getState().processing.instances.ring.roi);
+      assert.ok(store.getState().processing.instances.free.roi);
+
       if (kind === "vector") {
-        const image = await vite.ssrLoadModule("/src/store/imageSlice.ts");
         operations.length = 0;
         await act(async () => {
           store.dispatch(image.setupVector({pattern:"custom",edge:128,

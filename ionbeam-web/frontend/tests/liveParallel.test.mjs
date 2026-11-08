@@ -77,6 +77,8 @@ test("live ROI and Parallel changes rebuild both scan layouts, preserve pixels, 
     for (const kind of ["raster", "vector"]) {
       store.dispatch(scan.streamReset());
       await act(async () => { renderer = create(render(kind)); });
+      assert.equal(toggle().props.checked, false, "Parallel defaults OFF for multiple ROIs");
+      await act(async () => { toggle().props.onChange({ target: { checked: true } }); });
       const before = sockets.length;
       await act(async () => { await buttonByTitle(kind === "vector" ? "scan.infinite.title.vector" : "scan.infinite.title").props.onClick(); });
       assert.equal(sockets.length, before + 1);
@@ -116,10 +118,11 @@ test("live ROI and Parallel changes rebuild both scan layouts, preserve pixels, 
       await act(async () => { roiToggle().props.onChange({ target: { checked: true } }); });
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
       await act(async () => {});
-      assert.equal(sockets.at(-1).requests[0].parallel_rois.length, 2);
+      assert.equal(sockets.at(-1).requests[0].parallel_rois ?? null, null);
+      assert.equal(toggle().props.checked, false, "ROI mode does not automatically turn Parallel back on");
       // Stop cancels a scheduled handover instead of resurrecting the live scan.
       await act(async () => {
-        toggle().props.onChange({ target: { checked: false } });
+        toggle().props.onChange({ target: { checked: true } });
         buttonByTitle("scan.stop.title").props.onClick();
       });
       const stoppedAt = sockets.length;
@@ -296,6 +299,7 @@ test("live sequential zoom edits keep updating after the Parallel switch is turn
     const button = (key) => root.findAllByType("button").find((node) => node.props.title === translate("en", key));
     const zoomInput = () => root.findAll((node) => node.props.ariaLabel === translate("en", "scan.zoom") && node.props.onValueChange)[0];
     const toggleParallel = () => root.findByProps({ className: "checkbox vacuum-switch app-switch scan-parallel-toggle" }).findByType("input");
+    await act(async () => { toggleParallel().props.onChange({ target: { checked: true } }); });
     await act(async () => { await button("scan.infinite.title.vector").props.onClick(); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
     assert.equal(store.getState().scan.phase, "running");

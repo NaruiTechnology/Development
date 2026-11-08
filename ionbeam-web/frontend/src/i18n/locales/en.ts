@@ -1420,7 +1420,7 @@ export const en = {
   "processing.run": "Run",
   "processing.imageInvalid": "The configured Processing image could not be decoded.",
   "processing.imageError": "Processing image: {error}",
-  "processing.roiAutomatic": "ROI Scan follows the drawn patterns automatically.",
+  "processing.roiScan.title": "Scan the enabled pattern ROIs. Turn off to scan the full field. Changes apply during Run.",
   "processing.patterns": "Patterns",
   "processing.hint.rect": "Drag on the image to draw the pattern area.",
   "processing.hint.circle": "Drag from the centre to set the radius; release to finish. Esc or right-click cancels.",

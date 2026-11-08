@@ -73,6 +73,8 @@ test("repeated and rapid Parallel/Sequential toggles keep the live scan running 
     for (const kind of ["raster", "vector"]) {
       store.dispatch(scan.streamReset());
       await act(async () => { renderer = create(render(kind)); });
+      assert.equal(toggle().props.checked, false, "Parallel defaults OFF for multiple ROIs");
+      await act(async () => { toggle().props.onChange({ target: { checked: true } }); });
       await act(async () => { await buttonByTitle(kind === "vector" ? "scan.infinite.title.vector" : "scan.infinite.title").props.onClick(); });
       let want = true;
       let activeDrops = 0;

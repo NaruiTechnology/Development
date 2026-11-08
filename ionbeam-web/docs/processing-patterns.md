@@ -51,10 +51,11 @@ orientation and pattern geometry.
 ## Pattern-driven acquisition
 
 Processing derives its acquisition ROI list from the drawn pattern instances,
-in catalogue order. A first drawing enables ROI Scan automatically; clearing the
-last drawing returns to full-field acquisition. The read-only ROI Scan switch
-shows this automatic mode. Processing uses its own derived plan and does not
-replace the Scan tab's configured ROIs.
+in catalogue order. ROI Scan starts enabled and can be switched off for a
+full-field scan at the current Zoom. The switch remains editable during Run.
+Processing uses its own derived plan and does not replace the Scan tab's
+configured ROIs. With ROI Scan enabled, at least one valid enabled pattern
+is required to start acquisition.
 
 The existing live geometry/restart path applies edits, region-count changes and
 Zoom to these windows. Rectangles use their drawn bounds; circles, rings and freehand
@@ -117,3 +118,25 @@ completed, stopped, and error states plus sample progress. Stop cancels the
 remaining sequence. Cut steps run through the existing persisted scan queue.
 The deployment environment explicitly points `PROCESSING_PATTERNS_CONFIG` at
 the packaged catalogue; the distribution builder already requires this file.
+
+
+The Processing image includes Scan's message-panel styling below the viewer.
+It reports the live phase, chunks, bytes, display resolution, sample or pixel
+progress, path, ROI bounds, and pixel size. Custom workflows use their actual
+point count; parallel scans list each displayed ROI. Stream errors appear there
+even when the control card is collapsed.
+
+
+Processing's ROI Scan switch remains editable during Run. Turning it off
+restarts acquisition over the full field at the current Zoom; turning it on
+returns to the enabled pattern ROIs and their configured workflows. The
+existing stream handover stops the old request before starting the new mode.
+Parallel defaults to OFF, including when a second ROI is drawn; enable it
+explicitly to interleave regions rather than scan them sequentially.
+
+
+The Processing scan-path overlay follows the active acquisition display bounds.
+When ROI Scan is off, its sweep and marker span the full field even while ring
+and freehand patterns remain visible. Shape clipping, including ring holes,
+applies only when acquisition has an ROI; sequential scans show the current
+ROI and parallel scans show their active region list.

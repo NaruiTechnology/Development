@@ -84,15 +84,15 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     const { PresetNumberField } = await vite.ssrLoadModule("/src/components/PresetNumberField.tsx");
     store.dispatch({ type: "status/defaults/fulfilled", payload: { is_production: false, raster: {}, vector: {} } });
     store.dispatch(scan.setKind("roi"));
-    function Harness({ ready, request, processing = true, blocked = false }) {
+    function Harness({ ready, request, processing = true, blocked = false, scanKind = "vector" }) {
       const phase = useSelector((state) => state.scan.phase);
       const active = phase === "running" || phase === "stopping";
-      return React.createElement(ScanControls, { kind: "vector", disabled: active || blocked,
+      return React.createElement(ScanControls, { kind: scanKind, disabled: active || blocked,
         scanActive: active, processingMode: processing,
         firstRowContent: React.createElement(VectorScanExecutionSettings, { disabled: active || blocked, showScanPath: !processing }) });
     }
-    const render = (ready, request, processing = true, blocked = false) => React.createElement(Provider, { store },
-      React.createElement(Harness, { ready, request, processing, blocked }));
+    const render = (ready, request, processing = true, blocked = false, scanKind = "vector") => React.createElement(Provider, { store },
+      React.createElement(Harness, { ready, request, processing, blocked, scanKind }));
     const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 25)); });
     await act(async () => { renderer = create(render(false, 1)); });
     assert.equal(sockets.length, 0, "no acquisition before the configured image is ready");
@@ -220,6 +220,67 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     assert.equal(sockets[4].requests[0].pattern, "default");
     assert.equal(sockets[4].requests[0].continuous, true);
     assert.equal(store.getState().processing.instances.ring.workflow, "EvenLinelCut");
+    const roiToggle = () => renderer.root.findByProps({ className: "processing-parallel-controls" })
+      .findAllByType("input")[0];
+    const parallelToggle = () => renderer.root.findByProps({ className: "checkbox vacuum-switch app-switch scan-parallel-toggle" })
+      .findByType("input");
+    assert.equal(roiToggle().props.disabled, false, "ROI Scan stays editable during Run");
+    assert.ok(sockets.at(-1).requests[0].roi, "ROI Run uses the pattern bounds");
+    const switchROI = async checked => {
+      const previous = sockets.at(-1);
+      await act(async () => { roiToggle().props.onChange({ target: { checked } }); });
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 100)); });
+      await settle();
+      assert.equal(previous.readyState, Socket.CLOSED, "old stream closes before replacement");
+      assert.notEqual(sockets.at(-1), previous);
+      assert.equal(store.getState().scan.infiniteActive, true, "Run continues after mode switch, including sequential passes");
+      assert.equal(store.getState().scan.phase, "running");
+      assert.equal(store.getState().scan.streamRestarting, false);
+      assert.equal(roiToggle().props.checked, checked);
+    };
+    await switchROI(false);
+    assert.equal(sockets.at(-1).requests[0].roi ?? null, null, "OFF scans the full field");
+    assert.equal(store.getState().image.vectorROI, null, "display mapping follows the full-field request");
+    await act(async () => { sockets.at(-1).onmessage({ data: Uint8Array.of(0x12, 0x34).buffer }); });
+    await settle();
+    assert.equal(store.getState().image.vectorImage[0], 0x1234, "full-field samples paint outside the drawn ring");
+    assert.deepEqual(store.getState().processing.workflowProgress, [], "full-field scan has no ROI workflow steps");
+    // Drawing another enabled pattern must not silently select Parallel.
+    await act(async () => {
+      store.dispatch(processing.fetchProcessingPatterns.fulfilled({ patterns: [
+        ...store.getState().processing.specs,
+        { key: "free", model: "FreeHandModel", caption: "Free", icon: "free", roi: "polygon", parameters: [] },
+      ] }, "second"));
+      store.dispatch(processing.setPatternEnabled({ key: "free", enabled: true }));
+      store.dispatch(processing.setPatternRoi({ key: "free", roi: { points: [[5, 5], [15, 5], [10, 15]] } }));
+    });
+    assert.equal(parallelToggle().props.checked, false);
+    await switchROI(true);
+    assert.equal(parallelToggle().props.disabled, false);
+    assert.equal(parallelToggle().props.checked, false, "multiple ROIs start sequentially by default");
+    assert.ok(sockets.at(-1).requests[0].roi);
+    assert.equal(sockets.at(-1).requests[0].parallel_rois ?? null, null);
+    await switchROI(false);
+    assert.equal(sockets.at(-1).requests[0].roi ?? null, null);
+    await act(async () => { renderer.root.findAllByType("button").find(n => n.props.className === "btn btn--stop").props.onClick(); });
+    await settle();
+    const stoppedCount = sockets.length;
+    await settle();
+    assert.equal(sockets.length, stoppedCount, "Stop prevents any further restart");
+    await act(async () => { renderer.update(render(true, 4, true, false, "raster")); });
+    await clickRun();
+    assert.equal(sockets.at(-1).requests[0].roi ?? null, null, "raster starts full-field with ROI Scan off");
+    await switchROI(true);
+    assert.ok(sockets.at(-1).requests[0].roi, "raster switches to sequential pattern ROIs during Run");
+    assert.equal(parallelToggle().props.checked, false);
+    await switchROI(false);
+    assert.equal(sockets.at(-1).requests[0].roi ?? null, null, "raster returns to full-field during Run");
+    assert.equal(store.getState().image.rasterROI, null);
+    await act(async () => { sockets.at(-1).onmessage({ data: Uint8Array.of(0x23, 0x45).buffer }); });
+    await settle();
+    assert.equal(store.getState().image.frame[0], 0x2345, "raster full-field samples paint outside the patterns");
+
+
 
   } finally {
     if (renderer) await act(async () => { renderer.unmount(); });

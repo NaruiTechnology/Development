@@ -71,14 +71,19 @@ test("Processing drawn patterns drive live ROI windows, Zoom and Parallel withou
       const phase = useSelector((state) => state.scan.phase);
       const active = phase === "running" || phase === "stopping";
       return React.createElement(ScanControls, { kind: "vector", disabled: active,
-        scanActive: active, processingMode: true, autoStartRequest: 1, autoStartReady: true });
+        scanActive: active, processingMode: true });
     }
     const tick = (ms = 30) => act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)); });
     await act(async () => { renderer = create(React.createElement(Provider, { store }, React.createElement(Harness))); });
+    const roiToggle = () => renderer.root.findByProps({ className: "processing-parallel-controls" }).findAllByType("input")[0];
+    await act(async () => { roiToggle().props.onChange({ target: { checked: false } }); });
+    const run = renderer.root.findAllByType("button").find(node => node.props["aria-pressed"] !== undefined);
+    await act(async () => { await run.props.onClick(); });
     await tick();
-    assert.equal(sockets.at(-1).requests[0].roi, null, "no drawn pattern means full-field acquisition");
+    assert.equal(sockets.at(-1).requests[0].roi, null, "ROI Scan off starts full-field acquisition");
     await act(async () => { store.dispatch(processing.setPatternRoi({ key: "solidBox",
       roi: { x_start: 10, x_end: 30, y_start: 10, y_end: 30 } })); });
+    await act(async () => { roiToggle().props.onChange({ target: { checked: true } }); });
     await tick(450);
     let live = sockets.at(-1);
     const roi = live.requests[0].roi;
@@ -96,15 +101,19 @@ test("Processing drawn patterns drive live ROI windows, Zoom and Parallel withou
     await act(async () => { store.dispatch(processing.setPatternRoi({ key: "openBox",
       roi: { x_start: 50, x_end: 80, y_start: 50, y_end: 80 } })); });
     await tick(450);
-    assert.equal(sockets.at(-1).requests[0].parallel_rois.length, 2);
     const parallel = () => renderer.root.findByProps({ className: "checkbox vacuum-switch app-switch scan-parallel-toggle" }).findByType("input");
-    assert.equal(parallel().props.checked, true);
+    assert.equal(sockets.at(-1).requests[0].parallel_rois ?? null, null);
+    assert.equal(parallel().props.checked, false, "drawing a second ROI keeps sequential mode");
+    await act(async () => { parallel().props.onChange({ target: { checked: true } }); });
+    await tick(450);
+    assert.equal(sockets.at(-1).requests[0].parallel_rois.length, 2);
     assert.equal(parallel().props.disabled, false, "Parallel remains editable while live");
     await act(async () => { parallel().props.onChange({ target: { checked: false } }); });
     await tick(450);
     assert.equal(sockets.at(-1).requests[0].parallel_rois ?? null, null);
     assert.ok(sockets.at(-1).requests[0].roi, "Parallel off returns to sequential pattern windows");
     await act(async () => {
+      roiToggle().props.onChange({ target: { checked: false } });
       store.dispatch(processing.clearPatternRoi("solidBox"));
       store.dispatch(processing.clearPatternRoi("openBox"));
     });
@@ -112,8 +121,7 @@ test("Processing drawn patterns drive live ROI windows, Zoom and Parallel withou
     assert.deepEqual(sockets.at(-1).requests[0].roi,
       { x_start: 4096, x_end: 12287, y_start: 4096, y_end: 12287 },
       "clearing patterns restores the full-field plan while retaining the selected Zoom 2");
-    assert.equal(renderer.root.findByProps({ title: "ROI Scan follows the drawn patterns automatically." })
-      .findByType("input").props.checked, false);
+    assert.equal(roiToggle().props.checked, false);
     assert.deepEqual(store.getState().scan.roi.scan_regions, scanPlan, "Processing must not overwrite Scan's ROI plan");
     assert.equal(store.getState().scan.roi.roi_scan_enabled, true);
   } finally {

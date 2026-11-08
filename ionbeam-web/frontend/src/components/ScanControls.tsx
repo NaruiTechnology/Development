@@ -277,15 +277,16 @@ export function ScanControls({
   const shapeKey = JSON.stringify(patterns.specs.map((spec) => [spec.key, patterns.instances[spec.key]?.enabled, patterns.instances[spec.key]?.roi ?? null]));
   const processingPlan = useMemo(() => processingScanRegions(patterns.specs, patterns.instances, baseROIState),
     [shapeKey, baseROIState.x_origin, baseROIState.x_end, baseROIState.y_origin, baseROIState.y_end]);
+  const [processingROIScanEnabled, setProcessingROIScanEnabled] = useState(true);
   const roiState = useMemo(() => processingMode ? {
     ...baseROIState, selection: null, scan_regions: processingPlan.regions,
-    roi_scan_enabled: processingPlan.regions.length > 0,
+    roi_scan_enabled: processingROIScanEnabled && processingPlan.regions.length > 0,
     active_scan_region: Math.max(0, processingPlan.keys.indexOf(patterns.activeKey ?? "")),
-  } : baseROIState, [processingMode, baseROIState, processingPlan, patterns.activeKey]);
+  } : baseROIState, [processingMode, processingROIScanEnabled, baseROIState, processingPlan, patterns.activeKey]);
   useEffect(() => {
     if (processingMode) console.info("[processing] scan ROI plan", { patterns: processingPlan.keys,
-      regions: processingPlan.regions, roiScan: processingPlan.regions.length > 0, zoom: roiState.scan_zoom });
-  }, [processingMode, processingPlan, roiState.scan_zoom]);
+      regions: processingPlan.regions, roiScan: roiState.roi_scan_enabled, zoom: roiState.scan_zoom });
+  }, [processingMode, processingPlan, roiState.roi_scan_enabled, roiState.scan_zoom]);
   const roiStateRef = useRef(roiState);
   roiStateRef.current = roiState;
   const activeScanRegions = useMemo(
@@ -319,7 +320,7 @@ export function ScanControls({
   }, [phase]);
   const canParallelRegions = activeScanRegions.length > 1;
   useEffect(() => {
-    setParallelRegions(canParallelRegions);
+    if (!canParallelRegions) setParallelRegions(false);
   }, [canParallelRegions]);
   const selectedTargetGray = useAppSelector((s) => processingMode ? null : s.scan.selectedTargetGray);
   const defaults = useAppSelector((s) => s.status.defaults);
@@ -330,7 +331,7 @@ export function ScanControls({
   const roiSelectionKey = roi
     ? `${roi.x_start}:${roi.x_end}:${roi.y_start}:${roi.y_end}`
     : "";
-  const stream = useScanStream(processingMode ? processingPlan.regions.length : undefined);
+  const stream = useScanStream(processingMode ? activeScanRegions.length : undefined);
   const prevPhaseRef = useRef(phase);
   // Infinite mode repeats one prepared request until Stop: a Raster frame or a
   // Vector scan (with the scan type its progress/feedback handling needs).
@@ -682,19 +683,19 @@ export function ScanControls({
   }
 
   function defaultWorkflowProgress(): WorkflowProgress[] {
-    return processingPlan.keys.map(key => ({ id: `${key}:default`, pattern: patterns.specs.find(spec => spec.key === key)?.caption ?? key,
+    return (roiState.roi_scan_enabled ? processingPlan.keys : []).map(key => ({ id: `${key}:default`, pattern: patterns.specs.find(spec => spec.key === key)?.caption ?? key,
       caption: "Scan ROI", action: "Scan ROI", status: "upcoming", threshold: null, spot: 0, total: 0 }));
   }
 
   async function startRunRequest(repeatRegions = false, preserveCurrentFrame = false) {
-    if (startBlocked || scanHasErrors || (processingMode && !processingPlan.regions.length)) return;
+    if (startBlocked || scanHasErrors || (processingMode && processingROIScanEnabled && !processingPlan.regions.length)) return;
     runningROIScanEnabledRef.current = roiState.roi_scan_enabled;
     if (repeatRegions) runningParallelRegionsRef.current = parallelRegions;
     // Every run acquires only its requested regions. Preserve existing pixels
     // outside the ROI instead of sending an extra full-field pass to the DAC.
     const allowed = await refreshScanPrivilege();
     if (!allowed) return;
-    if (processingMode && patterns.workflows.length && processingPlan.keys.some(key => {
+    if (processingMode && roiState.roi_scan_enabled && patterns.workflows.length && processingPlan.keys.some(key => {
       const inst = patterns.instances[key];
       return inst.workflowEnabled && inst.workflow !== "default";
     })) {
@@ -794,7 +795,7 @@ export function ScanControls({
           req,
           displayROI: displayRegions[index] ?? null,
           initialFrame: initialFrames[index] ?? null,
-          workflowStepIds: processingMode ? [`${processingPlan.keys[index]}:default`] : undefined,
+          workflowStepIds: processingMode && roiState.roi_scan_enabled ? [`${processingPlan.keys[index]}:default`] : undefined,
         }));
         const scanEntries = parallelRegions && requests.length > 1
           ? [{
@@ -803,7 +804,7 @@ export function ScanControls({
               displayROI: null,
               displayROIs: displayRegions as ROIRequest[],
               initialFrame: initialFrames[0] ?? null,
-              workflowStepIds: processingMode ? processingPlan.keys.map(key => `${key}:default`) : undefined,
+              workflowStepIds: processingMode && roiState.roi_scan_enabled ? processingPlan.keys.map(key => `${key}:default`) : undefined,
             }]
           : entries;
         startRegionScanSequence(await persistScanSequence(scanEntries, repeatRegions), preserveCurrentFrame || (roiAreaDefined && rasterBackground !== null && (isProduction || !roiState.imageDataUrl)), repeatRegions);
@@ -834,7 +835,7 @@ export function ScanControls({
           scanType: resolveVectorScanType(req),
           displayROI: displayRegions[index] ?? null,
           initialFrame: initialFrames[index] ?? null,
-          workflowStepIds: processingMode ? [`${processingPlan.keys[index]}:default`] : undefined,
+          workflowStepIds: processingMode && roiState.roi_scan_enabled ? [`${processingPlan.keys[index]}:default`] : undefined,
         }));
         onScanRunStart?.(entries[0]?.scanType ?? ScanType.VECTOR);
         const scanEntries = parallelRegions && requests.length > 1
@@ -849,7 +850,7 @@ export function ScanControls({
               customPointROIs: requests.every((request) => request.pattern === "custom" && request.points)
                 ? requests.map((request) => request.roi ?? null) : undefined,
               initialFrame: initialFrames[0] ?? null,
-              workflowStepIds: processingMode ? processingPlan.keys.map(key => `${key}:default`) : undefined,
+              workflowStepIds: processingMode && roiState.roi_scan_enabled ? processingPlan.keys.map(key => `${key}:default`) : undefined,
             }]
           : entries;
         startRegionScanSequence(await persistScanSequence(scanEntries, repeatRegions), preserveCurrentFrame || (roiAreaDefined && vectorBackground !== null && (isProduction || !roiState.imageDataUrl)), repeatRegions);
@@ -860,11 +861,11 @@ export function ScanControls({
   }
 
   async function startInfiniteRequest(preserveCurrentFrame = false): Promise<void> {
-    if (processingMode && processingPlan.keys.some(key => patterns.instances[key].workflowEnabled && patterns.instances[key].workflow !== "default")) {
+    if (processingMode && roiState.roi_scan_enabled && processingPlan.keys.some(key => patterns.instances[key].workflowEnabled && patterns.instances[key].workflow !== "default")) {
       await startRunRequest(false, preserveCurrentFrame);
       return;
     }
-    if (processingMode && !processingPlan.regions.length) return;
+    if (processingMode && processingROIScanEnabled && !processingPlan.regions.length) return;
     if ((kind !== "raster" && kind !== "vector") || startBlocked || infiniteScanActiveRef.current || scanHasErrors) return;
     const startGeneration = zoomRestartGenerationRef.current;
     runningROIScanEnabledRef.current = roiState.roi_scan_enabled;
@@ -1610,7 +1611,7 @@ export function ScanControls({
     runStarting ||
     targetGrayRunning ||
     scanHasErrors ||
-    (processingMode && !processingPlan.regions.length);
+    (processingMode && processingROIScanEnabled && !processingPlan.regions.length);
   const stopDisabled = !stopAvailable || closing;
   const infiniteDisabled =
     (kind !== "raster" && kind !== "vector") || runDisabled || infiniteScanActive;
@@ -1895,8 +1896,10 @@ export function ScanControls({
         </span>
       )}
       {processingMode && <div className="processing-parallel-controls">
-        <label className="checkbox vacuum-switch app-switch scan-roi-toggle" title={t("processing.roiAutomatic")}>
-          <input type="checkbox" checked={roiState.roi_scan_enabled} disabled readOnly />
+        <label className="checkbox vacuum-switch app-switch scan-roi-toggle" title={t("processing.roiScan.title")}>
+          <input type="checkbox" checked={processingROIScanEnabled}
+            disabled={zoomDisabled || closing || settingsSaving || backendRestarting || targetGrayRunning}
+            onChange={(event) => setProcessingROIScanEnabled(event.target.checked)} />
           <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
           <span>{t("scan.roi.edit")}</span>
         </label>

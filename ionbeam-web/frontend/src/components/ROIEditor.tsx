@@ -134,7 +134,7 @@ export function ROIEditor({
   const processingPatterns = useAppSelector((s) => s.processing);
   // Gray readouts must not invalidate canvas painting or shape clipping.
   const processingRoiKey = JSON.stringify(processingPatterns.specs.map(spec =>
-    [spec.key, spec.model, processingPatterns.instances[spec.key]?.roi]));
+    [spec.key, spec.model, processingPatterns.instances[spec.key]?.enabled, processingPatterns.instances[spec.key]?.roi]));
   const measurementKey = JSON.stringify([processingRoiKey, imageWorldBounds(roi), roi.imageDataUrl, roi.scanImageDataUrl, processingPreview]);
   const measurementKeyRef = useRef(measurementKey);
   measurementKeyRef.current = measurementKey;
@@ -465,13 +465,15 @@ export function ROIEditor({
       return;
     }
     const regions = processingRegions?.length ? processingRegions : [processingROI];
-    // The processing preview is a shape mask over rectangular acquisition windows.
-    // Clip both the sweep and its marker; a ring hole must remain empty.
-    const shapes = processingPatterns.specs.flatMap((spec) => {
+    // Acquisition display bounds are authoritative: drawn patterns remain on
+    // screen when ROI Scan is off, but must not clip the full-field sweep.
+    // Within an ROI, clip both the sweep and marker, including ring holes.
+    const hasAcquisitionROI = processingROI !== null || Boolean(processingRegions?.length);
+    const shapes = hasAcquisitionROI ? processingPatterns.specs.flatMap((spec) => {
       if (vectorPattern === "custom" && workflowCurrentId && !workflowCurrentId.startsWith(`${spec.key}:`)) return [];
-      const shape = processingPatterns.instances[spec.key]?.roi;
-      return shape ? [shape] : [];
-    });
+      const instance = processingPatterns.instances[spec.key];
+      return instance?.enabled !== false && instance?.roi ? [instance.roi] : [];
+    }) : [];
     const clipPattern = shapes.length ? (ctx: CanvasRenderingContext2D) => {
       const image = imageWorldBounds(roi);
       const view = viewportBounds(roi);
