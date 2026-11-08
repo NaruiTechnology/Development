@@ -1,3 +1,4 @@
+import type { ImageWorkspace } from "../store/scanSlice";
 import type { RasterRequest, ROIRequest, VectorRequest } from "../types/api";
 import { apiUrl } from "./backendUrl.js";
 import { scanAuthHeaders } from "./authIdentity.js";
@@ -63,12 +64,12 @@ export async function prepareScanSequence(entries: StoredScanEntry[]): Promise<S
   return prepared;
 }
 
-export async function createScanQueue(entries: StoredScanEntry[]): Promise<{ summary: ScanQueueSummary; entries: StoredScanEntry[] }> {
+export async function createScanQueue(entries: StoredScanEntry[], workspace: ImageWorkspace = "scan"): Promise<{ summary: ScanQueueSummary; entries: StoredScanEntry[] }> {
   const prepared = await prepareScanSequence(entries);
   const summary = await queueJson("/api/scan/queues", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ entries: prepared }),
+    body: JSON.stringify({ entries: prepared, workspace }),
   }) as ScanQueueSummary;
   return {
     summary,
@@ -79,14 +80,14 @@ export async function createScanQueue(entries: StoredScanEntry[]): Promise<{ sum
   };
 }
 
-export async function latestScanQueue(): Promise<ScanQueueSummary | null> {
-  return queueJson("/api/scan/queues/latest") as Promise<ScanQueueSummary | null>;
+export async function latestScanQueue(workspace: ImageWorkspace = "scan"): Promise<ScanQueueSummary | null> {
+  return queueJson(`/api/scan/queues/latest?workspace=${workspace}`) as Promise<ScanQueueSummary | null>;
 }
 
-export async function loadScanQueue(summary: ScanQueueSummary): Promise<StoredScanEntry[]> {
+export async function loadScanQueue(summary: ScanQueueSummary, workspace: ImageWorkspace = "scan"): Promise<StoredScanEntry[]> {
   const entries: StoredScanEntry[] = [];
   for (let page = 0; page * 100 < summary.total; page += 1) {
-    const result = await queueJson(`/api/scan/queues/${summary.id}?page=${page}&page_size=100`) as {
+    const result = await queueJson(`/api/scan/queues/${summary.id}?page=${page}&page_size=100&workspace=${workspace}`) as {
       entries: StoredScanEntry[];
     };
     entries.push(...result.entries);

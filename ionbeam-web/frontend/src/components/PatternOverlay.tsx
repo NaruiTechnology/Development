@@ -17,7 +17,7 @@ import { useDeferredValue, memo, useEffect, useReducer, useRef, useState, type P
 
 import { patternBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
-import { useAppDispatch, useAppSelector } from "../store";
+import { useAppDispatch, useAppSelector, useWorkspaceActive } from "../store";
 import { useTranslation } from "../i18n";
 import { undoPatternRoi, commitPatternRoiEdit, clearPatternRoi, selectPattern, setPatternRoi } from "../store/processingSlice";
 
@@ -44,6 +44,7 @@ type Draft =
 
 export function PatternOverlay({ disabled, api }: { disabled: boolean; api: CanvasOverlayApi }) {
   const dispatch = useAppDispatch();
+  const workspaceActive = useWorkspaceActive();
   const { t } = useTranslation();
   const [menu, setMenu] = useState<{ x: number; y: number; key: string } | null>(null);
   const roi = useAppSelector((s) => s.scan.roi);
@@ -77,6 +78,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     if (draft.current) { draft.current = null; repaint(); }
   }, [activeKey, disabled]);              // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
+    if (!workspaceActive) return;
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
       if (target?.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]')) return;
@@ -90,7 +92,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [disabled, dispatch]);
+  }, [disabled, dispatch, workspaceActive]);
 
   function commit(roiValue: PatternRoi) {
     if (active) dispatch(setPatternRoi({ key: active.key, roi: roiValue }));

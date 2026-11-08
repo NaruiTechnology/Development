@@ -36,7 +36,8 @@ import { placeCompletedScan, replaceCompletedScanPane, type ImagePanelLayout } f
 import { setScanGeometry, setStreamTransforms } from "./store/scanSlice";
 import { saveDimensionCalibration } from "./store/dimensionCalibrationSlice";
 import { Footer } from "./components/Footer";
-import { ScanControls } from "./components/ScanControls";
+import { WorkspaceView } from "./components/WorkspaceView";
+import { WorkspaceScanControls } from "./components/WorkspaceScanControls";
 import { RasterParameters } from "./components/RasterParameters";
 import { ScanModeHelp } from "./components/ScanModeHelp";
 import { VectorParameters } from "./components/VectorParameters";
@@ -63,6 +64,7 @@ import { AdcTestControls, AdcTimelineCanvas } from "./components/AdcTest";
 import { DacRampPanel } from "./components/DacRampTest";
 import { BeamHoldPanel } from "./components/BeamHoldPanel";
 import { DacCheckHelp } from "./components/DacCheckHelp";
+import { useWorkspaceRef, useWorkspaceState } from "./hooks/useWorkspaceState";
 import { useAdcTestStream } from "./hooks/useAdcTestStream";
 import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
 import { targetGrayFilter } from "./lib/roiTargetGray";
@@ -96,7 +98,7 @@ import {
 import { resetRaster, resetVector } from "./store/imageSlice";
 import { fetchDefaults } from "./store/statusSlice";
 import { fetchProcessingPatterns } from "./store/processingSlice";
-import { useAppDispatch, useAppSelector } from "./store";
+import { getWorkspaceStore, WorkspaceProvider, useAppDispatch, useAppSelector, useAppWorkspace } from "./store";
 import { useTranslation } from "./i18n";
 import { scanAuthHeaders } from "./lib/authIdentity";
 import {
@@ -142,6 +144,17 @@ function CollapsibleScanParameters({ children }: { children: ReactNode }) {
 }
 
 export function App() {
+  useEffect(() => { void getWorkspaceStore("scan").dispatch(fetchDefaults()); }, []);
+  const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>("scan");
+  return <WorkspaceProvider workspace={activeTopTab === "processing" ? "processing" : "scan"}>
+    <WorkspaceApp activeTopTab={activeTopTab} setActiveTopTab={setActiveTopTab} />
+  </WorkspaceProvider>;
+}
+
+function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
+  activeTopTab: LeftTopTab; setActiveTopTab: (tab: LeftTopTab) => void;
+}) {
+  const imageWorkspace = useAppWorkspace();
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const mainRef = useRef<HTMLElement | null>(null);
@@ -163,11 +176,11 @@ export function App() {
   // Save results card starts collapsed. Collapsing only hides it —
   // ValidationPanel stays mounted so the filename insert, chosen folder
   // and auto-download keep working.
-  const [saveResultsCollapsed, setSaveResultsCollapsed] = useState(true);
+  const [saveResultsCollapsed, setSaveResultsCollapsed] = useWorkspaceState(imageWorkspace, true);
   // ADC test card (replaces the old ADC Test top tab). Starts collapsed;
   // while expanded, the right-hand panel shows the ADC timeline instead
   // of the scan canvas — the same view the old tab switched to.
-  const [adcTestCollapsed, setAdcTestCollapsed] = useState(true);
+  const [adcTestCollapsed, setAdcTestCollapsed] = useWorkspaceState(imageWorkspace, true);
   // Controls card (nested in the scan panel card) starts expanded.
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
   const [processingControlsCollapsed, setProcessingControlsCollapsed] = useState(false);
@@ -181,7 +194,7 @@ export function App() {
   const [processingHeaderHost, setProcessingHeaderHost] = useState<HTMLDivElement | null>(null);
   const handleVacuumActivityChange = useCallback((active: boolean) => {
     setVacuumControllerBusy(active);
-  }, []);
+  }, [imageWorkspace]);
   const previousVacuumWindowState = useRef<VacuumWindowState | null>(null);
   const serviceStatus = useAppSelector((s) => s.status.service);
   const vacuumEnabled = serviceStatus?.vacuum_enabled === true;
@@ -190,12 +203,19 @@ export function App() {
   const [highVoltagePending, setHighVoltagePending] = useState(false);
   const [highVoltageError, setHighVoltageError] = useState<string | null>(null);
   const storedKind = useAppSelector((s) => s.scan.kind);
-  const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>("scan");
-  const [scanSubTab, setScanSubTab] = useState<ScanSubTab>("vector");
+  const [scanSubTab, setScanSubTab] = useWorkspaceState<ScanSubTab>(imageWorkspace, "vector");
   const [calibrateSubTab, setCalibrateSubTab] = useState<CalibrateSubTab>(storedKind === "mag" ? "mag" : "dimension");
   const kind = controlCanvasKind(activeTopTab, scanSubTab, calibrateSubTab);
   const navigationRef = useRef({ activeTopTab, calibrateSubTab });
   navigationRef.current = { activeTopTab, calibrateSubTab };
+  useEffect(() => {
+    if (activeTopTab !== "scan") return;
+    const scanStore = getWorkspaceStore("scan");
+    if (scanStore.getState().scan.kind !== scanSubTab) scanStore.dispatch(setKind(scanSubTab));
+    if (scanStore.getState().scan.roi.calibration_enabled) {
+      scanStore.dispatch(updateROI({ calibration_enabled: false }));
+    }
+  }, [activeTopTab, scanSubTab]);
   const phase = useAppSelector((s) => s.scan.phase);
   const streamRestarting = useAppSelector((s) => s.scan.streamRestarting);
   const previewMode = useAppSelector((s) => s.scan.preview);
@@ -203,11 +223,11 @@ export function App() {
     setSaveResultsCollapsed(previewMode);
   }, [previewMode]);
   // "<kind>:<scanId>" of the scan whose image currently occupies the target pane.
-  const completedImageRecordedScanRef = useRef<string | null>(null);
-  const completedImagePaneRef = useRef<Record<"raster" | "vector", number>>({ raster: 0, vector: 0 });
+  const completedImageRecordedScanRef = useWorkspaceRef<string | null>(imageWorkspace, null);
+  const completedImagePaneRef = useWorkspaceRef<Record<"raster" | "vector", number>>(imageWorkspace, { raster: 0, vector: 0 });
   // Filled by ImageCanvas: snapshots the result shown in the live pane.
-  const captureTargetImageRef = useRef<(() => Promise<string | null>) | null>(null);
-  const splitInFlightRef = useRef(false);
+  const captureTargetImageRef = useWorkspaceRef<(() => Promise<string | null>) | null>(imageWorkspace, null);
+  const splitInFlightRef = useWorkspaceRef(imageWorkspace, false);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const adcTestEnabled = useAppSelector((s) => s.status.defaults?.adc_test !== false);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
@@ -218,19 +238,20 @@ export function App() {
   const vector = useAppSelector((s) => s.scan.vector);
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const vectorLatencyBytes = useAppSelector((s) => s.scan.vector.latency_bytes);
+  const processingImageInitialized = useRef(false);
   const roiState = useAppSelector((s) => s.scan.roi);
   const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
-  const [targetGrayDraft, setTargetGrayDraft] = useState(
+  const [targetGrayDraft, setTargetGrayDraft] = useWorkspaceState(imageWorkspace,
     selectedTargetGray === null ? "" : String(selectedTargetGray)
   );
-  const [targetGrayDraftInvalid, setTargetGrayDraftInvalid] = useState(false);
-  const [targetGraySkipped, setTargetGraySkipped] = useState(true);
+  const [targetGrayDraftInvalid, setTargetGrayDraftInvalid] = useWorkspaceState(imageWorkspace, false);
+  const [targetGraySkipped, setTargetGraySkipped] = useWorkspaceState(imageWorkspace, true);
   const targetGrayRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
   const dimensionCalibration = useAppSelector((s) => s.dimensionCalibration.values);
   const hasPersistedDimensionCalibration = useAppSelector(
     (s) => s.dimensionCalibration.persisted
   );
-  const roiStateRef = useRef(roiState);
+  const roiStateRef = useWorkspaceRef(imageWorkspace, roiState);
   roiStateRef.current = roiState;
   const roiSelectionKey = roiState.selection
     ? `${roiState.selection.x_start}:${roiState.selection.x_end}:${roiState.selection.y_start}:${roiState.selection.y_end}`
@@ -238,43 +259,43 @@ export function App() {
   const committedGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
   const committedGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
   const dimensionCalNavigationRequest = useAppSelector((s) => s.settings.dimensionCalNavigationRequest);
-  const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("vector");
-  const [lastLiveScanImage, setLastLiveScanImage] = useState<{
+  const [lastScanKind, setLastScanKind] = useWorkspaceState<Extract<ScanKind, "raster" | "vector">>(imageWorkspace, "vector");
+  const [lastLiveScanImage, setLastLiveScanImage] = useWorkspaceState<{
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
-  } | null>(null);
-  const captureScanImageRef = useRef<(() => CapturedScanImage | null) | null>(null);
+  } | null>(imageWorkspace, null);
+  const captureScanImageRef = useWorkspaceRef<(() => CapturedScanImage | null) | null>(imageWorkspace, null);
   // Each scan kind keeps its own pane layout: splitting the vector view must not
   // open empty panes on the raster view (and vice versa). Once any view has
   // been split, the other one splits itself after its first completed scan.
-  const [imagePanelLayoutByKind, setImagePanelLayoutByKind] = useState<
+  const [imagePanelLayoutByKind, setImagePanelLayoutByKind] = useWorkspaceState<
     Record<"raster" | "vector", ImagePanelLayout>
-  >({ raster: 1, vector: 1 });
+  >(imageWorkspace, { raster: 1, vector: 1 });
   const imagePanelLayout: ImagePanelLayout =
     kind === "raster" || kind === "vector" ? imagePanelLayoutByKind[kind] : 1;
   const imagePanelSplitActive =
     imagePanelLayoutByKind.raster > 1 || imagePanelLayoutByKind.vector > 1;
-  const [imagePanelLocked, setImagePanelLocked] = useState(true);
-  const [singlePaneImages, setSinglePaneImages] = useState<Record<"raster" | "vector", string | null>>({ raster: null, vector: null });
-  const savedSplitRef = useRef<{
+  const [imagePanelLocked, setImagePanelLocked] = useWorkspaceState(imageWorkspace, true);
+  const [singlePaneImages, setSinglePaneImages] = useWorkspaceState<Record<"raster" | "vector", string | null>>(imageWorkspace, { raster: null, vector: null });
+  const savedSplitRef = useWorkspaceRef<{
     layouts: Record<"raster" | "vector", ImagePanelLayout>;
     selected: Record<"raster" | "vector", number>;
     targets: Record<"raster" | "vector", number>;
     completed: Record<"raster" | "vector", number>;
-  } | null>(null);
-  const [selectedImagePane, setSelectedImagePane] = useState<
+  } | null>(imageWorkspace, null);
+  const [selectedImagePane, setSelectedImagePane] = useWorkspaceState<
     Record<"raster" | "vector", number>
-  >({ raster: 0, vector: 0 });
-  const [scanTargetImagePane, setScanTargetImagePane] = useState<
+  >(imageWorkspace, { raster: 0, vector: 0 });
+  const [scanTargetImagePane, setScanTargetImagePane] = useWorkspaceState<
     Record<"raster" | "vector", number>
-  >({ raster: 0, vector: 0 });
-  const previousScanPhaseRef = useRef(phase);
-  const [, setCompletedImageHistory] = useState<
+  >(imageWorkspace, { raster: 0, vector: 0 });
+  const previousScanPhaseRef = useWorkspaceRef(imageWorkspace, phase);
+  const [, setCompletedImageHistory] = useWorkspaceState<
     Record<"raster" | "vector", string[]>
-  >({ raster: [], vector: [] });
-  const [imagePanelSlots, setImagePanelSlots] = useState<
+  >(imageWorkspace, { raster: [], vector: [] });
+  const [imagePanelSlots, setImagePanelSlots] = useWorkspaceState<
     Record<"raster" | "vector", Array<string | null>>
-  >({ raster: [], vector: [] });
+  >(imageWorkspace, { raster: [], vector: [] });
 
   useEffect(() => {
     if (streamRestarting) return;
@@ -289,30 +310,30 @@ export function App() {
       current[kind] === targetPane ? current : { ...current, [kind]: targetPane }
     );
   }, [imagePanelLayout, imagePanelLocked, kind, phase, selectedImagePane, streamRestarting]);
-  const suppressedROIScanImageUrlRef = useRef<string | null>(null);
-  const previousROIImageRef = useRef({
+  const suppressedROIScanImageUrlRef = useWorkspaceRef<string | null>(imageWorkspace, null);
+  const previousROIImageRef = useWorkspaceRef(imageWorkspace, {
     imageDataUrl: roiState.imageDataUrl,
   });
-  const [suppressedROIScanImageUrl, setSuppressedROIScanImageUrl] = useState<string | null>(null);
-  const [pendingGrayScaleSelection, setPendingGrayScaleSelection] = useState<GrayScaleSelection>(committedGrayScaleSelection);
-  const [pendingGrayScaleAnchor, setPendingGrayScaleAnchor] = useState<number | null>(null);
-  const [pendingGrayScaleSkipped, setPendingGrayScaleSkipped] = useState<boolean | null>(committedGrayScaleSkipped);
-  const [grayScaleLevels, setGrayScaleLevels] = useState<number[]>([]);
-  const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useState(false);
-  const [grayScaleConfirmTarget, setGrayScaleConfirmTarget] = useState<"roi" | "vector" | "target">("roi");
-  const [pendingTargetGrayPoint, setPendingTargetGrayPoint] = useState<{ x: number; y: number } | null>(null);
-  const [grayScaleCommitCount, setGrayScaleCommitCount] = useState(0);
-  const [vectorGrayLevelsEnabled, setVectorGrayLevelsEnabled] = useState(false);
-  const [vectorGrayFilterApplied, setVectorGrayFilterApplied] = useState(false);
-  const [vectorGrayRange, setVectorGrayRange] = useState<[number, number]>([0, 255]);
-  const [vectorGrayScaleSkipped, setVectorGrayScaleSkipped] = useState<boolean | null>(null);
-  const [appliedVectorGrayRange, setAppliedVectorGrayRange] = useState<[number, number]>([0, 255]);
-  const vectorGrayRangeEditedRef = useRef(false);
-  const [activeScanType, setActiveScanType] = useState<ScanType | null>(null);
-  const [mergedFigureByKind, setMergedFigureByKind] = useState<{
+  const [suppressedROIScanImageUrl, setSuppressedROIScanImageUrl] = useWorkspaceState<string | null>(imageWorkspace, null);
+  const [pendingGrayScaleSelection, setPendingGrayScaleSelection] = useWorkspaceState<GrayScaleSelection>(imageWorkspace, committedGrayScaleSelection);
+  const [pendingGrayScaleAnchor, setPendingGrayScaleAnchor] = useWorkspaceState<number | null>(imageWorkspace, null);
+  const [pendingGrayScaleSkipped, setPendingGrayScaleSkipped] = useWorkspaceState<boolean | null>(imageWorkspace, committedGrayScaleSkipped);
+  const [grayScaleLevels, setGrayScaleLevels] = useWorkspaceState<number[]>(imageWorkspace, []);
+  const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useWorkspaceState(imageWorkspace, false);
+  const [grayScaleConfirmTarget, setGrayScaleConfirmTarget] = useWorkspaceState<"roi" | "vector" | "target">(imageWorkspace, "roi");
+  const [pendingTargetGrayPoint, setPendingTargetGrayPoint] = useWorkspaceState<{ x: number; y: number } | null>(imageWorkspace, null);
+  const [grayScaleCommitCount, setGrayScaleCommitCount] = useWorkspaceState(imageWorkspace, 0);
+  const [vectorGrayLevelsEnabled, setVectorGrayLevelsEnabled] = useWorkspaceState(imageWorkspace, false);
+  const [vectorGrayFilterApplied, setVectorGrayFilterApplied] = useWorkspaceState(imageWorkspace, false);
+  const [vectorGrayRange, setVectorGrayRange] = useWorkspaceState<[number, number]>(imageWorkspace, [0, 255]);
+  const [vectorGrayScaleSkipped, setVectorGrayScaleSkipped] = useWorkspaceState<boolean | null>(imageWorkspace, null);
+  const [appliedVectorGrayRange, setAppliedVectorGrayRange] = useWorkspaceState<[number, number]>(imageWorkspace, [0, 255]);
+  const vectorGrayRangeEditedRef = useWorkspaceRef(imageWorkspace, false);
+  const [activeScanType, setActiveScanType] = useWorkspaceState<ScanType | null>(imageWorkspace, null);
+  const [mergedFigureByKind, setMergedFigureByKind] = useWorkspaceState<{
     raster: string | null;
     vector: string | null;
-  }>({
+  }>(imageWorkspace, {
     raster: null,
     vector: null,
   });
@@ -350,17 +371,18 @@ export function App() {
     showROIPreviewSideCardBase && activeTopTab !== "processing" && !adcView && !showInlineSampleStage;
   const showROIThirdColumn = showROIPreviewSideCard || showInlineSampleStage;
 
+  const processingPatternsLoaded = useRef(false);
   useEffect(() => {
-    dispatch(fetchDefaults());
-    // processingPatterns.json: one model instance + card per non-skipped entry, built at launch
+    if (imageWorkspace !== "processing" || processingPatternsLoaded.current) return;
+    processingPatternsLoaded.current = true;
     void dispatch(fetchProcessingPatterns());
-  }, [dispatch]);
+  }, [dispatch, imageWorkspace]);
 
   useEffect(() => {
     if (!adcTestEnabled) setAdcTestCollapsed(true);
   }, [adcTestEnabled]);
 
-  const dimensionCalibrationRestoredRef = useRef(false);
+  const dimensionCalibrationRestoredRef = useWorkspaceRef(imageWorkspace, false);
   useEffect(() => {
     if (dimensionCalibrationRestoredRef.current) return;
     dimensionCalibrationRestoredRef.current = true;
@@ -373,7 +395,7 @@ export function App() {
   // shared across browsers/operators instead of being stuck in whichever one last confirmed it. The local
   // copy above applies instantly (works offline, no flash of defaults); if the backend has a row for the
   // currently selected equipment, it supersedes the local copy once the fetch resolves.
-  const dimensionCalibrationRemoteSyncedRef = useRef(false);
+  const dimensionCalibrationRemoteSyncedRef = useWorkspaceRef(imageWorkspace, false);
   useEffect(() => {
     if (dimensionCalibrationRemoteSyncedRef.current) return;
     dimensionCalibrationRemoteSyncedRef.current = true;
@@ -401,7 +423,7 @@ export function App() {
 
   // Rectified scan geometry (Admin > Calibration > Scan geometry): when one is applied, ROI / bitmap scans map world
   // µm to DAC codes through it. Loaded once; on failure scans keep the linear ROI mapping.
-  const scanGeometryLoadedRef = useRef(false);
+  const scanGeometryLoadedRef = useWorkspaceRef(imageWorkspace, false);
   useEffect(() => {
     if (scanGeometryLoadedRef.current) return;
     scanGeometryLoadedRef.current = true;
@@ -517,7 +539,7 @@ export function App() {
     } finally {
       setHighVoltagePending(false);
     }
-  }, [highVoltagePending, highVoltagePower, isVacuumSystemReady, signedInUser?.login_name, t]);
+  }, [highVoltagePending, highVoltagePower, isVacuumSystemReady, signedInUser?.login_name, t, imageWorkspace]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -658,10 +680,7 @@ export function App() {
     roiState.scanImageDataUrl !== null;
   const roiCachedScanImageUrl =
     kind === "roi" && hasPartialROI ? roiState.scanImageDataUrl : null;
-  const serverScanImageUrl =
-    lastScanKind === "vector"
-      ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}&view=texture&_=${imageRevision}`
-      : `/api/scan/last/figure?view=texture&_=${imageRevision}`;
+  const serverScanImageUrl = lastResult?.artifacts?.figureDataUrl ?? null;
   const roiScanImageUrl =
     kind === "roi" && hasPriorScanImage
       ? lastLiveScanImage?.kind === lastScanKind
@@ -786,7 +805,7 @@ export function App() {
         isSkipped: null,
       })
     );
-  }, [dispatch]);
+  }, [dispatch, imageWorkspace]);
 
   useEffect(() => {
     if (phase === "running" || phase === "stopping" || streamRestarting) return;
@@ -822,7 +841,7 @@ export function App() {
       setGrayScaleConfirmOpen(false);
       setGrayScaleCommitCount(0);
     },
-    [clearCommittedGrayScaleSelection, dispatch]
+    [clearCommittedGrayScaleSelection, dispatch, imageWorkspace]
   );
 
   const handleClearROIGrayScaleValues = useCallback(() => {
@@ -832,23 +851,27 @@ export function App() {
     setPendingGrayScaleSkipped(null);
     setGrayScaleConfirmOpen(false);
     setGrayScaleCommitCount(0);
-  }, [clearCommittedGrayScaleSelection]);
+  }, [clearCommittedGrayScaleSelection, imageWorkspace]);
 
   useEffect(() => {
     setPendingGrayScaleSelection(committedGrayScaleSelection);
     setPendingGrayScaleAnchor(null);
-  }, [committedGrayScaleSelection]);
+    setPendingGrayScaleSkipped(committedGrayScaleSkipped);
+    setGrayScaleConfirmOpen(false);
+    setPendingTargetGrayPoint(null);
+    vectorGrayRangeEditedRef.current = false;
+  }, [committedGrayScaleSelection, committedGrayScaleSkipped, imageWorkspace]);
 
   useEffect(() => {
     setTargetGrayDraft(selectedTargetGray === null ? "" : String(selectedTargetGray));
     setTargetGrayDraftInvalid(false);
-  }, [selectedTargetGray]);
+  }, [selectedTargetGray, imageWorkspace]);
 
   useEffect(() => {
     if (selectedTargetGray === null) return;
     setVectorGrayLevelsEnabled(false);
     setVectorGrayFilterApplied(false);
-  }, [selectedTargetGray]);
+  }, [selectedTargetGray, imageWorkspace]);
 
   function commitTargetGrayDraft() {
     const text = targetGrayDraft.trim();
@@ -927,7 +950,7 @@ export function App() {
     roiState.viewport_y_end,
   ]);
 
-  const previousROISelectionKeyRef = useRef(roiSelectionKey);
+  const previousROISelectionKeyRef = useWorkspaceRef(imageWorkspace, roiSelectionKey);
   useEffect(() => {
     if (previousROISelectionKeyRef.current === roiSelectionKey) return;
     previousROISelectionKeyRef.current = roiSelectionKey;
@@ -1048,6 +1071,7 @@ export function App() {
       scanTargetImagePane,
       selectedImagePane,
       t,
+      imageWorkspace,
     ]
   );
 
@@ -1107,7 +1131,7 @@ export function App() {
     setImagePanelLayoutByKind((current) => ({ ...current, [kind]: 2 }));
     setSelectedImagePane((current) => ({ ...current, [kind]: targetPane }));
     setScanTargetImagePane((current) => ({ ...current, [kind]: targetPane }));
-  }, [canSplitImagePanel, currentTargetImage, kind, scanActive]);
+  }, [canSplitImagePanel, currentTargetImage, kind, scanActive, imageWorkspace]);
 
   const handleMergedFigureChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
@@ -1115,7 +1139,7 @@ export function App() {
         current[scanKind] === imageUrl ? current : { ...current, [scanKind]: imageUrl }
       );
     },
-    []
+    [imageWorkspace]
   );
 
   const handleImagePaneChange = useCallback(
@@ -1126,7 +1150,7 @@ export function App() {
         return { ...current, [scanKind]: slots };
       });
     },
-    []
+    [imageWorkspace]
   );
 
   const handleImagePaneRecycle = useCallback(
@@ -1138,7 +1162,7 @@ export function App() {
       setSelectedImagePane((current) => ({ ...current, [scanKind]: pane }));
       setScanTargetImagePane((current) => ({ ...current, [scanKind]: pane }));
     },
-    [],
+    [imageWorkspace],
   );
 
   const handleImagePaneSelect = useCallback(
@@ -1147,12 +1171,13 @@ export function App() {
         current[scanKind] === pane ? current : { ...current, [scanKind]: pane }
       );
     },
-    []
+    [imageWorkspace]
   );
 
   const handleSimulationImageChange = useCallback(
     (imageUrl: string | null) => {
       if (activeTopTab === "processing") {
+        processingImageInitialized.current = true;
         setProcessingImageError(null);
       }
       if (kind !== "raster" && kind !== "vector") return;
@@ -1173,11 +1198,11 @@ export function App() {
         setScanTargetImagePane((current) => ({ ...current, [scanKind]: pane }));
       }
     },
-    [imagePanelLayoutByKind, kind, selectedImagePane, activeTopTab],
+    [imagePanelLayoutByKind, kind, selectedImagePane, activeTopTab, imageWorkspace],
   );
 
   useEffect(() => {
-    if (activeTopTab !== "processing") return;
+    if (activeTopTab !== "processing" || processingImageInitialized.current) return;
     const controller = new AbortController();
     let cancelled = false;
     setProcessingImageError(null);
@@ -1194,12 +1219,13 @@ export function App() {
             probe.onerror = () => reject(new Error(t("processing.imageInvalid")));
             probe.src = image.data_url;
           });
-          if (cancelled) return;
+          if (cancelled || processingImageInitialized.current) return;
           clearBitmapSelectionCache();
           dispatch(updateROI({ imageName: image.name, imageDataUrl: image.data_url,
             imageKind: "file", imageBounds: null, roiScanResultUrl: null, scanImageDataUrl: null }));
         }
         if (cancelled) return;
+        processingImageInitialized.current = true;
       } catch (error) {
         if (!cancelled) setProcessingImageError(error instanceof Error ? error.message : String(error));
       }
@@ -1216,7 +1242,7 @@ export function App() {
     setPendingGrayScaleAnchor(null);
     setPendingGrayScaleSkipped(false);
     setGrayScaleConfirmOpen(true);
-  }, [scanControlsSafetyDisabled, targetGrayRunning, phase]);
+  }, [scanControlsSafetyDisabled, targetGrayRunning, phase, imageWorkspace]);
 
   const handleGrayScaleSelect = useCallback((grayScale: number) => {
     setGrayScaleConfirmTarget("roi");
@@ -1236,13 +1262,13 @@ export function App() {
     setPendingGrayScaleSelection((next ?? [grayScale, grayScale]) as GrayScaleSelection);
     setGrayScaleCommitCount(0);
     setGrayScaleConfirmOpen(true);
-  }, [grayScaleCommitCount, pendingGrayScaleAnchor, pendingGrayScaleSelection]);
+  }, [grayScaleCommitCount, pendingGrayScaleAnchor, pendingGrayScaleSelection, imageWorkspace]);
 
   const handleGrayScaleConfirm = useCallback(() => {
     if (pendingGrayScaleSelection === null || pendingGrayScaleAnchor !== null) return;
     setPendingGrayScaleSkipped(false);
     setGrayScaleConfirmOpen(true);
-  }, [pendingGrayScaleAnchor, pendingGrayScaleSelection]);
+  }, [pendingGrayScaleAnchor, pendingGrayScaleSelection, imageWorkspace]);
 
   const handleGrayScaleConfirmAccept = useCallback(() => {
     if (pendingGrayScaleSelection === null || pendingGrayScaleAnchor !== null) return;
@@ -1292,6 +1318,7 @@ export function App() {
     scanActive,
     roiState.imageKind,
     roiState.scanImageDataUrl,
+    imageWorkspace,
   ]);
 
   const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
@@ -1301,7 +1328,7 @@ export function App() {
     // Switching on only arms the sliders. A range becomes active exclusively
     // in the confirmation handler; switching off removes the current filter.
     if (!checked) setVectorGrayFilterApplied(false);
-  }, [appliedVectorGrayRange]);
+  }, [appliedVectorGrayRange, imageWorkspace]);
 
   useEffect(() => {
     if (!vectorGrayFilterActive || vectorLatencyBytes >= 8196) return;
@@ -1316,7 +1343,7 @@ export function App() {
       }
       return normalized;
     });
-  }, []);
+  }, [imageWorkspace]);
 
   const handleVectorGrayRangeSelect = useCallback((explicit = false) => {
     if (!shouldConfirmVectorGrayRange({
@@ -1333,7 +1360,7 @@ export function App() {
     setPendingGrayScaleAnchor(null);
     setPendingGrayScaleSkipped(false);
     setGrayScaleConfirmOpen(true);
-  }, [vectorGrayLevelsEnabled, vectorGrayFilterApplied, vectorGrayRange, appliedVectorGrayRange]);
+  }, [vectorGrayLevelsEnabled, vectorGrayFilterApplied, vectorGrayRange, appliedVectorGrayRange, imageWorkspace]);
 
   const handleLoadLastScan = useCallback(() => {
     if (!roiScanImageUrl) return;
@@ -1348,7 +1375,7 @@ export function App() {
         imageBounds: null,
       })
     );
-  }, [dispatch, resetROIContext, roiScanImageUrl, t]);
+  }, [dispatch, resetROIContext, roiScanImageUrl, t, imageWorkspace]);
 
   function selectKind(nextKind: ScanKind) {
     if (nextKind === storedKind) return;
@@ -1388,12 +1415,11 @@ export function App() {
   }
 
   function activateCalibrateSubTab(nextTab: CalibrateSubTab) {
+    const dispatch = getWorkspaceStore("scan").dispatch;
     setActiveTopTab("calibrate");
     setCalibrateSubTab(nextTab);
     if (nextTab === "dimension") {
-      if (kind !== "roi") {
-        selectKind("roi");
-      }
+      dispatch(setKind("roi"));
       dispatch(
         hasPersistedDimensionCalibration
           ? applyPersistedDimensionCalibration(dimensionCalibration)
@@ -1402,7 +1428,7 @@ export function App() {
       return;
     }
     dispatch(updateROI({ calibration_enabled: false }));
-    selectKind("mag");
+    dispatch(setKind("mag"));
   }
 
   function handleImagePanelLockChange(locked: boolean) {
@@ -1434,19 +1460,14 @@ export function App() {
   }
 
   function activateScanTopTab() {
-    closeImagePanelSplit();
     setActiveTopTab("scan");
-    activateScanSubTab(scanSubTab);
   }
 
   // Processing: pattern ROIs are drawn on the ROI canvas, so it runs on the "roi" kind like the dimension view.
   function activateProcessingTopTab() {
-    closeImagePanelSplit();
     setActiveTopTab("processing");
     setProcessingControlsCollapsed(false);
     setProcessingEntryRequest((value) => value + 1);
-    dispatch(updateROI({ calibration_enabled: false }));
-    selectKind("roi");
   }
 
   function activateCalibrateTopTab() {
@@ -1494,6 +1515,7 @@ export function App() {
 
   const roiCanvas = (
     <ROIEditor
+      key={imageWorkspace}
       disabled={panelDisabled}
       variant="canvas"
       backgroundImageUrl={activeROIScanImageUrl}
@@ -1669,7 +1691,7 @@ export function App() {
                   role="tab"
                   className="tab tab--top"
                   aria-selected={activeTopTab === "scan"}
-                  disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning}
+                  disabled={scanControlsSafetyDisabled}
                   onClick={activateScanTopTab}
                 >
                   <Icon name="scan" tone="tab" />
@@ -1683,7 +1705,7 @@ export function App() {
                 aria-selected={activeTopTab === "processing"}
                 title={t("tabs.processing")}
                 aria-label={t("tabs.processing")}
-                disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning}
+                disabled={scanControlsSafetyDisabled}
                 onClick={activateProcessingTopTab}
               >
                 <Icon name="target" tone="tab" />
@@ -1834,7 +1856,7 @@ export function App() {
                   </>
                 )
               )}
-              {(activeTopTab === "scan" || activeTopTab === "processing") && (
+              <div hidden={activeTopTab !== "scan" && activeTopTab !== "processing"}>
                 <>
                   <div className={`card scan-controls-card${activeScanColor ? " scan-controls-card--active" : ""}`}>
                       <div className="card__header">
@@ -1852,9 +1874,13 @@ export function App() {
                       </div>
                       {/* hidden, not unmounted: ScanControls owns the live scan stream */}
                       <div className="card__body" hidden={activeTopTab === "processing" ? processingControlsCollapsed : controlsCollapsed}>
-                        <ScanControls
+                        {(["scan", "processing"] as const).map(workspace => (
+                          <div key={workspace} hidden={activeTopTab !== workspace}>
+                        <WorkspaceScanControls
+                          workspace={workspace}
+                          active={activeTopTab === workspace}
                           kind={scanSubTab}
-                          processingMode={activeTopTab === "processing"}
+                          processingMode={workspace === "processing"}
                           disabled={panelDisabled}
                           scanActive={scanActive}
                           zoomDisabled={scanControlsSafetyDisabled}
@@ -1867,13 +1893,15 @@ export function App() {
                           firstRowContent={(
                             <>
                               {scanSubTab === "vector" ? (
-                                <VectorScanExecutionSettings disabled={panelDisabled} grayLevelFilterActive={vectorGrayFilterActive} showScanPath={activeTopTab !== "processing"} />
+                                <VectorScanExecutionSettings disabled={panelDisabled} grayLevelFilterActive={vectorGrayFilterActive} showScanPath={workspace !== "processing"} />
                               ) : <RasterScanExecutionSettings disabled={panelDisabled} />}
                             </>
                           )}
                           onScanRunStart={setActiveScanType}
                           validatedActionsHost={validatedActionsHost}
                         />
+                          </div>
+                        ))}
                       </div>
                     </div>
                   {activeTopTab === "processing" && <ProcessingPatternCards disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} />}
@@ -1910,7 +1938,7 @@ export function App() {
                     </div>
                   </div>}
                 </>
-              )}
+              </div>
               {adcTestEnabled && activeTopTab === "scan" && scanSubTab === "vector" && (
                 <div className="card adc-test-card">
                   <div className="card__header">
@@ -2023,15 +2051,16 @@ export function App() {
                 )}
             </div>
             <div className="card__body">
-              <div hidden={activeTopTab !== "processing" || adcView}>
+              <WorkspaceView workspace="processing" active={activeTopTab === "processing" && !adcView}>
                 <ProcessingImagePanel headerHost={processingHeaderHost}>
-                  {activeTopTab === "processing" && !adcView ? roiCanvas : null}
+                  {roiCanvas}
                 </ProcessingImagePanel>
-                {activeTopTab === "processing" && !adcView && <ProcessingScanStatus kind={scanSubTab} />}
-              </div>
+                <ProcessingScanStatus kind={scanSubTab} />
+              </WorkspaceView>
+              <WorkspaceView workspace="scan" active={activeTopTab !== "processing"}>
                 {adcView ? (
                   <AdcTimelineCanvas state={adcTest.state} />
-              ) : activeTopTab === "processing" ? null : kind === "roi" ? (
+              ) : kind === "roi" ? (
                   roiCanvas
               ) : kind === "mag" ? (
                 <MagCalibrationChart />
@@ -2064,6 +2093,7 @@ export function App() {
                   onSelectedPaneChange={handleImagePaneSelect}
                 />
               )}
+              </WorkspaceView>
             </div>
           </div>
         </section>

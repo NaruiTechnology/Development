@@ -6,7 +6,7 @@
  *   - Live stream (WebSocket)                -> just downloads, no checks
  *
  * Download buttons:
- *   - CSV: validated runs hit /api/scan/last/csv on the server.
+ *   - CSV: validated runs use their captured CSV snapshot.
  *          Live streams (no validated result) generate the CSV
  *          client-side from imageSlice; matches the server format.
  *   - Figure (PNG), first available of:
@@ -14,7 +14,7 @@
  *          2. the live canvas image — the same pixels the canvas shows and
  *             the merged FTP upload is built from (gray filter, levels,
  *             decimation) — with the glass scan-parameter chip burned in;
- *          3. fallback /api/scan/last/figure (matplotlib, server-side) with
+ *          3. fallback to this workspace's captured server figure with
  *             the scan-parameter summary appended as a caption band.
  *
  * Auto download saves the PNG first, then the CSV. When edits are merged
@@ -286,7 +286,9 @@ export function ValidationPanel({
 
   async function csvDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
     if (haveValidatedData) {
-      const r = await fetch(apiUrl("/api/scan/last/csv"));
+      const savedCsv = result?.artifacts?.csvDataUrl;
+      if (!savedCsv) throw new Error("No saved CSV is available for this workspace's run.");
+      const r = await fetch(savedCsv);
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
       const blob = await r.blob();
       return {
@@ -350,11 +352,9 @@ export function ValidationPanel({
       }
     }
 
-    const url =
-      kind === "vector"
-        ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}`
-        : "/api/scan/last/figure";
-    const r = await fetch(apiUrl(url));
+    const url = result?.artifacts?.figureDataUrl;
+    if (!url) throw new Error("No saved figure is available for this workspace's run.");
+    const r = await fetch(url);
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
       throw new Error(`HTTP ${r.status}: ${detail || "figure render failed"}`);

@@ -7,7 +7,7 @@ import { useAppSelector } from "../store";
 import { selectGlobalPixelSize } from "../store/selectors";
 import type { ROIRequest } from "../types/api";
 
-/** The Processing viewer shares Scan's message-panel appearance and live stream counters. */
+/** Processing status reads only its workspace store and stream counters. */
 export function ProcessingScanStatus({ kind }: { kind: "raster" | "vector" }) {
   const { t, fmt } = useTranslation();
   const scan = useAppSelector(s => s.scan);

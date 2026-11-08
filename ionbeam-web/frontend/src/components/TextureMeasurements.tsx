@@ -1,3 +1,4 @@
+import { useWorkspaceActive } from "../store";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { TranslationApi } from "../i18n";
 import type { ImageExtent } from "../lib/imageScale";
@@ -14,10 +15,12 @@ export function TextureMeasurements({ frameRef, edge, extent, rotate90, enabled,
   rotate90: boolean;
   enabled: boolean;
 }) {
+  const workspaceActive = useWorkspaceActive();
   const cancelGesture = useRef<(() => void) | null>(null);
   const [lines, setLines] = useState<Measurement[]>([]);
   const [draft, setDraft] = useState<Measurement | null>(null);
   useEffect(() => {
+    if (!workspaceActive) return;
     const frame = frameRef.current;
     if (!frame || !enabled) return;
     let active: Measurement | null = null;
@@ -91,9 +94,10 @@ export function TextureMeasurements({ frameRef, edge, extent, rotate90, enabled,
       frame.removeEventListener("click", click, true);
       if (pointer !== null && frame.hasPointerCapture(pointer)) frame.releasePointerCapture(pointer);
     };
-  }, [frameRef, enabled]);
+  }, [frameRef, enabled, workspaceActive]);
 
   useEffect(() => {
+    if (!workspaceActive) return;
     if (!enabled || (!lines.length && !draft)) return;
     const undo = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.key.toLowerCase() !== "z") return;
@@ -106,7 +110,7 @@ export function TextureMeasurements({ frameRef, edge, extent, rotate90, enabled,
     };
     window.addEventListener("keydown", undo, true);
     return () => window.removeEventListener("keydown", undo, true);
-  }, [enabled, lines.length, draft]);
+  }, [enabled, lines.length, draft, workspaceActive]);
 
   if (!enabled) return null;
   const visible = draft ? [...lines, draft] : lines;

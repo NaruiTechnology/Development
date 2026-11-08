@@ -44,3 +44,21 @@ test("completed newer queue does not expose an older interrupted scan", async ()
   assert.equal(store.latestScanQueue(owner), null);
   assert.equal(store.readScanQueue(old.id, owner).status, "interrupted");
 });
+
+
+test("SCAN and Processing recovery queues stay separate for the same operator", async () => {
+  const store = await import("../src/scanQueueStore");
+  const owner = "workspace-operator";
+  const scan = store.createScanQueue(owner, [{ kind: "raster", req: { resolution: 64 } }], "scan");
+  store.setScanQueueStep(scan.id, 0, "running", owner);
+  store.setScanQueueStep(scan.id, 0, "interrupted", owner);
+  const processing = store.createScanQueue(owner, [{ kind: "vector", req: { vector_resolution: 128 } }], "processing");
+  assert.equal(store.latestScanQueue(owner, "scan")?.id, scan.id);
+  assert.equal(store.latestScanQueue(owner, "processing")?.id, processing.id);
+  assert.throws(() => store.queuePage(processing.id, owner, 0, 100, "scan"), /not found/);
+  assert.throws(() => store.queuePage(scan.id, owner, 0, 100, "processing"), /not found/);
+  store.setScanQueueStep(processing.id, 0, "running", owner);
+  store.setScanQueueStep(processing.id, 0, "completed", owner);
+  assert.equal(store.latestScanQueue(owner, "processing"), null);
+  assert.equal(store.latestScanQueue(owner, "scan")?.id, scan.id);
+});

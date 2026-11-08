@@ -261,6 +261,8 @@ export interface ScanValidation {
 }
 
 export interface ScanResult {
+  /** Frozen while this run still owns the instrument; never read another run's /last output. */
+  artifacts?: { csvDataUrl: string | null; figureDataUrl: string | null };
   kind: "raster" | "vector";
   chunks: number;
   bytes: number;

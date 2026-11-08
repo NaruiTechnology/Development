@@ -22,6 +22,8 @@ import { estimateRevC3ScanTiming } from "../lib/scanTiming";
 import { clampScanZoom } from "../lib/scanRegions";
 import { summarizeScanParams, type ScanParamSummary } from "../lib/scanParamChip";
 
+import { captureScanResultArtifacts } from "../lib/scanResultArtifacts";
+
 const SAMPLE_PERIOD_NS = estimateRevC3ScanTiming(1, 0).samplePeriodNs;
 
 export type ScanKind = "raster" | "vector" | "roi" | "mag";
@@ -39,7 +41,32 @@ export interface StreamTransforms {
   rotate90: boolean;
 }
 
+export type ImageWorkspace = "scan" | "processing";
+
+type WorkspaceImage = Pick<ROIState,
+  "imageName" | "imageDataUrl" | "imageKind" | "imageBounds" |
+  "scanImageDataUrl" | "roiScanResultUrl">;
+
+interface ImageWorkspaceState {
+  image: WorkspaceImage;
+  selectedTargetGray: number | null;
+  selectedTargetGrayPoint: { x: number; y: number } | null;
+  roiGrayScaleSelection: GrayScaleSelection;
+  roiGrayScaleSkipped: boolean | null;
+}
+
+function emptyImageWorkspace(): ImageWorkspaceState {
+  return {
+    image: { imageName: "No image selected", imageDataUrl: null, imageKind: "none",
+      imageBounds: null, scanImageDataUrl: null, roiScanResultUrl: null },
+    selectedTargetGray: null, selectedTargetGrayPoint: null,
+    roiGrayScaleSelection: null, roiGrayScaleSkipped: null,
+  };
+}
+
 interface ScanState {
+  imageWorkspace: ImageWorkspace;
+  imageWorkspaces: Record<ImageWorkspace, ImageWorkspaceState>;
   kind: ScanKind;
   phase: ScanPhase;
   infiniteActive: boolean;
@@ -184,6 +211,8 @@ const defaultVector: VectorRequest = {
 };
 
 const initialState: ScanState = {
+  imageWorkspace: "scan",
+  imageWorkspaces: { scan: emptyImageWorkspace(), processing: emptyImageWorkspace() },
   kind: "vector",
   phase: "idle",
   infiniteActive: false,
@@ -458,7 +487,7 @@ function calibrationPatchTouchesConfirmedMapping(patch: Partial<ROIState>): bool
 
 export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
   "scan/runRasterValidated",
-  async (req, { signal }) => {
+  async (req, { signal, getState }) => {
     const r = await fetch(apiUrl("/api/scan/raster/run"), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
@@ -466,13 +495,15 @@ export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
       signal,
     });
     if (!r.ok) throw new Error(await scanRunErrorMessage(r, "raster run"));
-    return await readJsonResponse<ScanResult>(r, "raster run");
+    const result = await readJsonResponse<ScanResult>(r, "raster run");
+    const render = (getState() as { scan: ScanState }).scan.vectorRenderMode;
+    return captureScanResultArtifacts(result, render, signal);
   }
 );
 
 export const runVectorValidated = createAsyncThunk<ScanResult, VectorRequest>(
   "scan/runVectorValidated",
-  async (req, { signal }) => {
+  async (req, { signal, getState }) => {
     const r = await fetch(apiUrl("/api/scan/vector/run"), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
@@ -480,7 +511,9 @@ export const runVectorValidated = createAsyncThunk<ScanResult, VectorRequest>(
       signal,
     });
     if (!r.ok) throw new Error(await scanRunErrorMessage(r, "vector run"));
-    return await readJsonResponse<ScanResult>(r, "vector run");
+    const result = await readJsonResponse<ScanResult>(r, "vector run");
+    const render = (getState() as { scan: ScanState }).scan.vectorRenderMode;
+    return captureScanResultArtifacts(result, render, signal);
   }
 );
 
@@ -500,6 +533,24 @@ const slice = createSlice({
   name: "scan",
   initialState,
   reducers: {
+    setImageWorkspace(s, a: PayloadAction<ImageWorkspace>) {
+      if (s.imageWorkspace === a.payload) return;
+      const { imageName, imageDataUrl, imageKind, imageBounds, scanImageDataUrl, roiScanResultUrl } = s.roi;
+      s.imageWorkspaces[s.imageWorkspace] = {
+        image: { imageName, imageDataUrl, imageKind, imageBounds, scanImageDataUrl, roiScanResultUrl },
+        selectedTargetGray: s.selectedTargetGray,
+        selectedTargetGrayPoint: s.selectedTargetGrayPoint,
+        roiGrayScaleSelection: s.roiGrayScaleSelection,
+        roiGrayScaleSkipped: s.roiGrayScaleSkipped,
+      };
+      const next = s.imageWorkspaces[a.payload];
+      Object.assign(s.roi, next.image);
+      s.selectedTargetGray = next.selectedTargetGray;
+      s.selectedTargetGrayPoint = next.selectedTargetGrayPoint;
+      s.roiGrayScaleSelection = next.roiGrayScaleSelection;
+      s.roiGrayScaleSkipped = next.roiGrayScaleSkipped;
+      s.imageWorkspace = a.payload;
+    },
     setKind(s, a: PayloadAction<ScanKind>) {
       s.kind = a.payload;
     },
@@ -864,6 +915,7 @@ const slice = createSlice({
 });
 
 export const {
+  setImageWorkspace,
   setKind,
   setInfiniteActive,
   updateRaster,

@@ -28,13 +28,13 @@ import {
   grayAt,
   stepTowardTargetGray,
 } from "../lib/roiTargetGray";
-import { useAppDispatch, useAppSelector } from "../store";
+import { useAppDispatch, useAppSelector, useWorkspaceActive, useAppWorkspace } from "../store";
 import type { ROIRequest } from "../types/api";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
 import { paintCustomVectorScanOrderOverlay, paintVectorScanOrderOverlay } from "../lib/scanPathOverlay";
-import { stopAllScanActions } from "../hooks/scanActionRegistry";
+import { stopScanActions } from "../hooks/scanActionRegistry";
 import {
   ROI_CANVAS_EDGE,
   ROI_VIEWPORT_MIN_SPAN,
@@ -128,6 +128,8 @@ export function ROIEditor({
   onImageChange?: (imageUrl: string | null) => void;
 }) {
   const dispatch = useAppDispatch();
+  const workspaceActive = useWorkspaceActive();
+  const workspace = useAppWorkspace();
   const tr = useTranslation();
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
@@ -405,6 +407,7 @@ export function ROIEditor({
   }, [backgroundImageUrl, canvasResetToken, dispatch, imageSource, t, vectorPhase]);
 
   useEffect(() => {
+    if (!workspaceActive) return;
     function onKeyUp(event: KeyboardEvent) {
       if (event.key !== "Control") return;
       resizeCleanupRef.current?.();
@@ -418,7 +421,7 @@ export function ROIEditor({
 
     window.addEventListener("keyup", onKeyUp);
     return () => window.removeEventListener("keyup", onKeyUp);
-  }, []);
+  }, [workspaceActive]);
 
   useEffect(() => {
     drawBaseCanvas();
@@ -710,6 +713,7 @@ export function ROIEditor({
   }, [roiSelectionKey]);
 
   useEffect(() => {
+    if (!workspaceActive) return;
     if (!activeHandle) return;
     const handle = activeHandle;
 
@@ -730,12 +734,12 @@ export function ROIEditor({
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
     };
-  }, [activeHandle, roi]);
+  }, [activeHandle, roi, workspaceActive]);
 
   /** Drop the loaded image and everything derived from it (regions, selection). */
   function clearLoadedImage() {
     clearBitmapSelectionCache();
-    stopAllScanActions();
+    stopScanActions(workspace);
     setDraft(null);
     imageRef.current = null;
     promotedBackgroundRef.current = null;
@@ -2014,7 +2018,7 @@ export function ROIEditor({
               })}
             </span>
           )}
-          {grayTip &&
+          {workspaceActive && grayTip &&
             createPortal(
               <div
                 className="roi-gray-tooltip"

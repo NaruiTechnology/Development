@@ -674,3 +674,21 @@ Select button always opens confirmation for the current range, even without a
 new drag. Only confirming applies the draft range. Cancel preserves the current
 rule. Live simulation applies confirmed range updates over its existing socket
 between passes.
+
+
+SCAN and PROCESSING run in separate workspace stores and persistent controllers.
+Scan parameters, ROI and pattern data, image buffers, results, counters, queues,
+control wedges, annotations, and Stop/Clear callbacks stay with their owner.
+Switching tabs retains each viewer and controller; hidden viewers do not receive
+keyboard or pointer shortcuts or publish controls into the active toolbar.
+Service status and application configuration remain global. One workspace can
+own the physical instrument at a time; starting the other never aborts its run.
+Validated CSV and figure results are captured before releasing the instrument,
+so later exports do not read another workspace's `/scan/last` output.
+
+Deployment uses the existing frontend and backend builds and full-tree source
+copy. Queue JSON adds an optional `workspace` field; older queues belong to
+SCAN, with no database migration. Rebuild both web packages after these changes.
+Regression coverage includes `workspaceIsolation.test.mjs`,
+`workspaceResults.test.mjs`, and the backend `scanQueueStore.test.ts` workspace
+recovery test. No additional runtime dependency or environment setting is needed.

@@ -20,7 +20,7 @@ import { TextureMeasurements } from "./TextureMeasurements";
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { useAppDispatch, useAppSelector } from "../store";
+import { useAppDispatch, useAppSelector, useWorkspaceActive } from "../store";
 import { orientCanvas } from "../lib/canvasOrientation";
 import {
   setVectorRenderMode,
@@ -277,6 +277,7 @@ export function ImageCanvas({
   onTargetGrayPick?: (gray: number, point: { x: number; y: number }) => void;
 }) {
   const dispatch = useAppDispatch();
+  const workspaceActive = useWorkspaceActive();
   const { t, fmt } = useTranslation();
   const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
   const selectedTargetGrayPoint = useAppSelector((s) => s.scan.selectedTargetGrayPoint);
@@ -363,6 +364,7 @@ export function ImageCanvas({
   const [grayPickPrompt, setGrayPickPrompt] = useState<{ x: number; y: number } | null>(null);
   const grayPromptGestureRef = useRef(false);
   useEffect(() => {
+    if (!workspaceActive) return;
     const release = (event: MouseEvent) => { if (event.button === 2) setGrayPickPrompt(null); };
     const cancel = () => setGrayPickPrompt(null);
     window.addEventListener("pointerup", release, true);
@@ -375,8 +377,9 @@ export function ImageCanvas({
       window.removeEventListener("pointercancel", cancel, true);
       window.removeEventListener("blur", cancel);
     };
-  }, []);
+  }, [workspaceActive]);
   useEffect(() => {
+    if (!workspaceActive) return;
     if (!grayPickPrompt) return;
     const dismiss = () => setGrayPickPrompt(null);
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") dismiss(); };
@@ -390,7 +393,7 @@ export function ImageCanvas({
       window.removeEventListener("resize", dismiss);
       window.removeEventListener("keydown", onKey);
     };
-  }, [grayPickPrompt]);
+  }, [grayPickPrompt, workspaceActive]);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
   // The image panel header (raster / vector) has a spot on its first row for
   // the vector View selector; without it (e.g. ROI) the selector stays inline.
@@ -945,8 +948,8 @@ export function ImageCanvas({
 
   useEffect(() => {
     if (typeof document === "undefined") return;
-    setToolbarHost(document.getElementById("image-panel-toolbar-slot"));
-  }, []);
+    setToolbarHost(workspaceActive ? document.getElementById("image-panel-toolbar-slot") : null);
+  }, [workspaceActive]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -955,6 +958,7 @@ export function ImageCanvas({
   });
 
   useEffect(() => {
+    if (!workspaceActive) return;
     if (!editorEnabled) return;
 
     function onKeyDown(event: KeyboardEvent) {
@@ -970,7 +974,7 @@ export function ImageCanvas({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [editorEnabled, annotations.length]);
+  }, [editorEnabled, annotations.length, workspaceActive]);
 
   useEffect(() => {
     if (!showServerFigure) {
@@ -988,10 +992,12 @@ export function ImageCanvas({
     setServerFigureBusy(true);
     setServerFigureError(null);
 
-    const url =
-      kind === "vector"
-        ? apiUrl("/api/scan/last/figure?render=decimated&view=texture")
-        : apiUrl("/api/scan/last/figure?view=texture");
+    const url = lastResult?.artifacts?.figureDataUrl;
+    if (!url) {
+      setServerFigureBusy(false);
+      setServerFigureError("No saved figure is available for this workspace's run.");
+      return;
+    }
 
     fetch(url)
       .then(async (r) => {
@@ -1023,7 +1029,7 @@ export function ImageCanvas({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [showServerFigure, kind, renderMode, chunksReceived, streamTransforms]);
+  }, [showServerFigure, kind, renderMode, chunksReceived, streamTransforms, lastResult]);
 
   const totalRasterPx = resolution * resolution * (rasterParallelROIs?.length ?? 1);
   const totalVectorSamples =
@@ -1780,9 +1786,9 @@ export function ImageCanvas({
 
   return (
     <div>
-      {!showModeToggle && editorToolbarVisible && (toolbarHost && toolbar ? createPortal(<>{toolbar}</>, toolbarHost) : toolbar)}
+      {workspaceActive && !showModeToggle && editorToolbarVisible && (toolbarHost && toolbar ? createPortal(<>{toolbar}</>, toolbarHost) : toolbar)}
 
-      {mergeConfirmOpen && createPortal(
+      {workspaceActive && mergeConfirmOpen && createPortal(
         <div className="modal-backdrop canvas-merge-confirm__backdrop" role="presentation">
           <div
             className="modal canvas-merge-confirm"
@@ -1844,7 +1850,7 @@ export function ImageCanvas({
         document.body,
       )}
 
-      {showModeToggle && viewToggleHost && createPortal(viewToggle, viewToggleHost)}
+      {workspaceActive && showModeToggle && viewToggleHost && createPortal(viewToggle, viewToggleHost)}
       {showModeToggle && (
         <div className="row canvas-view-row" style={{ marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
           {!viewToggleHost && viewToggle}
@@ -2243,13 +2249,13 @@ export function ImageCanvas({
             : t("canvas.serverFigure.livePreview")}
         </div>
       )}
-      {grayPickPrompt && createPortal(
+      {workspaceActive && grayPickPrompt && createPortal(
         <div className="roi-gray-tooltip image-target-gray-prompt" role="status" style={{ left: grayPickPrompt.x, top: grayPickPrompt.y }}>
           {t("roi.targetGray.gesturePrompt")}
         </div>,
         document.body,
       )}
-      {grayTooltip && !grayPickPrompt && createPortal(
+      {workspaceActive && grayTooltip && !grayPickPrompt && createPortal(
         <div
           className="roi-gray-tooltip image-target-gray-tooltip"
           style={{ left: grayTooltip.x, top: grayTooltip.y }}

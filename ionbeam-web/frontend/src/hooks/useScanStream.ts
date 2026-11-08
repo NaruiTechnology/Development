@@ -38,7 +38,7 @@ import {
   streamStarted,
   streamStopping,
 } from "../store/scanSlice";
-import { useAppDispatch, useAppSelector } from "../store";
+import { useAppDispatch, useAppSelector, useAppWorkspace } from "../store";
 import { decodeScanSamples } from "../lib/scanSamples";
 import {
   appendRaster,
@@ -49,6 +49,7 @@ import {
 } from "../store/imageSlice";
 import type { RasterRequest, ROIRequest, VectorRequest } from "../types/api";
 import type { RootState } from "../store";
+import { claimWorkspaceRun, otherWorkspaceBusy } from "./useScanWorkspace";
 import { registerScanActionStop } from "./scanActionRegistry";
 import { withScanAuthQuery } from "../lib/authIdentity";
 import { scanAuthHeaders } from "../lib/authIdentity";
@@ -92,6 +93,7 @@ type LiveScanUpdate = {
 
 export function useScanStream(regionCountOverride?: number) {
   const dispatch = useAppDispatch();
+  const workspace = useAppWorkspace();
   const wsRef = useRef<WebSocket | null>(null);
   const closureKindRef = useRef<Closure | null>(null);
   // Captures whether the server delivered a clean "done" event before
@@ -191,6 +193,10 @@ export function useScanStream(regionCountOverride?: number) {
       hasSimulationBitmap?: boolean;
       initialFrame?: Uint16Array | null;
     }) => {
+      if (otherWorkspaceBusy(workspace)) {
+        dispatch(streamErrored("The instrument is in use by the other workspace."));
+        return;
+      }
       const hasBitmapSource = Boolean(
         req.simulation_bitmap || req.simulation_bitmap_id ||
         req.parallel_simulation_bitmaps?.length || req.parallel_simulation_bitmap_ids?.length ||
@@ -336,6 +342,10 @@ export function useScanStream(regionCountOverride?: number) {
       initialFrame?: Uint16Array | null;
       pointPixelIndices?: number[];
     }) => {
+      if (otherWorkspaceBusy(workspace)) {
+        dispatch(streamErrored("The instrument is in use by the other workspace."));
+        return;
+      }
       const hasBitmapSource = Boolean(
         req.simulation_bitmap || req.simulation_bitmap_id ||
         req.parallel_simulation_bitmaps?.length || req.parallel_simulation_bitmap_ids?.length ||
@@ -529,6 +539,9 @@ export function useScanStream(regionCountOverride?: number) {
       if (hadActiveScan) dispatch(streamReset());
       return Promise.resolve(true);
     }
+    // Keep ownership until the HTTP abort has finished, even if onclose
+    // already returned this workspace to idle. A late abort must not hit the other workspace.
+    const releaseOwnership = claimWorkspaceRun(workspace);
     const closed = ws.readyState === WebSocket.CLOSED ? Promise.resolve() :
       new Promise<void>((resolve) => stopCloseWaitersRef.current.set(ws, resolve));
     dispatch(streamStopping());
@@ -565,6 +578,7 @@ export function useScanStream(regionCountOverride?: number) {
     // Socket closure alone does not mean that request reached the old scan.
     const stopped = Promise.all([aborted, closed]).then(([ok]) => ok).finally(() => {
       if (stopInFlightRef.current === stopped) stopInFlightRef.current = null;
+      releaseOwnership?.();
     });
     stopInFlightRef.current = stopped;
     // Close the client side immediately. The service observes the disconnect
@@ -591,8 +605,8 @@ export function useScanStream(regionCountOverride?: number) {
   }, [flushPendingGeometryUpdates]);
 
   useEffect(() => {
-    return registerScanActionStop(stop);
-  }, [stop]);
+    return registerScanActionStop(stop, workspace);
+  }, [stop, workspace]);
 
   return useMemo(
     () => ({ startRaster, startVector, stop, hasActiveStream, updateGeometry }),

@@ -1,5 +1,5 @@
 import { VECTOR_SCAN_PATHS } from "../lib/vectorScanPath";
-import { useAppDispatch, useAppSelector } from "../store";
+import { useAppDispatch, useAppSelector, useAppWorkspace } from "../store";
 import { updateVector } from "../store/scanSlice";
 import type { VectorScanPath } from "../types/api";
 import { useTranslation } from "../i18n";
@@ -8,12 +8,14 @@ import { PatternHelp } from "./PatternHelp";
 
 export function VectorScanPathField({
   disabled,
-  id = "vector-scan-path",
+  id: suppliedId,
 }: {
   disabled: boolean;
   id?: string;
 }) {
   const dispatch = useAppDispatch();
+  const workspace = useAppWorkspace();
+  const id = suppliedId ?? (workspace === "scan" ? "vector-scan-path" : "processing-vector-scan-path");
   const { t } = useTranslation();
   const scanPath = useAppSelector((state) => state.scan.vector.scan_path);
 

@@ -22,8 +22,9 @@ test("Split captures running and stopped scans, preserves snapshots, and retains
   globalThis.cancelAnimationFrame = window.cancelAnimationFrame;
   let allowServerFigure = false;
   const figureBytes = Buffer.from("server-figure");
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (url) => {
     if (!allowServerFigure) throw new Error("capturing existing pixels must not fetch a server figure");
+    assert.match(String(url), /^(data:image\/png|blob:)/, "server-only results must use their workspace snapshot");
     return { ok: true, blob: async () => new Blob([figureBytes], { type: "image/png" }) };
   };
   globalThis.FileReader = class {
@@ -150,12 +151,15 @@ test("Split captures running and stopped scans, preserves snapshots, and retains
         else store.dispatch(image.resetVector());
       });
       assert.deepEqual(archivedCanvas.pixels, pixels);
-      // Server figures use revocable blob URLs. The asynchronous patch path
-      // must return a self-contained image for a pane that outlives the source.
+      // Server-only validated results use their captured workspace snapshot.
+      // The asynchronous patch path must keep it self-contained after Split.
       allowServerFigure = true;
       await act(async () => {
         renderer.update(render());
-        store.dispatch(scan.streamCompleted({ kind, chunks: 1, image_filename: "result.png", csv_filename: null }));
+        const result = { kind, resolution: 4, chunks: 1, image_filename: "result.png", csv_filename: null,
+          artifacts: { csvDataUrl: null, figureDataUrl: `data:image/png;base64,${figureBytes.toString("base64")}` } };
+        const run = kind === "raster" ? scan.runRasterValidated : scan.runVectorValidated;
+        store.dispatch(run.fulfilled(result, "workspace-result", kind === "raster" ? store.getState().scan.raster : store.getState().scan.vector));
       });
       const persisted = await captureTargetImageRef.current();
       assert.equal(persisted, `data:image/png;base64,${figureBytes.toString("base64")}`);

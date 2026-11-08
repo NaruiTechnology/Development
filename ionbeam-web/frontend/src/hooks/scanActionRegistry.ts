@@ -20,14 +20,16 @@
 
 type StopFn = () => void;
 
-const activeStops = new Set<StopFn>();
+import type { ImageWorkspace } from "../store/scanSlice";
+
+const activeStops = new Map<StopFn, ImageWorkspace>();
 
 /**
  * Register an active scan action's stop callback. Returns an unregister
  * function the caller must invoke on cleanup.
  */
-export function registerScanActionStop(stop: StopFn): () => void {
-  activeStops.add(stop);
+export function registerScanActionStop(stop: StopFn, workspace: ImageWorkspace = "scan"): () => void {
+  activeStops.set(stop, workspace);
   return () => {
     activeStops.delete(stop);
   };
@@ -39,8 +41,16 @@ export function registerScanActionStop(stop: StopFn): () => void {
  * registered callback are swallowed so a misbehaving action
  * can't block the dialog from opening.
  */
+export function stopScanActions(workspace: ImageWorkspace): boolean {
+  return stopRegisteredActions(workspace);
+}
+
 export function stopAllScanActions(): boolean {
-  const stops = [...activeStops];
+  return stopRegisteredActions();
+}
+
+function stopRegisteredActions(workspace?: ImageWorkspace): boolean {
+  const stops = [...activeStops].filter(([, scope]) => workspace === undefined || scope === workspace).map(([stop]) => stop);
   if (stops.length === 0) return false;
   for (const fn of stops) {
     try {

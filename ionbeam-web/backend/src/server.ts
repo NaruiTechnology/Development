@@ -1312,7 +1312,7 @@ app.post("/api/scan/queues", async (req, res) => {
   try {
     const actor = await currentAdminActor(req);
     if (!actor) throw new Error("scan session expired");
-    const queue = createScanQueue(actor.login_name, req.body?.entries as QueueEntry[]);
+    const queue = createScanQueue(actor.login_name, req.body?.entries as QueueEntry[], req.body?.workspace === "processing" ? "processing" : "scan");
     res.status(201).json({ id: queue.id, status: queue.status, next_index: queue.next_index, total: queue.entries.length });
   } catch (err) {
     res.status(400).json({ detail: err instanceof Error ? err.message : String(err) });
@@ -1322,7 +1322,7 @@ app.get("/api/scan/queues/latest", async (req, res) => {
   try {
     const actor = await currentAdminActor(req);
     if (!actor) throw new Error("scan session expired");
-    const queue = latestScanQueue(actor.login_name);
+    const queue = latestScanQueue(actor.login_name, req.query.workspace === "processing" ? "processing" : "scan");
     res.json(queue ? { id: queue.id, status: queue.status, next_index: queue.next_index, total: queue.entries.length } : null);
   } catch (err) {
     res.status(400).json({ detail: err instanceof Error ? err.message : String(err) });
@@ -1334,7 +1334,7 @@ app.get("/api/scan/queues/:id", async (req, res) => {
     if (!actor) throw new Error("scan session expired");
     const page = Math.max(0, Math.trunc(Number(req.query.page) || 0));
     const pageSize = Math.max(1, Math.min(100, Math.trunc(Number(req.query.page_size) || 100)));
-    res.json(queuePage(req.params.id, actor.login_name, page, pageSize));
+    res.json(queuePage(req.params.id, actor.login_name, page, pageSize, req.query.workspace === "processing" ? "processing" : "scan"));
   } catch (err) {
     res.status(404).json({ detail: err instanceof Error ? err.message : String(err) });
   }

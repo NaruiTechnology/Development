@@ -15,6 +15,7 @@ export type QueueStatus = "queued" | "running" | "interrupted" | "completed";
 export type ScanQueue = {
   id: string;
   owner: string;
+  workspace?: "scan" | "processing";
   created_at: string;
   updated_at: string;
   status: QueueStatus;
@@ -42,32 +43,32 @@ function write(queue: ScanQueue): void {
   fs.renameSync(temporary, target);
 }
 
-export function createScanQueue(owner: string, entries: QueueEntry[]): ScanQueue {
+export function createScanQueue(owner: string, entries: QueueEntry[], workspace: "scan" | "processing" = "scan"): ScanQueue {
   if (!Array.isArray(entries) || entries.length < 1 || entries.length > MAX_ENTRIES ||
       entries.some((entry) => !["raster", "vector"].includes(entry?.kind) || !entry.req || typeof entry.req !== "object")) {
     throw new Error(`scan queue must contain 1..${MAX_ENTRIES} valid entries`);
   }
   const now = new Date().toISOString();
   const queue: ScanQueue = {
-    id: crypto.randomUUID(), owner, created_at: now, updated_at: now,
+    id: crypto.randomUUID(), owner, workspace, created_at: now, updated_at: now,
     status: "queued", next_index: 0, entries,
   };
   write(queue);
   return queue;
 }
 
-export function readScanQueue(id: string, owner: string): ScanQueue {
+export function readScanQueue(id: string, owner: string, workspace?: "scan" | "processing"): ScanQueue {
   const queue = JSON.parse(fs.readFileSync(queuePath(id), "utf8")) as ScanQueue;
-  if (queue.owner !== owner) throw new Error("scan queue not found");
+  if (queue.owner !== owner || (workspace !== undefined && (queue.workspace ?? "scan") !== workspace)) throw new Error("scan queue not found");
   return queue;
 }
 
-export function latestScanQueue(owner: string): ScanQueue | null {
+export function latestScanQueue(owner: string, workspace: "scan" | "processing" = "scan"): ScanQueue | null {
   if (!fs.existsSync(ROOT)) return null;
   const queues = fs.readdirSync(ROOT)
     .filter((name) => name.endsWith(".json"))
     .map((name) => {
-      try { return readScanQueue(name.slice(0, -5), owner); } catch { return null; }
+      try { return readScanQueue(name.slice(0, -5), owner, workspace); } catch { return null; }
     })
     .filter((queue): queue is ScanQueue => queue !== null)
     .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.updated_at.localeCompare(a.updated_at));
@@ -77,8 +78,8 @@ export function latestScanQueue(owner: string): ScanQueue | null {
     ? latest : null;
 }
 
-export function queuePage(id: string, owner: string, page: number, pageSize: number) {
-  const queue = readScanQueue(id, owner);
+export function queuePage(id: string, owner: string, page: number, pageSize: number, workspace?: "scan" | "processing") {
+  const queue = readScanQueue(id, owner, workspace);
   const start = page * pageSize;
   return {
     id: queue.id, status: queue.status, next_index: queue.next_index,

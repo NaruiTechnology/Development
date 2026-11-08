@@ -6,7 +6,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { useAppDispatch, useAppSelector } from "../store";
+import { useAppDispatch, useAppSelector, useAppWorkspace } from "../store";
 import { apiUrl } from "../lib/backendUrl";
 import {
   runRasterValidated,
@@ -30,7 +30,8 @@ import {
   queueLiveScanDisplay,
   seedVectorRegions,
 } from "../store/imageSlice";
-import { registerScanActionStop, stopAllScanActions } from "../hooks/scanActionRegistry";
+import { claimWorkspaceRun, useOtherWorkspaceBusy } from "../hooks/useScanWorkspace";
+import { registerScanActionStop, stopScanActions } from "../hooks/scanActionRegistry";
 import { useScanStream, type LiveGrayRule } from "../hooks/useScanStream";
 import {
   clearBitmapSelectionCache,
@@ -256,6 +257,8 @@ export function ScanControls({
   processingMode?: boolean;
 }) {
   const dispatch = useAppDispatch();
+  const workspace = useAppWorkspace();
+  const otherWorkspaceActive = useOtherWorkspaceBusy();
   const { t } = useTranslation();
   const phase = useAppSelector((s) => s.scan.phase);
   const streamRestarting = useAppSelector((s) => s.scan.streamRestarting);
@@ -302,7 +305,7 @@ export function ScanControls({
     let active = true;
     const refresh = async () => {
       try {
-        const queue = await latestScanQueue();
+        const queue = await latestScanQueue(workspace);
         if (active) setPendingQueue(queue && queue.status === "interrupted" &&
           queue.next_index >= 0 && queue.next_index < queue.total ? queue : null);
       } catch {
@@ -606,7 +609,7 @@ export function ScanControls({
       entry.workflowStepIds?.forEach(id => dispatch(updateWorkflowStep({ id, status: "completed" })));
       // Live sequences have no persisted queue to refresh on every ROI pass.
       if (!regionScanRepeatRef.current.length) {
-        void latestScanQueue().then(setPendingQueue).catch(() => {});
+        void latestScanQueue(workspace).then(setPendingQueue).catch(() => {});
       }
       if (!regionScanQueueRef.current.length && regionScanRepeatRef.current.length) {
         regionScanQueueRef.current = [...regionScanRepeatRef.current];
@@ -657,7 +660,7 @@ export function ScanControls({
       return entries.map((entry, index) => ({ ...entry, ...prepared[index] })) as RegionScanEntry[];
     }
     const stored = entries.map(({ initialFrame: _initialFrame, ...entry }) => entry) as StoredScanEntry[];
-    const created = await createScanQueue(stored);
+    const created = await createScanQueue(stored, workspace);
     setPendingQueue(created.summary);
     return entries.map((entry, index) => ({ ...entry, req: created.entries[index].req })) as RegionScanEntry[];
   }
@@ -667,12 +670,12 @@ export function ScanControls({
     try {
       const allowed = await refreshScanPrivilege();
       if (!allowed) return;
-      const queue = await latestScanQueue();
+      const queue = await latestScanQueue(workspace);
       if (!queue || queue.status !== "interrupted" || queue.next_index < 0 || queue.next_index >= queue.total) {
         setPendingQueue(null);
         return;
       }
-      const entries = await loadScanQueue(queue);
+      const entries = await loadScanQueue(queue, workspace);
       const remaining = entries.slice(queue.next_index);
       if (!remaining.length || remaining[0].kind !== kind) return;
       startRegionScanSequence(remaining.map((entry) => ({ ...entry, initialFrame: null })) as RegionScanEntry[], true);
@@ -1032,7 +1035,7 @@ export function ScanControls({
     if (!stoppingLiveScan && !roiState.imageDataUrl && (kind === "raster" || kind === "vector")) {
       pendingStopClearRef.current = kind;
     }
-    stopAllScanActions();
+    stopScanActions(workspace);
   }
 
   async function onZoomChange(value: string) {
@@ -1536,7 +1539,7 @@ export function ScanControls({
           cancelled = true;
           (current as { abort?: () => void } | null)?.abort?.();
           dispatch(streamReset());
-        });
+        }, workspace);
         promise.finally(unregister);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -1567,7 +1570,7 @@ export function ScanControls({
           cancelled = true;
           (current as { abort?: () => void } | null)?.abort?.();
           dispatch(streamReset());
-        });
+        }, workspace);
         promise.finally(unregister);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -1591,6 +1594,8 @@ export function ScanControls({
   const runStartingRef = useRef(false);
   const guardRunStart = (start: () => Promise<void>) => async () => {
     if (runStartingRef.current) return;
+    const release = claimWorkspaceRun(workspace);
+    if (!release) return;
     runStartingRef.current = true;
     setRunStarting(true);
     try {
@@ -1598,6 +1603,7 @@ export function ScanControls({
     } finally {
       runStartingRef.current = false;
       setRunStarting(false);
+      release();
     }
   };
   const onRun = guardRunStart(startRunRequest);
@@ -1605,6 +1611,7 @@ export function ScanControls({
   const onRunValidated = guardRunStart(startValidatedRunRequest);
 
   const runDisabled =
+    otherWorkspaceActive ||
     controlsDisabled ||
     streaming ||
     closing ||
@@ -1720,7 +1727,7 @@ export function ScanControls({
   }, [clearInfiniteScanState, dispatch, phase, roiState.imageDataUrl, roiSelectionKey, startInfiniteScanRun, startRegionScanEntry]);
 
   useEffect(() => {
-    if (phase === "error") void latestScanQueue().then(setPendingQueue).catch(() => {});
+    if (phase === "error") void latestScanQueue(workspace).then(setPendingQueue).catch(() => {});
   }, [phase]);
 
   useEffect(() => {

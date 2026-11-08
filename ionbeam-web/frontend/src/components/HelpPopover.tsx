@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useTranslation } from "../i18n";
-import { useAppSelector } from "../store";
+import { useAppSelector, useWorkspaceActive } from "../store";
 import { Icon } from "./Icon";
 
 interface HelpPopoverProps {
@@ -34,6 +34,7 @@ const HOVER_OPEN_DELAY_MS = 350;
 
 export function HelpPopover({ title, ariaLabel, children, iconName = "help", openOnHover = false, size = "default", dismissOnPointer = false }: HelpPopoverProps) {
   const [open, setOpen] = useState(false);
+  const workspaceActive = useWorkspaceActive();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const hoverTimer = useRef<number | null>(null);
   /** false right after a pointer dismissal while the pointer may still rest on the trigger: prevents an instant reopen */
@@ -120,7 +121,7 @@ export function HelpPopover({ title, ariaLabel, children, iconName = "help", ope
       >
         <Icon name={iconName} />
       </button>
-      {open && (
+      {open && workspaceActive && (
         <HelpModal title={title} size={size} onClose={close} onPointerDismiss={dismissOnPointer ? dismissByPointer : undefined}>
           {children}
         </HelpModal>
