@@ -1,9 +1,78 @@
 {
     "Header": {
         "Application": "Ion Beam Processing Patterns",
-        "Description": "Pattern catalogue for the native app's Processing tab. Each entry of Patterns is a one-key object: the key is the pattern name, the value selects the data model (a class registered in ionbeam_native.processing.models) and its parameters. Entries with skip=true are not instantiated and get no card. Order is the order of the icons and cards.",
-        "LoadImage": "/home/vboxuser/Project/Operations/Development/GlasgowDataIO/IobeamControl/unittest/testData/Mystery Chip FIB X-Section - 1.jpeg"
+        "Description": "Pattern catalogue for the native app's Processing tab. Each entry of Patterns is a one,key object: the key is the pattern name, the value selects the data model (a class registered in ionbeam_native.processing.models) and its parameters. Entries with skip=true are not instantiated and get no card. Order is the order of the icons and cards.",
+        "LoadImage": "../IobeamControl/unittest/testData/Mystery Chip FIB X-Section - 1.jpeg"
     },
+    "Message": [
+        "The following table is derived from the user,supplied Google AI table of Ga+ image brightness for common materials. It is illustrative only, not a calibrated secondary,electron yield or universal material constant. Beam conditions, charging, surface geometry and detector gain/offset affect contrast.",
+        "    Material\tBrightness Level\tGray Value Range (0–255)\tDominant Contrast Factor",
+        "    Platinum (Pt)\tUltra,Bright / Pure White\t~230 – 255\tHigh atomic mass (Z=78), excellent conductivity, high sputter/ion,interaction yield.",
+        "    Gold (Au)\tVery Bright / Cream White\t~210 – 240\tHigh atomic mass (Z=79) and excellent electrical grounding.",
+        "    Copper (Cu)\tBright / Light Gray\t~140 – 180\tHigh density transitions (Z=29), strong metallic emission.",
+        "    Aluminium (Al)\tMedium,Bright / Gray\t~110 – 140\tGood conductivity, but lighter atom (Z=13) reduces back,scattering effects.",
+        "    Silicon (Si)\tMedium,Dark / Dark Gray\t~70 – 100\tSemiconducting bulk (Z=14) acts less efficiently as an emitter than conductors.",
+        "    Silicon Dioxide (SiO2)\tDark to Variable\tNot supplied\tCharging and charge compensation affect contrast.",
+        "Normalized brightness = gray,range midpoint / 85 (silicon midpoint). 1.0 = 100%.",
+        "Material | Brightness | Relative percentage",
+        ",,, | ,,, | ,,,",
+        "Si | 1.0 | 100.00%",
+        "SiO2 | Unknown (1.0 placeholder) | Unknown",
+        "Pt | 2.8529 | 285.29%",
+        "Au | 2.6471 | 264.71%",
+        "Al | 1.4706 | 147.06%",
+        "Cu | 1.8824 | 188.24%"
+    ],
+    "Materials": [
+        {
+            "name": "Si",
+            "caption": "Silicon",
+            "density": 2.33,
+            "comment": "Density in g/cm3. Illustrative Ga+ image brightness based on the user,supplied Google AI table: gray range 70,100 (0,255), midpoint 85; brightness = midpoint / 85 (silicon midpoint), rounded to 4 decimal places. 1.0 = 100% of silicon; percentage = brightness * 100. These display,gray ratios are not calibrated secondary,electron yields or universal material constants; beam conditions, charging, surface geometry and detector gain/offset affect contrast.",
+            "brightness": 1.0,
+            "grayValueRange": "70,100"
+        },
+        {
+            "name": "SiO2",
+            "caption": "Silicon dioxide",
+            "density": 2.65,
+            "comment": "Density in g/cm3. The user,supplied Google AI table describes SiO2 as dark to variable but provides no numeric gray range. Brightness 1.0 remains an uncalibrated placeholder, not an estimate of equal brightness to silicon. Supply a gray range or measured ratio before using this value; charging and charge compensation affect the signal. 1.0 = 100% of silicon; percentage = brightness * 100.",
+            "brightness": 1.0,
+            "grayValueRange": null
+        },
+        {
+            "name": "Pt",
+            "caption": "Platinum",
+            "density": 21.45,
+            "comment": "Density in g/cm3. Illustrative Ga+ image brightness based on the user,supplied Google AI table: gray range 230,255 (0,255), midpoint 242.5; brightness = midpoint / 85 (silicon midpoint), rounded to 4 decimal places. 1.0 = 100% of silicon; percentage = brightness * 100. These display,gray ratios are not calibrated secondary,electron yields or universal material constants; beam conditions, charging, surface geometry and detector gain/offset affect contrast.",
+            "brightness": 2.8529,
+            "grayValueRange": "230,255"
+        },
+        {
+            "name": "Au",
+            "caption": "Gold",
+            "density": 19.32,
+            "comment": "Density in g/cm3. Illustrative Ga+ image brightness based on the user,supplied Google AI table: gray range 210,240 (0,255), midpoint 225; brightness = midpoint / 85 (silicon midpoint), rounded to 4 decimal places. 1.0 = 100% of silicon; percentage = brightness * 100. These display,gray ratios are not calibrated secondary,electron yields or universal material constants; beam conditions, charging, surface geometry and detector gain/offset affect contrast.",
+            "brightness": 2.6471,
+            "grayValueRange": "210,240"
+        },
+        {
+            "name": "Al",
+            "caption": "Aluminium",
+            "density": 2.7,
+            "comment": "Density in g/cm3. Illustrative Ga+ image brightness based on the user,supplied Google AI table: gray range 110,140 (0,255), midpoint 125; brightness = midpoint / 85 (silicon midpoint), rounded to 4 decimal places. 1.0 = 100% of silicon; percentage = brightness * 100. These display,gray ratios are not calibrated secondary,electron yields or universal material constants; beam conditions, charging, surface geometry and detector gain/offset affect contrast.",
+            "brightness": 1.4706,
+            "grayValueRange": "110,140"
+        },
+        {
+            "name": "Cu",
+            "caption": "Copper",
+            "density": 8.96,
+            "comment": "Density in g/cm3. Illustrative Ga+ image brightness based on the user,supplied Google AI table: gray range 140,180 (0,255), midpoint 160; brightness = midpoint / 85 (silicon midpoint), rounded to 4 decimal places. 1.0 = 100% of silicon; percentage = brightness * 100. These display,gray ratios are not calibrated secondary,electron yields or universal material constants; beam conditions, charging, surface geometry and detector gain/offset affect contrast.",
+            "brightness": 1.8824,
+            "grayValueRange": "140,180"
+        }
+    ],
     "Patterns": [
         {
             "solidBox": {
@@ -96,7 +165,7 @@
                 "parameters": {
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
                     "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1},
-                    "smoothing": {"label": "Point spacing", "type": "float", "default": 2.0, "min": 0.0, "max": 100.0, "step": 0.5, "unit": "px"}
+                    "smoothing": {"label": "Point spacing", "type": "float", "default": 2.0, "min": 0.0, "max": 1.0, "step": 0.5, "unit": "px"}
                 }
             }
         },
@@ -115,7 +184,7 @@
             "crossSection": {
                 "skip": true,
                 "model": "CrossSectionModel",
-                "caption": "X-section",
+                "caption": "X,section",
                 "icon": "patternSolidBox",
                 "roi": "rect",
                 "comment": "Item 8: width + depth, auto beam current, drift correction.",
@@ -173,7 +242,7 @@
                 "caption": "Pattern stitching",
                 "icon": "patternSolidBox",
                 "roi": "rect",
-                "comment": "Item 13: large-area milling.",
+                "comment": "Item 13: large,area milling.",
                 "parameters": {}
             }
         }
