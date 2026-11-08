@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { paintVectorScanOrderOverlay } from "../.test-dist/lib/scanPathOverlay.js";
+import { paintCustomVectorScanOrderOverlay, paintVectorScanOrderOverlay } from "../.test-dist/lib/scanPathOverlay.js";
 
 function draw(path, regions, cursor = 100) {
   const lines = [], clips = [], markers = [];
@@ -57,4 +57,18 @@ test("parallel scans draw separate ROI-local sweeps without a connecting line", 
 test("round-robin cursor does not draw a region before its first sample", () => {
   assert.equal(draw("horizontal_sawtooth", [roi, roi], 1).lines.length, 1);
   assert.equal(draw("horizontal_sawtooth", [roi], 0).lines.length, 0);
+});
+
+
+test("custom workflow path follows source pixel coordinates rather than interpreting its cursor as a raster index", () => {
+  const moves = [], markers = [];
+  let clipped = false;
+  const ctx = {clearRect(){}, save(){}, restore(){}, beginPath(){}, rect(){}, clip(){}, stroke(){}, fill(){},
+    moveTo(x,y){moves.push([x,y]);},lineTo(x,y){moves.push([x,y]);},arc(x,y){markers.push([x,y]);}};
+  const canvas = {width:128,height:128,getContext:()=>ctx};
+  paintCustomVectorScanOrderOverlay(canvas,128,3,"horizontal_sawtooth",
+    new Float32Array([20,80,21,80,20,81,21,81]),null,()=>{clipped=true;});
+  assert.ok(clipped, "custom paths retain the ROI shape clip");
+  assert.deepEqual(moves.slice(0,2),[[20,81],[21,81]]);
+  assert.deepEqual(markers,[[20,81]]);
 });

@@ -334,6 +334,7 @@ export function useScanStream(regionCountOverride?: number) {
       simulationBitmapInfo?: { width: number; height: number } | null;
       hasSimulationBitmap?: boolean;
       initialFrame?: Uint16Array | null;
+      pointPixelIndices?: number[];
     }) => {
       const hasBitmapSource = Boolean(
         req.simulation_bitmap || req.simulation_bitmap_id ||
@@ -376,6 +377,7 @@ export function useScanStream(regionCountOverride?: number) {
           parallelROIs: options?.displayROIs ?? req.parallel_rois,
           compositeROIs: options?.compositeROIs,
           initialImage: options?.initialFrame,
+          pointPixelIndices: options?.pointPixelIndices,
           simulationBitmap: req.simulation_bitmap
             ? {
                 width: req.simulation_bitmap.width,

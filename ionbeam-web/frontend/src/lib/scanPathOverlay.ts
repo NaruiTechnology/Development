@@ -77,3 +77,55 @@ export function paintVectorScanOrderOverlay(
     ctx.restore();
   });
 }
+
+
+/** Custom workflows traverse a sparse point list; the stream cursor is not a raster index. */
+export function paintCustomVectorScanOrderOverlay(
+  canvas: HTMLCanvasElement, edge: number, cursor: number, scanPath: VectorScanPath,
+  points: Float32Array | null, region: ROIRequest | null,
+  clipPattern?: (ctx: CanvasRenderingContext2D) => void,
+) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!points?.length || edge <= 0 || cursor <= 0) return;
+  const count = Math.floor(points.length / 2);
+  const current = Math.min(count, Math.floor(cursor)) - 1;
+  const fixedAxis = scanPath.startsWith("horizontal") ? 1 : 0;
+  const fixed = points[2 * current + fixedAxis];
+  let first = current, last = current;
+  while (first > 0 && points[2 * (first - 1) + fixedAxis] === fixed) first--;
+  while (last + 1 < count && points[2 * (last + 1) + fixedAxis] === fixed) last++;
+  const bounds = scanRegionPixelBounds(region, edge);
+  const point = (index: number) => {
+    const pixel = mapScanPixelIndexToFrame(bounds, edge, points[2 * index], points[2 * index + 1]);
+    return { x: (pixel % edge) / Math.max(1, edge - 1) * (canvas.width - 1),
+      y: Math.floor(pixel / edge) / Math.max(1, edge - 1) * (canvas.height - 1) };
+  };
+  ctx.save();
+  clipPattern?.(ctx);
+  ctx.beginPath();
+  ctx.rect(bounds.x0 / edge * canvas.width, bounds.y0 / edge * canvas.height,
+    (bounds.x1 - bounds.x0) / edge * canvas.width, (bounds.y1 - bounds.y0) / edge * canvas.height);
+  ctx.clip();
+  ctx.strokeStyle = "rgba(111, 190, 211, 0.9)";
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  for (let index = first; index <= last; index++) {
+    const { x, y } = point(index);
+    if (index === first) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  const { x, y } = point(current);
+  ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+  ctx.shadowBlur = 2;
+  ctx.fillStyle = "rgba(151, 210, 224, 1)";
+  ctx.beginPath();
+  ctx.arc(x, y, 1.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - 2.3, y); ctx.lineTo(x + 2.3, y);
+  ctx.moveTo(x, y - 2.3); ctx.lineTo(x, y + 2.3);
+  ctx.stroke();
+  ctx.restore();
+}

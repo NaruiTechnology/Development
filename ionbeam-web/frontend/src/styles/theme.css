@@ -8162,23 +8162,26 @@ body {
 .pattern-workflow-controls .pattern-workflow-toggle { flex: 0 0 auto; }
 .pattern-workflow-controls .app-switch { padding: 0; height: 30px; line-height: 20px; }
 .processing-workflow { border: 1px solid var(--c-border); border-radius: 6px; padding: 16px; background: var(--c-bg-elev); margin-bottom: 12px; }
-.processing-workflow__header { display: flex; align-items: center; justify-content: space-between; }
-.processing-workflow__header h3 { margin: 0 0 12px; font-size: 20px; }
 .processing-workflow progress { display: block; width: 100%; height: 6px; appearance: none; -webkit-appearance: none; border: 0; border-radius: 3px; overflow: hidden; background: var(--c-border); color: var(--c-accent); accent-color: var(--c-accent); }
 .processing-workflow progress::-webkit-progress-bar { background: var(--c-border); border-radius: 3px; }
 .processing-workflow progress::-webkit-progress-value { background: var(--c-accent); border-radius: 3px; }
 .processing-workflow progress::-moz-progress-bar { background: var(--c-accent); border-radius: 3px; }
 .processing-workflow p { font-size: 12px; opacity: .8; }
 .processing-workflow__tree { display: flex; gap: 28px; list-style: none; padding: 0 0 8px; margin: 18px 0 0; overflow-x: auto; }
-.processing-workflow__node { display: flex; flex-direction: column; flex: 1 0 120px; min-width: 0; gap: 8px; position: relative; }
-.processing-workflow__node::before { content: ""; position: absolute; top: 12px; left: 32px; right: -21px; border-top: 1px solid var(--c-accent); }
-.processing-workflow__node::after { content: ""; position: absolute; top: 9px; right: -21px; width: 6px; height: 6px; border-top: 1px solid var(--c-accent); border-right: 1px solid var(--c-accent); transform: rotate(45deg); }
-.processing-workflow__node:last-child::before, .processing-workflow__node:last-child::after { display: none; }
+.processing-workflow__node { --workflow-direction-color: #7b8794; display: flex; flex-direction: column; flex: 1 0 120px; min-width: 0; gap: 8px; position: relative; }
+.processing-workflow__node::before { content: ""; position: absolute; top: 12px; left: 32px; right: -21px; border-top: 1px solid var(--workflow-direction-color); }
+.processing-workflow__node::after { content: ""; position: absolute; top: 9px; right: -21px; width: 6px; height: 6px; border-top: 1px solid var(--workflow-direction-color); border-right: 1px solid var(--workflow-direction-color); transform: rotate(45deg); }
+.processing-workflow__node:last-child::before, .processing-workflow__node:last-child::after { right: 18px; }
+.processing-workflow__node--current { --workflow-direction-color: #ff3b30; }
+.processing-workflow__node--completed { --workflow-direction-color: #7cfc00; }
+.processing-workflow__end { position: absolute; top: 6px; right: 0; width: 12px; height: 12px; border: 2px solid #3498ff; border-radius: 50%; background: var(--c-bg-elev); }
+.processing-workflow__end[data-completed="true"] { background: #3498ff; }
 .processing-workflow__number { border: 1px solid var(--c-border); border-radius: 50%; width: 25px; height: 25px; display: grid; place-items: center; font-size: 10px; }
 .processing-workflow__elapsed { font-variant-numeric: tabular-nums; }
+.processing-workflow > .processing-workflow__elapsed { margin: 0; font-size: 16px; font-weight: 600; color: #fff; opacity: 1; }
 .processing-workflow__step { flex: 1; display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--c-border); padding: 12px; border-radius: 5px; font-size: 12px; overflow-wrap: anywhere; }
 .processing-workflow__step small { text-transform: uppercase; letter-spacing: 1px; font-size: 9px; }
 .processing-workflow__step strong { font-size: 14px; }
 .processing-workflow__node--current .processing-workflow__step { border-color: var(--c-accent); background: color-mix(in srgb, var(--c-accent) 15%, transparent); }
-.processing-workflow__node--completed .processing-workflow__number { color: #65c68c; border-color: #65c68c; }
+.processing-workflow__node--current .processing-workflow__number, .processing-workflow__node--completed .processing-workflow__number { color: var(--workflow-direction-color); border-color: var(--workflow-direction-color); }
 .processing-workflow__node--error .processing-workflow__step, .processing-workflow__node--stopped .processing-workflow__step { border-color: #d98853; }

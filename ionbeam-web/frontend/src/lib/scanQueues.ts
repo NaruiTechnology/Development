@@ -19,6 +19,7 @@ export type StoredScanEntry =
       displayROI: ROIRequest | null;
       displayROIs?: ROIRequest[] | null;
       scanType: ScanType;
+      pointPixelIndices?: number[];
       simulationBitmapInfo?: { width: number; height: number } | null;
       hasSimulationBitmap?: boolean;
     };

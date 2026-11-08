@@ -107,6 +107,7 @@ type RegionScanEntry = { workflowStepIds?: string[] } & (
       kind: "vector";
       req: VectorRequest;
       scanType: ScanType;
+      pointPixelIndices?: number[];
       displayROI: ROIRequest | null;
       displayROIs?: ROIRequest[] | null;
       compositeROIs?: ROIRequest[] | null;
@@ -581,6 +582,7 @@ export function ScanControls({
       onComplete?: () => void,
       simulationBitmapInfo?: { width: number; height: number } | null,
       hasSimulationBitmap?: boolean,
+      pointPixelIndices?: number[],
     ) => {
     stream.startVector({ ...req, preview }, {
       preserveFrame,
@@ -590,6 +592,7 @@ export function ScanControls({
       simulationBitmapInfo,
       hasSimulationBitmap,
       initialFrame,
+      pointPixelIndices,
       onComplete,
     });
   }, [preview, stream]);
@@ -628,7 +631,7 @@ export function ScanControls({
     } else {
       startVectorRun(
         entry.req, preserveFrame, entry.displayROI, entry.displayROIs, entry.compositeROIs,
-        entry.initialFrame, onComplete, entry.simulationBitmapInfo, entry.hasSimulationBitmap,
+        entry.initialFrame, onComplete, entry.simulationBitmapInfo, entry.hasSimulationBitmap, entry.pointPixelIndices,
       );
     }
   }, [dispatch, preview, startVectorRun, stream]);
@@ -698,10 +701,11 @@ export function ScanControls({
       try {
         // Prepare every step before opening a stream; an invalid plan cannot mill partially.
         const edge = vector.vector_resolution;
-        const useAcquired = vectorImageFilled >= vectorImageEdge * vectorImageEdge && vectorImageEdge > 0;
-        const source = useAcquired
+        const loadedSource = !isProduction && roiState.imageDataUrl ? await bitmapImageFrame(roiState, edge) : null;
+        const useAcquired = !loadedSource && vectorImageFilled >= vectorImageEdge * vectorImageEdge && vectorImageEdge > 0;
+        const source = loadedSource ?? (useAcquired
           ? resizeImageFrame(vectorImageFrame, vectorImageEdge, edge)
-          : await bitmapImageFrame(roiState, edge);
+          : await bitmapImageFrame(roiState, edge));
         if (!source) throw new Error("Load or acquire a complete image before running a workflow.");
         const bounds = useAcquired ? roiState : imageWorldBounds(roiState);
         const field = { x_start: bounds.x_origin, x_end: bounds.x_end, y_start: bounds.y_origin, y_end: bounds.y_end };
@@ -724,17 +728,20 @@ export function ScanControls({
               action: result.step.actions[0].caption, status: "upcoming", threshold: result.threshold,
               spot: result.spot, total: result.points.length });
             entries.push({ kind: "vector", scanType: ScanType.VECTOR, workflowStepIds: [id],
-              req: { ...vector, pattern: "custom", points: result.points, roi: worldSelectionToDacROI(processingPlan.regions[index], roiState),
-                continuous: false, pre_process: false, feedback_mode: "standard", simulation_bitmap: null,
+              req: { ...vector, pattern: "custom", points: result.points, roi: result.simulationBitmap.source_roi,
+                continuous: false, pre_process: false, feedback_mode: "standard",
+                simulation_bitmap: isProduction ? null : result.simulationBitmap, simulation_bitmap_id: null,
+                parallel_rois: null, parallel_simulation_bitmaps: null, parallel_simulation_bitmap_ids: null,
                 target_gray_level: null, gray_level_range: null, gray_level_skipped: null },
               displayROI: worldSelectionToDacROI(processingPlan.regions[index], roiState), initialFrame: source,
-              simulationBitmapInfo: { width: edge, height: edge }, hasSimulationBitmap: true });
+              simulationBitmapInfo: { width: edge, height: edge }, hasSimulationBitmap: !isProduction,
+              pointPixelIndices: result.pointPixelIndices });
           }
         }
         const prepared = await persistScanSequence(entries, false);
         dispatch(setWorkflowProgress(progress));
         onScanRunStart?.(ScanType.VECTOR);
-        startRegionScanSequence(prepared, true, false);
+        startRegionScanSequence(prepared, false, false);
       } catch (e) {
         dispatch(streamErrored(e instanceof Error ? e.message : String(e)));
       }

@@ -74,6 +74,8 @@ The Processing scan-path preview clips its sweep and marker to the current drawn
 ## Pilot pixel workflows
 
 The API now returns validated `Workflows` and `Materials` alongside `Patterns`.
+Completing a valid ROI drawing automatically turns that pattern's Enable switch on.
+Draft previews and cancelled drawings do not enable it.
 Each pattern card has a Workflow dropdown (initially Default) and a switch.
 Switching off retains the selected workflow and executes Default instead.
 Default is an ordinary acquisition with no workflow or global gray filter.
@@ -92,7 +94,12 @@ in hardware and simulation, preserving scan path and dwell. Each step blanks
 pixels outside its selected gray class and outside the drawn ROI shape,
 including ring holes. The average is measured over sampled shape pixels from
 one frozen complete acquired image, or the loaded bitmap if no complete frame
-exists. Both Even steps use that same source and threshold. Workflow pixel
+exists. In simulation a loaded bitmap takes precedence, and the same sampled ROI
+crop is uploaded as the ADC source for every step. The request ROI matches the
+actual sample extent in DAC coordinates; each point carries UI metadata mapping
+its feedback to the exact source-image pixel. Blanked points preserve their
+original pixels, including ring holes. The Processing scan-path overlay follows
+the actual custom point list and stream cursor during a workflow. Both Even steps use that same source and threshold. Workflow pixel
 coordinates follow the FOV/calibration transform; workflow masks use the drawn
 ROI without the acquisition Zoom crop. The executor rejects missing source data,
 unknown materials, and ROIs exceeding 250,000 vector points. It does not convert
@@ -100,7 +107,9 @@ Dose to dwell or repeat Passes; those remain pattern metadata.
 
 Each pattern card shows its own Workflow timeline directly below its workflow
 dropdown and switch. Steps run left to right, connected by arrows; narrow cards
-scroll horizontally. Each step and the workflow summary show elapsed time, updated
+scroll horizontally. Outgoing arrows are gray while idle, red while scanning,
+and lawn green after completion. The final arrow leads to a blue end circle,
+which fills when all steps complete. Each step and the workflow summary show elapsed time, updated
 while running and frozen on completion, Stop, or error. Timing starts when the
 step is dispatched to the scan stream and includes connection/transfer time.
 It follows actual stream completion for that pattern, with current,

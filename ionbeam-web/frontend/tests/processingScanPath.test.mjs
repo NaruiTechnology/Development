@@ -58,6 +58,21 @@ for (const kind of ["raster", "vector"]) {
       assert.ok(operations.some(([op]) => op === "closePath"), "freehand outline closes the clipping mask");
       assert.equal(callbacks.size, 1, "editing patterns replaces the animation loop");
 
+      if (kind === "vector") {
+        const image = await vite.ssrLoadModule("/src/store/imageSlice.ts");
+        operations.length = 0;
+        await act(async () => {
+          store.dispatch(image.setupVector({pattern:"custom",edge:128,
+            roi:{x_start:4096,x_end:8192,y_start:4096,y_end:8192},
+            points:[[5000,6000,2,false,1],[6000,6000,2,false,1],[5000,7000,2,false,1],[6000,7000,2,false,1]],
+            pointPixelIndices:[80*128+20,80*128+21,81*128+20,81*128+21],scanPath:"horizontal_sawtooth"}));
+          store.dispatch(image.appendVectorSamples({values:new Uint16Array([40<<8,40<<8,40<<8])}));
+        });
+        assert.ok(operations.some(([op]) => op === "stroke"), "workflow's custom point list still draws a scan sweep");
+        assert.ok(operations.some(([op, x, y]) => op === "arc" && Math.abs(y - 81/127*639) < 0.01),
+          "workflow marker uses actual point pixels rather than its compact cursor as a raster offset");
+      }
+
       operations.length = 0;
       await act(async () => {
         store.dispatch(scan.updateROI(kind === "raster" ? { raster_show_scan_path: false } : { vector_show_scan_path: false }));

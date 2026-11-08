@@ -115,6 +115,10 @@ const slice = createSlice({
       if (!spec || !inst) return;
       try {
         const next = MODEL_REGISTRY[spec.model].validateRoi(a.payload.roi);
+        if (!a.payload.preview && !inst.enabled) {
+          inst.enabled = true;
+          s.workflowProgress = [];
+        }
         if (JSON.stringify(inst.roi) === JSON.stringify(next)) return;
         if (!a.payload.preview) {
           s.roiHistory.push({ key: a.payload.key, roi: inst.roi });

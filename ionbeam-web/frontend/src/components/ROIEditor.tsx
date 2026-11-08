@@ -33,7 +33,7 @@ import type { ROIRequest } from "../types/api";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
-import { paintVectorScanOrderOverlay } from "../lib/scanPathOverlay";
+import { paintCustomVectorScanOrderOverlay, paintVectorScanOrderOverlay } from "../lib/scanPathOverlay";
 import { stopAllScanActions } from "../hooks/scanActionRegistry";
 import {
   ROI_CANVAS_EDGE,
@@ -283,6 +283,9 @@ export function ROIEditor({
   const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
   const vectorScanPath = useAppSelector((s) => s.image.vectorScanPath);
   const vectorCustomPoints = useAppSelector((s) => s.image.vectorCustomPoints);
+  const vectorCustomRenderPoints = useAppSelector(s => s.image.vectorCustomRenderPoints);
+  const vectorCustomRenderInFrame = useAppSelector(s => s.image.vectorCustomRenderInFrame);
+  const workflowCurrentId = processingPatterns.workflowProgress.find(step => step.status === "current")?.id;
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
   const retainVectorFeedbackOnComplete = useAppSelector(
     (s) => s.image.retainVectorFeedbackOnComplete
@@ -465,6 +468,7 @@ export function ROIEditor({
     // The processing preview is a shape mask over rectangular acquisition windows.
     // Clip both the sweep and its marker; a ring hole must remain empty.
     const shapes = processingPatterns.specs.flatMap((spec) => {
+      if (vectorPattern === "custom" && workflowCurrentId && !workflowCurrentId.startsWith(`${spec.key}:`)) return [];
       const shape = processingPatterns.instances[spec.key]?.roi;
       return shape ? [shape] : [];
     });
@@ -506,6 +510,12 @@ export function ROIEditor({
     let animationFrame = 0;
     const draw = (now: number) => {
       const edge = Math.max(1, processingEdge);
+      if (processingPreview === "vector" && vectorPattern === "custom") {
+        paintCustomVectorScanOrderOverlay(canvas, edge, running ? Math.max(1, processingCursor) : processingCursor,
+          vectorScanPath, vectorCustomRenderPoints, vectorCustomRenderInFrame ? null : processingROI, clipPattern);
+        if (running) animationFrame = requestAnimationFrame(draw);
+        return;
+      }
       const sweepStart = Math.floor(Math.max(0, Math.ceil(processingCursor / regions.length) - 1) / edge) * edge;
       const cursor = running
         ? (sweepStart + Math.floor(((now % 800) / 800) * edge) + 1) * regions.length
@@ -517,7 +527,7 @@ export function ROIEditor({
     draw(performance.now());
     return () => cancelAnimationFrame(animationFrame);
   }, [processingPreview, processingEdge, processingCursor, processingROI, processingRegions,
-    vectorScanPath, vectorPhase, roi, processingRoiKey]);
+    vectorScanPath, vectorPattern, vectorCustomRenderPoints, vectorCustomRenderInFrame, workflowCurrentId, vectorPhase, roi, processingRoiKey]);
 
   // Action run toward the target gray level. Each pass compares every pixel
   // inside the ROI area with `selectedTargetGray` and decides its beam state

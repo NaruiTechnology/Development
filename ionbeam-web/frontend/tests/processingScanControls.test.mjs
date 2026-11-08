@@ -21,11 +21,28 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
   globalThis.requestAnimationFrame = window.requestAnimationFrame;
   globalThis.cancelAnimationFrame = window.cancelAnimationFrame;
   const abortCalls = [];
+  const assetUploads = new Map();
   globalThis.fetch = async (url, init) => {
     if (String(url).includes("/api/scan/abort")) abortCalls.push(String(url));
     let body = null;
     if (String(url).endsWith("/api/scan/queues") && init?.method === "POST") {
       body = { id: "test-queue", status: "queued", next_index: 0, total: JSON.parse(init.body).entries.length };
+    }
+    const asset = String(url).match(/\/api\/scan\/assets\/([^/]+)\/(chunk|complete)/);
+    if (String(url).endsWith("/api/scan/assets/prepare")) {
+      const upload = JSON.parse(init.body);
+      const cached = assetUploads.get(upload.asset_id)?.bitmap !== undefined;
+      if (!cached) assetUploads.set(upload.asset_id, {chunks: []});
+      body = { asset_id: upload.asset_id, cached, offset: 0 };
+    } else if (asset) {
+      const upload = assetUploads.get(asset[1]);
+      if (asset[2] === "chunk") {
+        upload.chunks.push(Buffer.from(init.body));
+        body = {asset_id: asset[1], offset: upload.chunks.reduce((total, chunk) => total + chunk.length, 0)};
+      } else {
+        upload.bitmap = JSON.parse(Buffer.concat(upload.chunks).toString());
+        body = {asset_id: asset[1]};
+      }
     }
     if (String(url).includes("current-account")) {
       if (delayPrivilege) await delayPrivilege;
@@ -156,12 +173,29 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     assert.equal(sockets.length, 3);
     assert.equal(sockets[2].requests[0].continuous, false, "cut workflows do not repeat indefinitely");
     assert.equal(sockets[2].requests[0].pattern, "custom");
+    const uploadedBitmap = assetUploads.get(sockets[2].requests[0].simulation_bitmap_id)?.bitmap;
+    assert.ok(uploadedBitmap, "workflow attaches the frozen ROI image instead of falling back to fake ADC data");
+    assert.deepEqual(sockets[2].requests[0].roi, uploadedBitmap.source_roi, "ROI spans the actual sampled crop so custom ADC values use the same DAC coordinates");
+    assert.ok(uploadedBitmap.pixels.every(value => value === 40 || value === 200));
+    assert.ok(uploadedBitmap.pixels.length < 128 * 128, "upload only the sampled ROI crop");
+    assert.equal(store.getState().image.vectorCustomRenderInFrame, true);
+    assert.equal(store.getState().image.vectorEdge, 128, "crop dimensions must not change full-frame display size");
     assert.deepEqual(store.getState().processing.workflowProgress.map(p => p.status), ["current", "upcoming"]);
     const darkStarted = store.getState().processing.workflowProgress[0].startedAt;
     assert.equal(typeof darkStarted, "number");
     assert.equal(store.getState().processing.workflowProgress[1].startedAt, undefined);
     assert.ok(sockets[2].requests[0].points.some(p => p[3]));
     assert.ok(sockets[2].requests[0].points.some(p => !p[3]));
+    const pointSamples = new Uint8Array(sockets[2].requests[0].points.length * 2);
+    sockets[2].requests[0].points.forEach((point, index) => {
+      const sample = point[3] ? 0x1234 : 40 << 8;
+      pointSamples[index * 2] = sample >>> 8;
+      pointSamples[index * 2 + 1] = sample & 255;
+    });
+    await act(async () => { sockets[2].onmessage({data: pointSamples.buffer}); });
+    await settle();
+    assert.ok(store.getState().image.vectorImage.every((sample, index) => sample === (index % 128 < 64 ? 40 : 200) << 8),
+      "samples preserve the original image, including blanked ring holes and unselected pixels");
     await act(async () => {
       sockets[2].onmessage({data: JSON.stringify({event: "done", chunks: 1})});
       sockets[2].close();

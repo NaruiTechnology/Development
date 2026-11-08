@@ -61,6 +61,8 @@ interface ImageState {
   vectorCustomPoints: Float32Array | null;
   /** For custom pattern only: flat render-space (x, y) pairs, length 2*N. */
   vectorCustomRenderPoints: Float32Array | null;
+  /** Workflow points retain exact source-image pixels rather than stretching into an ROI. */
+  vectorCustomRenderInFrame: boolean;
   /** For custom pattern only: 1 when the point is explicitly beam-blanked. */
   vectorCustomBlankMask: Uint8Array | null;
   /** For custom pattern only: 1 when the point is a selected Spot beam-on pixel. */
@@ -120,6 +122,7 @@ const initialState: ImageState = {
   vectorSampledMask: new Uint8Array(VEC_EDGE * VEC_EDGE),
   vectorCustomPoints: null,
   vectorCustomRenderPoints: null,
+  vectorCustomRenderInFrame: false,
   vectorCustomBlankMask: null,
   vectorCustomSpotMask: null,
   vectorCustomCount: 0,
@@ -142,6 +145,8 @@ interface SetupVectorPayload {
   scanPath?: VectorScanPath;
   /** Custom points copied from VectorRequest.points for custom mode. */
   points?: Array<VectorPointTuple | VectorPoint> | null;
+  /** Exact full-frame source pixel for each custom point (UI metadata only). */
+  pointPixelIndices?: number[];
   /** Edge of the render target. Defaults to 2048 (FPGA DAC range). */
   edge?: number;
   /** Active ROI in 14-bit DAC coordinates. Used to map custom points to pixels. */
@@ -374,8 +379,14 @@ const slice = createSlice({
       state.vectorPreserveZeroSamples = a.payload.preserveZeroSamples === true;
       state.pendingVectorDisplay = null;
 
+      state.vectorCustomRenderInFrame = false;
       if (pattern === "custom" && a.payload.points && a.payload.points.length) {
         const pts = a.payload.points;
+        const sourcePixels = a.payload.pointPixelIndices;
+        if (sourcePixels && (sourcePixels.length !== pts.length || sourcePixels.some(index => !Number.isInteger(index) || index < 0 || index >= edge * edge))) {
+          throw new Error("Custom scan source pixel map does not match the display frame");
+        }
+        state.vectorCustomRenderInFrame = Boolean(sourcePixels);
         const flat = new Float32Array(pts.length * 2);
         const renderFlat = new Float32Array(pts.length * 2);
         const blankMask = new Uint8Array(pts.length);
@@ -385,8 +396,8 @@ const slice = createSlice({
           const [x, y] = pointCoords(pts[i]);
           flat[2 * i] = x;
           flat[2 * i + 1] = y;
-          renderFlat[2 * i] = mapCoordToPixel(x, bounds.x0, bounds.x1, edge);
-          renderFlat[2 * i + 1] = mapCoordToPixel(y, bounds.y0, bounds.y1, edge);
+          renderFlat[2 * i] = sourcePixels ? sourcePixels[i] % edge : mapCoordToPixel(x, bounds.x0, bounds.x1, edge);
+          renderFlat[2 * i + 1] = sourcePixels ? Math.floor(sourcePixels[i] / edge) : mapCoordToPixel(y, bounds.y0, bounds.y1, edge);
           blankMask[i] = pointBlanked(pts[i]) ? 1 : 0;
           spotMask[i] = pointSpotHighlighted(pts[i]) ? 1 : 0;
         }
@@ -516,15 +527,16 @@ const slice = createSlice({
             }
           }
         } else if (pts) {
-          const maps = roiMaps;
+          const maps = state.vectorCustomRenderInFrame ? null : roiMaps;
           for (let m = 0; m < n; m++) {
             const i = cur + m;
+            if (state.vectorCustomBlankMask?.[i] === 1) continue;
             const x = pts[2 * i] | 0;
             const y = pts[2 * i + 1] | 0;
             if (x >= 0 && x < edge && y >= 0 && y < edge) {
               const destinationIndex = maps ? maps.ys[y] + maps.xs[x] : y * edge + x;
               const sample = values[k + m];
-              if (!preserveZero || sample !== 0) {
+              if (!preserveZero || sample !== 0 || state.vectorCustomBlankMask !== null) {
                 image[destinationIndex] = sample;
                 sampledMask[destinationIndex] = 1;
               }

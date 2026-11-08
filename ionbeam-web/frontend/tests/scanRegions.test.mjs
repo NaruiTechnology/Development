@@ -495,3 +495,17 @@ test("ROI streaming matches the reference per-sample mapping and stays fast", as
   time(roi); time(null);
   assert.ok(time(roi) < Math.max(100, time(null) * 40), "ROI raster append regressed to per-sample proxy access");
 });
+
+
+test("workflow custom samples land on exact source pixels and never replace blanked pixels", () => {
+  const initial = Uint16Array.from({length:64}, (_, i) => (i+1) * 256);
+  let state = imageReducer(undefined, setupVector({pattern:"custom",edge:8,
+    roi:{x_start:4000,x_end:8000,y_start:4000,y_end:8000},
+    points:[[4200,4200,2,false,1],[6000,6000,2,true,2],[7900,7900,2,false,1]],
+    pointPixelIndices:[17,18,19], initialImage:initial, preserveZeroSamples:true}));
+  state = imageReducer(state, appendVectorSamples({values:new Uint16Array([0x4567,0xabcd,0])}));
+  assert.equal(state.vectorImage[17], 0x4567);
+  assert.equal(state.vectorImage[18], initial[18], "even nonzero ADC feedback at a blank point preserves its original pixel");
+  assert.equal(state.vectorImage[19], 0, "an active zero sample is valid image data");
+  for (let i=0; i<64; i++) if (![17,19].includes(i)) assert.equal(state.vectorImage[i], initial[i]);
+});

@@ -1,6 +1,6 @@
 import { MODEL_REGISTRY, type PatternSpec, type PatternRoi } from "./processingPatterns.js";
 import { bitmapScanCoordinates } from "./vectorScanPath.js";
-import type { ROIRequest, VectorPointTuple, VectorScanPath } from "../types/api";
+import type { ROIRequest, SimulationBitmap, VectorPointTuple, VectorScanPath } from "../types/api";
 
 export interface WorkflowSpec {
   name: string; caption: string;
@@ -24,10 +24,12 @@ export function workflowPoints(spec: PatternSpec, shape: PatternRoi, region: ROI
   field: ROIRequest, frame: Uint16Array, edge: number, workflow: WorkflowSpec,
   materials: { name: string; brightness: number }[], dwell: number, path: VectorScanPath,
   toDac?: (x: number, y: number) => { x: number; y: number },
-): { step: WorkflowSpec["steps"][number]; points: VectorPointTuple[]; threshold: number | null; spot: number }[] {
+): { step: WorkflowSpec["steps"][number]; points: VectorPointTuple[]; threshold: number | null; spot: number; simulationBitmap: SimulationBitmap; pointPixelIndices: number[] }[] {
   if (frame.length !== edge * edge || !frame.length) throw new Error("Workflow needs a complete source image.");
-  const samples: { x: number; y: number; gray: number; inside: boolean }[] = [];
+  const samples: { x: number; y: number; gray: number; inside: boolean; index: number }[] = [];
   let sum = 0, count = 0;
+  let left = edge, right = 0, top = edge, bottom = 0;
+  let dacLeft = 16383, dacRight = 0, dacTop = 16383, dacBottom = 0;
   for (const [x, y] of bitmapScanCoordinates(edge, edge, path)) {
     const wx = field.x_start + x / Math.max(1, edge - 1) * (field.x_end - field.x_start);
     const wy = field.y_start + y / Math.max(1, edge - 1) * (field.y_end - field.y_start);
@@ -36,12 +38,25 @@ export function workflowPoints(spec: PatternSpec, shape: PatternRoi, region: ROI
     const gray = frame[y * edge + x] >>> 8;
     const dac = toDac?.(wx, wy);
     samples.push({ x: dac?.x ?? Math.round((wx - field.x_start) / (field.x_end - field.x_start) * 16383),
-      y: dac?.y ?? Math.round((wy - field.y_start) / (field.y_end - field.y_start) * 16383), gray, inside });
+      y: dac?.y ?? Math.round((wy - field.y_start) / (field.y_end - field.y_start) * 16383), gray, inside, index: y * edge + x });
+    left = Math.min(left, x); right = Math.max(right, x);
+    top = Math.min(top, y); bottom = Math.max(bottom, y);
+    const sample = samples[samples.length - 1];
+    dacLeft = Math.min(dacLeft, sample.x); dacRight = Math.max(dacRight, sample.x);
+    dacTop = Math.min(dacTop, sample.y); dacBottom = Math.max(dacBottom, sample.y);
     if (samples.length > 250000) throw new Error("Workflow exceeds 250,000 vector points; reduce resolution or ROI size.");
     if (inside) { sum += gray; count++; }
   }
   if (!count) throw new Error(`${spec.caption}: ROI contains no source pixels at this resolution.`);
   if (samples.length > 250000) throw new Error("Workflow exceeds 250,000 vector points; reduce resolution or ROI size.");
+  const pixels: number[] = [];
+  for (let y = top; y <= bottom; y++) for (let x = left; x <= right; x++) pixels.push(frame[y * edge + x] >>> 8);
+  // Even one sampled column/row needs a non-degenerate API ROI.
+  if (dacLeft === dacRight) { if (dacRight < 16383) dacRight++; else dacLeft--; }
+  if (dacTop === dacBottom) { if (dacBottom < 16383) dacBottom++; else dacTop--; }
+  const simulationBitmap: SimulationBitmap = { width: right - left + 1, height: bottom - top + 1, pixels,
+    source_roi: { x_start: dacLeft, x_end: dacRight, y_start: dacTop, y_end: dacBottom } };
+  const pointPixelIndices = samples.map(sample => sample.index);
   return workflow.steps.map(step => {
     const action = step.actions[0];
     const ratio = materials.find(m => m.name === action.thresholdMaterial)?.brightness;
@@ -54,7 +69,7 @@ export function workflowPoints(spec: PatternSpec, shape: PatternRoi, region: ROI
       if (active) spot++;
       return [p.x, p.y, dwell, !active, active ? 1 : 2];
     });
-    return { step, points, threshold, spot };
+    return { step, points, threshold, spot, simulationBitmap, pointPixelIndices };
   });
 }
 

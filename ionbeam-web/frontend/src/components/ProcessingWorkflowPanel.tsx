@@ -26,14 +26,15 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
   const completed = nodes.filter(n => n.status === "completed").length;
   const caption = specs.find(spec => spec.key === patternKey)?.caption ?? patternKey;
   return <section className="processing-workflow" aria-label={`${caption}: Workflow progress`}>
-    <div className="processing-workflow__header"><h3>Workflow</h3><span>{nodes.length}</span></div>
-    <progress aria-label="Completed workflow steps" title="Overall workflow progress: completed steps out of total steps" value={completed} max={Math.max(1, nodes.length)} />
-    <p aria-live="polite">{completed} / {nodes.length} steps complete{nodes.some(node => node.status === "error") ? " · Error" : ""}</p>
     <p className="processing-workflow__elapsed">Elapsed: {formatWorkflowElapsed(elapsed)}</p>
     {!nodes.length && <p>Enable a pattern and draw its ROI to preview the workflow.</p>}
     <ol className="processing-workflow__tree" aria-label="Workflow steps, left to right">{nodes.map((node, i) => <li key={node.id}
       className={`processing-workflow__node processing-workflow__node--${node.status}`} aria-current={node.status === "current" ? "step" : undefined}>
       <span className="processing-workflow__number">{String(i + 1).padStart(2, "0")}</span>
+      {i === nodes.length - 1 && <span className="processing-workflow__end" role="img"
+        aria-label={`Workflow end: ${completed === nodes.length ? "completed" : "not reached"}`}
+        title={`Workflow end: ${completed === nodes.length ? "completed" : "not reached"}`}
+        data-completed={completed === nodes.length} />}
       <div className="processing-workflow__step"><small>{node.status}</small><strong>{node.caption}</strong>
         <span className="processing-workflow__elapsed">Elapsed: {node.startedAt === undefined ? "—" : formatWorkflowElapsed(workflowElapsedMs(node, now))}</span>
         <span>{node.pattern}</span><span>{node.action}</span>

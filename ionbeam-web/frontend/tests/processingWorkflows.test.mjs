@@ -56,3 +56,18 @@ test("elapsed time advances only after start and freezes at the terminal event",
   assert.equal(formatWorkflowElapsed(61500), "01:01.5");
   assert.equal(formatWorkflowElapsed(3661500), "1:01:01.5");
 });
+
+
+test("ROI image and render pixel indices share the exact workflow point order", () => {
+  const region = {x_start: 1, x_end: 2, y_start: 1, y_end: 2};
+  const smallField = {x_start:0,x_end:3,y_start:0,y_end:3};
+  const frame = Uint16Array.from({length: 16}, (_, i) => i << 8);
+  const [dark, bright] = workflowPoints(spec, region, region, smallField, frame, 4, even, materials, 2, "vertical_serpentine");
+  assert.deepEqual(dark.pointPixelIndices, [9,5,6,10]);
+  assert.deepEqual(dark.simulationBitmap.pixels, [5,6,9,10]);
+  assert.equal(dark.simulationBitmap.width, 2);
+  assert.equal(dark.simulationBitmap.height, 2);
+  assert.deepEqual(dark.simulationBitmap.source_roi, {x_start:5461,x_end:10922,y_start:5461,y_end:10922});
+  assert.equal(dark.simulationBitmap, bright.simulationBitmap);
+  assert.equal(dark.pointPixelIndices, bright.pointPixelIndices);
+});
