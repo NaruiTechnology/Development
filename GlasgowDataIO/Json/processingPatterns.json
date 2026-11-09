@@ -103,6 +103,28 @@
                             "thresholdSource": "fullScaleAverage"
                         }
                     ]
+                },                
+                {
+                    "caption": "Step 1",
+                    "actions": [
+                        {
+                            "caption": "Spot lay 1",
+                            "mode": "spot",
+                            "selection": "bright",
+                            "thresholdSource": "fullScaleAverage"
+                        }
+                    ]
+                },
+                {
+                    "caption": "Step 2",
+                    "actions": [
+                        {
+                            "caption": "Spot lay 2",
+                            "mode": "spot",
+                            "selection": "bright",
+                            "thresholdSource": "fullScaleAverage"
+                        }
+                    ]
                 }
             ]
         },

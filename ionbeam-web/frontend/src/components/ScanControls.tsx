@@ -342,6 +342,7 @@ export function ScanControls({
   const infiniteScanActiveRef = useRef(false);
   const regionScanQueueRef = useRef<RegionScanEntry[]>([]);
   const regionScanRepeatRef = useRef<RegionScanEntry[]>([]);
+  const [workflowLivePending, setWorkflowLivePending] = useState(false);
   const [runStarting, setRunStarting] = useState(false);
   const [infiniteScanActive, setInfiniteScanActive] = useState(false);
   const [pendingZoomRestart, setPendingZoomRestart] = useState<"single" | "infinite" | null>(null);
@@ -616,6 +617,9 @@ export function ScanControls({
       }
       const next = regionScanQueueRef.current.shift();
       if (next) startEntry(next, true);
+      else if (entry.workflowStepIds?.length && !regionScanRepeatRef.current.length) {
+        setWorkflowLivePending(true);
+      }
     };
     if (entry.kind === "vector" && entry.pendingUnderlay && preserveFrame && entry.displayROI) {
       dispatch(seedVectorRegions({ image: entry.pendingUnderlay, regions: [entry.displayROI] }));
@@ -767,6 +771,7 @@ export function ScanControls({
         }
         if (!entries.length) {
           dispatch(setWorkflowProgress(progress));
+          if (progress.length) setWorkflowLivePending(true);
           return;
         }
         const prepared = await persistScanSequence(entries, false);
@@ -912,7 +917,10 @@ export function ScanControls({
     if (!allowed || startGeneration !== zoomRestartGenerationRef.current) return;
     // Zoom remains editable while authentication/request preparation awaits.
     // A render's closure can be older than the value currently in the control.
-    if (processingMode) dispatch(setWorkflowProgress(defaultWorkflowProgress().map(step => ({ ...step, status: "current" }))));
+    if (processingMode && (roiState.roi_scan_enabled || !patterns.workflowProgress.length ||
+        !patterns.workflowProgress.every(step => step.status === "completed"))) {
+      dispatch(setWorkflowProgress(defaultWorkflowProgress().map(step => ({ ...step, status: "current" }))));
+    }
     const scanZoom = roiStateRef.current.scan_zoom;
     const zoomGeneration = zoomUpdateGenerationRef.current;
     try {
@@ -1039,7 +1047,27 @@ export function ScanControls({
   }
   startInfiniteRequestRef.current = startInfiniteRequest;
 
+  useEffect(() => {
+    if (!workflowLivePending) return;
+    if (phase === "error" || phase === "stopping") {
+      setWorkflowLivePending(false);
+      return;
+    }
+    if (busy) return;
+    // Wait for a render with full-field settings before preparing the live
+    // request; the finishing stream's closure still contains its ROI bounds.
+    if (processingROIScanEnabled || baseROIState.roi_scan_enabled || roiState.scan_zoom !== 1) {
+      setProcessingROIScanEnabled(false);
+      dispatch(setROIScanEnabled(false));
+      dispatch(setScanZoom(1));
+      return;
+    }
+    setWorkflowLivePending(false);
+    void startInfiniteRequestRef.current(true);
+  }, [workflowLivePending, phase, busy, processingROIScanEnabled, baseROIState.roi_scan_enabled, roiState.scan_zoom, dispatch]);
+
   function onStop() {
+    setWorkflowLivePending(false);
     if (!stopAvailable) return;
     dispatch(updateWorkflowStep({ status: "stopped" }));
     if (targetGrayRunning) {

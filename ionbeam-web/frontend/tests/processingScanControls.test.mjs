@@ -318,8 +318,38 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     await settle();
     assert.equal(store.getState().image.frame[0], 0x2345, "raster full-field samples paint outside the patterns");
 
-
-
+    // Finishing every workflow step returns to an unzoomed full-field live scan.
+    await act(async () => { renderer.root.findAllByType("button").find(n => n.props.className === "btn btn--stop").props.onClick(); });
+    await settle();
+    await act(async () => {
+      renderer.update(render(true, 5, true, false, "vector"));
+      store.dispatch(processing.fetchProcessingPatterns.fulfilled({ patterns: store.getState().processing.specs,
+        workflows, materials: config.Materials }, "completion"));
+      store.dispatch(processing.setPatternEnabled({ key: "free", enabled: false }));
+      store.dispatch(processing.setPatternWorkflow({ key: "ring", enabled: true }));
+      store.dispatch(scan.setScanZoom(2));
+      store.dispatch(image.setupVector({ pattern: "default", edge: 128,
+        initialImage: Uint16Array.from({length: 128 * 128}, (_, i) => (i % 128 < 64 ? 40 : 200) << 8) }));
+    });
+    await act(async () => { roiToggle().props.onChange({ target: { checked: true } }); });
+    await clickRun();
+    for (let step = 0; step < 2; step++) {
+      const current = sockets.at(-1);
+      assert.equal(roiToggle().props.checked, true);
+      await act(async () => {
+        current.onmessage({ data: JSON.stringify({ event: "done", chunks: 1 }) });
+        current.close();
+      });
+      await settle();
+    }
+    assert.deepEqual(store.getState().processing.workflowProgress.map(p => p.status), ["completed", "completed"]);
+    assert.equal(roiToggle().props.checked, false);
+    assert.equal(store.getState().scan.roi.scan_zoom, 1);
+    assert.equal(sockets.at(-1).requests[0].roi ?? null, null);
+    assert.equal(sockets.at(-1).requests[0].pattern, "default");
+    assert.equal(sockets.at(-1).requests[0].continuous, true);
+    assert.equal(store.getState().scan.phase, "running");
+    assert.equal(store.getState().scan.infiniteActive, true);
   } finally {
     if (renderer) await act(async () => { renderer.unmount(); });
     await vite.close();
