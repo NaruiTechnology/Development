@@ -119,6 +119,7 @@ type AppRoute = "control" | "report" | "vacuum";
 type LeftTopTab = "scan" | "processing" | "calibrate";
 type ScanSubTab = "raster" | "vector";
 type CalibrateSubTab = "dimension" | "mag";
+type ProcessingSubTab = "control" | "patterns";
 
 function CollapsibleScanParameters({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(true);
@@ -184,6 +185,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   // Controls card (nested in the scan panel card) starts expanded.
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
   const [processingControlsCollapsed, setProcessingControlsCollapsed] = useState(false);
+  const [processingSubTab, setProcessingSubTab] = useState<ProcessingSubTab>("control");
   const [processingEntryRequest, setProcessingEntryRequest] = useState(0);
   const [processingImageError, setProcessingImageError] = useState<string | null>(null);
 
@@ -1778,8 +1780,17 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
               </div>
             ) : null}
             <div className="card__body">
+              {activeTopTab === "processing" && (
+                <div className="tabs tabs--sub" role="tablist" aria-label="Processing sections">
+                  <button type="button" role="tab" className="tab tab--sub" aria-selected={processingSubTab === "control"}
+                    onClick={() => setProcessingSubTab("control")}>{t("card.controls")}</button>
+                  <button type="button" role="tab" className="tab tab--sub" aria-selected={processingSubTab === "patterns"}
+                    onClick={() => setProcessingSubTab("patterns")}>{t("processing.patterns")}</button>
+                </div>
+              )}
               {activeTopTab === "processing" ? (
                 <>
+                  {processingSubTab === "control" && <>
                   <SimulationImageCard
                     defaultCollapsed
                     disabled={panelDisabled}
@@ -1788,7 +1799,8 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                     onImageChange={handleSimulationImageChange}
                   />
                   {processingImageError && <p className="scan-inline-error" role="alert">{t("processing.imageError", { error: processingImageError })}</p>}
-                  <ProcessingPatternsPanel disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} />
+                  </>}
+                  {processingSubTab === "patterns" && <ProcessingPatternsPanel disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} />}
                 </>
               ) : activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
@@ -1858,6 +1870,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
               )}
               <div hidden={activeTopTab !== "scan" && activeTopTab !== "processing"}>
                 <>
+                  <div hidden={activeTopTab === "processing" && processingSubTab !== "control"}>
                   <div className={`card scan-controls-card${activeScanColor ? " scan-controls-card--active" : ""}`}>
                       <div className="card__header">
                         <span className="card__title">{t("card.controls")}</span>
@@ -1904,7 +1917,8 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                         ))}
                       </div>
                     </div>
-                  {activeTopTab === "processing" && <ProcessingPatternCards disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} />}
+                    </div>
+                  {activeTopTab === "processing" && <div hidden={processingSubTab !== "patterns"}><ProcessingPatternCards disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} /></div>}
                   {activeTopTab === "scan" && <div className="card save-results-card">
                     <div className="card__header">
                       <span className="card__title">{t("card.runReport")}</span>
