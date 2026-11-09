@@ -125,7 +125,8 @@ class PatternCard(Card):
     def retranslate(self) -> None:
         m = self.model
         self.set_title(tr(f"processing.pattern.{m.key}", m.caption))
-        self.hint.setText(t(f"processing.hint.{m.ROI_KIND}"))
+        hint = "line" if type(m).__name__ == "LineModel" else "vertices" if type(m).__name__ == "PolygonModel" else m.ROI_KIND
+        self.hint.setText(t(f"processing.hint.{hint}"))
         self.clear_btn.setText(t("processing.clear"))
         for name, (name_lbl, w, _u) in self._widgets.items():
             name_lbl.setText(tr(f"processing.param.{m.key}.{name}", m.param_specs[name].label))

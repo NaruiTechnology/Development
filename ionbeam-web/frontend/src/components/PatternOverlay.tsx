@@ -8,7 +8,7 @@
  *   circle   drag from the centre to the radius; release to finish
  *   ring     drag from the centre to the outer circle; drag the inner-radius handle to adjust the hole
  *            (both circles share the centre; Esc / right-click cancels)
- *   polygon  press, drag, release: a free-hand outline
+ *   LineModel: drag endpoints; PolygonModel: four clicks; FreeHandModel: press-drag-release
  *
  * Shapes are stored in world coordinates (like the ROI selection), radii as world lengths, so a ring stays a true
  * circle whatever the image aspect and survives zoom.
@@ -16,7 +16,7 @@
 import { useDeferredValue, memo, useEffect, useReducer, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 
-import { MODEL_REGISTRY, patternBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
+import { MODEL_REGISTRY, lineRoi, patternBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { useAppDispatch, useAppSelector, useWorkspaceActive } from "../store";
 import { useTranslation } from "../i18n";
@@ -43,7 +43,9 @@ export interface CanvasOverlayApi {
 type Draft =
   | { kind: "rect"; start: Pt; rect: RectRoi | null }
   | { kind: "circle" | "ring"; center: Pt; centerCanvas: Pt; outer: number; inner: number; dragging: boolean }
-  | { kind: "polygon"; points: Pt[] };
+  | { kind: "polygon"; points: Pt[] }
+  | { kind: "line"; start: Pt; end: Pt }
+  | { kind: "vertices"; points: Pt[]; hover: Pt; pressed: Pt | null };
 
 export function PatternOverlay({ disabled, api }: { disabled: boolean; api: CanvasOverlayApi }) {
   const dispatch = useAppDispatch();
@@ -117,6 +119,10 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     setMenu(null);
     e.preventDefault();
     const p = api.pointFromClient(e.clientX, e.clientY);
+    if (draft.current?.kind === "vertices") {
+      draft.current.pressed = p;
+      return;
+    }
     const target = (e.target as Element | undefined)?.closest("[data-pattern-key]");
     const key = target?.getAttribute("data-pattern-key");
     const original = key ? instances[key]?.roi : null;
@@ -139,7 +145,9 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     } catch {
       // synthetic events have no active pointer
     }
-    if (active.roi === "rect") draft.current = { kind: "rect", start: p, rect: null };
+    if (active.model === "LineModel") draft.current = { kind: "line", start: p, end: p };
+    else if (active.model === "PolygonModel") draft.current = { kind: "vertices", points: [], hover: p, pressed: p };
+    else if (active.roi === "rect") draft.current = { kind: "rect", start: p, rect: null };
     else if (active.roi === "circle" || active.roi === "ring") draft.current = { kind: active.roi, center: api.toWorld(p), centerCanvas: p, outer: 0, inner: 0, dragging: true };
     else draft.current = { kind: "polygon", points: [p] };
     repaint();
@@ -204,7 +212,11 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     const d = draft.current;
     if (!d || !active || disabled) return;
     const p = api.pointFromClient(e.clientX, e.clientY);
-    if (d.kind === "rect") {
+    if (d.kind === "line") {
+      d.end = p;
+    } else if (d.kind === "vertices") {
+      d.hover = p;
+    } else if (d.kind === "rect") {
       if (Math.max(Math.abs(p.x - d.start.x), Math.abs(p.y - d.start.y)) >= DRAG_THRESHOLD) {
         const a = api.toWorld(d.start);
         const b = api.toWorld(p);
@@ -235,7 +247,23 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     const d = draft.current;
     if (!d || !active || e.button !== 0) return;
     const p = api.pointFromClient(e.clientX, e.clientY);
-    if (d.kind === "rect") {
+    if (d.kind === "line") {
+      if (Math.hypot(p.x - d.start.x, p.y - d.start.y) >= DRAG_THRESHOLD) {
+        const a = api.toWorld(d.start), b = api.toWorld(p);
+        commit(lineRoi([a.x, a.y], [b.x, b.y], Number(instances[active.key]?.parameters.lineWidth ?? 0.5)));
+      }
+      draft.current = null;
+    } else if (d.kind === "vertices") {
+      if (d.pressed && Math.hypot(p.x - d.pressed.x, p.y - d.pressed.y) < DRAG_THRESHOLD) {
+        const last = d.points[d.points.length - 1];
+        if (!last || Math.hypot(p.x - last.x, p.y - last.y) >= 1) d.points.push(p);
+        if (d.points.length === 4) {
+          commit({ points: d.points.map(q => { const w = api.toWorld(q); return [w.x, w.y]; }) });
+          draft.current = null;
+        }
+      }
+      d.pressed = null;
+    } else if (d.kind === "rect") {
       if (d.rect) commit(d.rect);
       draft.current = null;
     } else if (d.kind === "circle" || d.kind === "ring") {
@@ -261,7 +289,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
 
   function onPointerLeave() {
     setGrayTooltip(null);
-    if (draft.current) cancel();
+    if (draft.current && draft.current.kind !== "vertices") cancel();
   }
 
   const d = draft.current;
@@ -334,6 +362,16 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       {active && d?.kind === "circle" && d.outer > 0 && (
         <Shape spec={active} params={{}} roi={{ cx: d.center.x, cy: d.center.y, radius: d.outer }} active draft cx={cx} cy={cy} sx={sx} sy={sy} />
       )}
+      {active && d?.kind === "line" && Math.hypot(d.end.x - d.start.x, d.end.y - d.start.y) > 0 && (() => {
+        const a = api.toWorld(d.start), b = api.toWorld(d.end);
+        return <Shape spec={active} params={{}} roi={lineRoi([a.x, a.y], [b.x, b.y], Number(instances[active.key]?.parameters.lineWidth ?? 0.5))}
+          active draft cx={cx} cy={cy} sx={sx} sy={sy} />;
+      })()}
+      {d?.kind === "vertices" && d.points.length > 0 && <g pointerEvents="none">
+        <polyline points={[...d.points, d.hover, d.points[0]].map(q => `${q.x},${q.y}`).join(" ")}
+          fill="none" stroke={ACTIVE_COLOR} strokeWidth={1.5} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
+        {d.points.map((q, i) => <circle key={i} cx={q.x} cy={q.y} r={3} fill={ACTIVE_COLOR} />)}
+      </g>}
       {d?.kind === "polygon" && d.points.length > 1 && (
         <polyline
           points={d.points.map((q) => `${q.x},${q.y}`).join(" ")}

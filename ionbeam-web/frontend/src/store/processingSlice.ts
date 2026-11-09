@@ -5,6 +5,9 @@ import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
 import {
   MODEL_REGISTRY,
+  lineEndpoints,
+  lineRoi,
+  type PolygonRoi,
   coerceParameter,
   defaultParameters,
   resolveCatalogue,
@@ -111,6 +114,13 @@ const slice = createSlice({
       if (!spec || !inst) return;
       try {
         inst.parameters[a.payload.name] = coerceParameter(spec, a.payload.value);
+        if (a.payload.name === "lineWidth" && inst.roi && s.specs.find(p => p.key === a.payload.key)?.model === "LineModel") {
+          const previous = inst.roi as PolygonRoi;
+          inst.roi = lineRoi(...lineEndpoints(previous), Number(inst.parameters.lineWidth));
+          s.roiHistory.push({ key: a.payload.key, roi: previous });
+          if (s.roiHistory.length > 100) s.roiHistory.shift();
+          s.workflowProgress = [];
+        }
       } catch {
         // not a usable value (e.g. half-typed number): keep the previous one
       }
@@ -120,7 +130,8 @@ const slice = createSlice({
       const inst = s.instances[a.payload.key];
       if (!spec || !inst) return;
       try {
-        const next = MODEL_REGISTRY[spec.model].validateRoi(a.payload.roi);
+        let next = MODEL_REGISTRY[spec.model].validateRoi(a.payload.roi);
+        if (spec.model === "LineModel") next = lineRoi(...lineEndpoints(next as PolygonRoi), Number(inst.parameters.lineWidth ?? 0.5));
         if (!a.payload.preview && !inst.enabled) {
           inst.enabled = true;
           s.workflowProgress = [];
@@ -146,6 +157,10 @@ const slice = createSlice({
       const previous = s.roiHistory.pop();
       if (!previous || !s.instances[previous.key]) return;
       s.instances[previous.key].roi = previous.roi;
+      if (previous.roi && s.specs.find(p => p.key === previous.key)?.model === "LineModel") {
+        const [a, , , d] = (previous.roi as PolygonRoi).points;
+        s.instances[previous.key].parameters.lineWidth = Math.hypot(a[0] - d[0], a[1] - d[1]);
+      }
       if (!previous.roi) s.instances[previous.key].enabled = false;
       s.instances[previous.key].AvgGray = null;
       s.activeKey = previous.key;

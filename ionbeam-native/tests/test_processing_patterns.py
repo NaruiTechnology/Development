@@ -11,7 +11,7 @@ from ionbeam_native.processing.config import parse_config
 def test_shipped_config_loads_and_skips():
     cfg, models = load_models(processing_patterns_path())
     assert not cfg.errors
-    assert list(models) == ["solidBox", "openBox", "stairCut", "cleaningLine", "circle", "ring", "freeHand"]
+    assert list(models) == ["solidBox", "openBox", "line", "stairCut", "cleaningLine", "circle", "ring", "polygon", "freeHand"]
     assert all(s.skip for s in cfg.specs if s.key not in models)
     assert models["stairCut"].parameters["steps"] == 5
 
@@ -111,3 +111,59 @@ def test_freehand_polygon():
     assert len(fh.roi["points"]) == 4 and fh.area() == 16 and fh.contains(2, 2) and not fh.contains(5, 5)
     with pytest.raises(ValueError):
         fh.set_roi({"points": [[0, 0], [1, 1], [2, 2]]})
+
+
+def test_line_width_and_four_vertex_polygon():
+    from ionbeam_native.processing.models import line_roi, line_endpoints
+    _, models = load_models(processing_patterns_path())
+    line = models["line"]
+    for start, end in [((0, 0), (10, 0)), ((0, 10), (0, 0)), ((0, 0), (6, 8))]:
+        line.set_roi(line_roi(start, end, 0.5))
+        assert line_endpoints(line.roi) == (start, end)
+        assert math.isclose(line.area(), 5)
+        assert line.contains((start[0] + end[0]) / 2, (start[1] + end[1]) / 2)
+        assert not line.contains(50, 50)
+    line.set_parameter("lineWidth", 2)
+    assert math.isclose(line.area(), 20)
+    with pytest.raises(ValueError):
+        line_roi((0, 0), (0, 0), 1)
+    poly = models["polygon"]
+    poly.set_roi({"points": [[0, 0], [4, 0], [1, 1], [0, 4]]})
+    assert poly.area() == 4 and poly.contains(0.5, 0.5) and poly.contains(0, 0)
+    assert not poly.contains(3, 3)
+    for points in [[[0, 0], [1, 0], [1, 1]], [[0, 0], [4, 4], [0, 3], [4, 0]]]:
+        with pytest.raises(ValueError):
+            poly.set_roi({"points": points})
+
+
+def test_line_and_polygon_pointer_gestures():
+    from types import SimpleNamespace
+    from PyQt6.QtCore import Qt
+    from ionbeam_native.ui.pattern_tool import PatternTool
+    from ionbeam_native.processing.models import line_endpoints
+    _, models = load_models(processing_patterns_path())
+    panel = SimpleNamespace(active_model=lambda: models["line"], models=models)
+    tool = PatternTool(panel)
+    canvas = SimpleNamespace(disabled=False, view=SimpleNamespace(setFocus=lambda: None, update=lambda: None),
+                             _canvas_point=lambda p: p, _to_dut=lambda p: (p[0] / 2, p[1] / 2))
+    def event(x, y, button=Qt.MouseButton.LeftButton):
+        return SimpleNamespace(button=lambda: button, position=lambda: (x, y))
+    tool.mouse_press(canvas, event(20, 20))
+    tool.mouse_move(canvas, event(80, 20))
+    assert models["line"].roi is None
+    tool.mouse_release(canvas, event(100, 20))
+    assert line_endpoints(models["line"].roi) == ((10, 10), (50, 10))
+    panel.active_model = lambda: models["polygon"]
+    for x, y in [(20, 20), (120, 20), (120, 120)]:
+        tool.mouse_press(canvas, event(x, y))
+        tool.mouse_release(canvas, event(x, y))
+    assert models["polygon"].roi is None
+    tool.mouse_leave(canvas)
+    tool.mouse_press(canvas, event(20, 120))
+    tool.mouse_release(canvas, event(20, 120))
+    assert models["polygon"].roi == {"points": [[10, 10], [60, 10], [60, 60], [10, 60]]}
+    saved = models["polygon"].roi
+    tool.mouse_press(canvas, event(30, 30))
+    tool.mouse_press(canvas, event(40, 30))
+    tool.mouse_press(canvas, event(50, 30, Qt.MouseButton.RightButton))
+    assert not tool.drawing and models["polygon"].roi == saved

@@ -8,9 +8,9 @@ Workflows may omit `steps` or provide an empty list. `AreaRemoval` is parameterl
 
 Workflow JSON keeps only the fields the web executor consumes: workflow and display captions, step actions, `mode`, and the Spot selection/threshold source. Action and step names are omitted. A Spot threshold uses exactly one of `thresholdMaterial`, `thresholdSource: "selectedMaterial"`, or `thresholdSource: "fullScaleAverage"`.
 
-**Models.** `frontend/src/lib/processingPatterns.ts` has `MODEL_REGISTRY` (SolidBoxModel, OpenBoxModel, StairCutModel, CleaningLineModel, CircleModel, RingModel, FreeHandModel): ROI validation, area, containment, preview geometry. The processing slice (`store/processingSlice.ts`) holds one instance (parameters + ROI) per catalogue entry; the catalogue is fetched at app launch.
+**Models.** `frontend/src/lib/processingPatterns.ts` has `MODEL_REGISTRY` (SolidBoxModel, OpenBoxModel, StairCutModel, CleaningLineModel, CircleModel, RingModel, LineModel, PolygonModel, FreeHandModel): ROI validation, area, containment, preview geometry. The processing slice (`store/processingSlice.ts`) holds one instance (parameters + ROI) per catalogue entry; the catalogue is fetched at app launch.
 
-**UI.** `ProcessingPatternsPanel` renders the non-collapsible *Patterns* card (icon strip). The shared Controls card sits directly below it, followed by `ProcessingPatternCards` with one card per pattern, collapsed by default. Picking an icon arms drawing; picking it again disarms. Icon selection leaves card expansion and scroll position unchanged. Drawing or editing a pattern ROI automatically expands its corresponding card. Each card is expanded or collapsed independently using its chevron; expanding a card also selects its drawing tool. `PatternOverlay` is mounted inside the ROI canvas through `ROIEditor`'s `renderCanvasOverlay`: rect = drag; circle = drag centre to radius and release (open outline); ring = drag centre to outer circle, then click for the inner circle (same centre), Esc / right-click cancels; free hand = press-drag-release.
+**UI.** `ProcessingPatternsPanel` renders the non-collapsible *Patterns* card (icon strip). The shared Controls card sits directly below it, followed by `ProcessingPatternCards` with one card per pattern, collapsed by default. Picking an icon arms drawing; picking it again disarms. Icon selection leaves card expansion and scroll position unchanged. Drawing or editing a pattern ROI automatically expands its corresponding card. Each card is expanded or collapsed independently using its chevron; expanding a card also selects its drawing tool. `PatternOverlay` is mounted inside the ROI canvas through `ROIEditor`'s `renderCanvasOverlay`: rect = drag; circle = drag centre to radius and release (open outline); ring = drag centre to outer circle, then click for the inner circle (same centre), Esc / right-click cancels; line = drag endpoints and release (adjustable width); polygon = four clicks; free hand = press-drag-release.
 
 **New pattern:** add a model to `MODEL_REGISTRY` and an entry to the JSON; the card form is generated from `parameters`.
 
@@ -164,3 +164,10 @@ When ROI Scan is off, its sweep and marker span the full field even while ring
 and freehand patterns remain visible. Shape clipping, including ring holes,
 applies only when acquisition has an ROI; sequential scans show the current
 ROI and parallel scans show their active region list.
+
+
+## Manual reference and new tools
+
+Line and Polygon follow PN 21021-B p. 2-60: drag-and-release for Line, four successive vertex clicks for Polygon. Esc/right-click cancels drafts. A Line is stored as a finite-width four-corner polygon to share the acquisition bounds and workflow masks; `lineWidth` changes its geometry, not only its appearance. Polygon rejects zero-area and crossing-edge drawings. Both have icons and cards in the shared catalogue; native model and drawing support is kept compatible.
+
+See [patterning-audit.md](patterning-audit.md) for the comparison with the supplied manual, remaining outline/stair/cleaning execution gaps, and the distinction between rectangular Default acquisition and selected shape-masked Spot workflows.

@@ -203,6 +203,20 @@
             }
         },
         {
+            "line": {
+                "skip": false,
+                "model": "LineModel",
+                "caption": "Line",
+                "icon": "patternLine",
+                "roi": "polygon",
+                "parameters": {
+                    "lineWidth": {"label": "Line width", "type": "float", "default": 0.5, "min": 0.01, "max": 1000.0, "step": 0.1, "unit": "um"},
+                    "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
+                    "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
+                }
+            }
+        },
+        {
             "stairCut": {
                 "skip": false,
                 "model": "StairCutModel",
@@ -250,6 +264,19 @@
                 "caption": "Ring",
                 "icon": "patternRing",
                 "roi": "ring",
+                "parameters": {
+                    "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
+                    "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
+                }
+            }
+        },
+        {
+            "polygon": {
+                "skip": false,
+                "model": "PolygonModel",
+                "caption": "Polygon",
+                "icon": "patternPolygon",
+                "roi": "polygon",
                 "parameters": {
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
                     "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}

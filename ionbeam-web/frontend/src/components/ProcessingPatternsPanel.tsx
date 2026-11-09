@@ -12,6 +12,7 @@ import { useTranslation, type TranslationKey } from "../i18n";
 import { materialTargetGrayLevel } from "../lib/processingWorkflows";
 import {
   MODEL_REGISTRY,
+  lineEndpoints,
   type CircleRoi,
   type ParameterSpec,
   type ParameterValue,
@@ -82,6 +83,8 @@ export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
             );
           })}
         </div>
+        {specs.find(s => s.key === activeKey)?.model === "LineModel" && <p className="patterns-card__status">{t("processing.hint.line")}</p>}
+        {specs.find(s => s.key === activeKey)?.model === "PolygonModel" && <p className="patterns-card__status">{t("processing.hint.vertices")}</p>}
         {messages.length > 0 && (
           <p className={`patterns-card__status${status === "error" ? " patterns-card__status--error" : ""}`}>{messages.join("\n")}</p>
         )}
@@ -200,7 +203,10 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
     if (!roi) return t("processing.roi.none");
     const n = (v: number) => String(Math.round(v * 100) / 100);
     let text: string;
-    if (s.roi === "rect") {
+    if (s.model === "LineModel") {
+      const [a, b] = lineEndpoints(roi as PolygonRoi);
+      text = `(${n(a[0])}, ${n(a[1])}) → (${n(b[0])}, ${n(b[1])}) ${u}`;
+    } else if (s.roi === "rect") {
       const r = roi as RectRoi;
       text = t("processing.roi.rect").replace("{x0}", n(r.x_start)).replace("{x1}", n(r.x_end)).replace("{y0}", n(r.y_start)).replace("{y1}", n(r.y_end)).replace("{unit}", u);
     } else if (s.roi === "circle") {

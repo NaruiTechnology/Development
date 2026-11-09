@@ -23,7 +23,7 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QPainterPath, QPen, QPolygonF
 
 from ..core.geometry import image_world_bounds, viewport_bounds, world_to_canvas_x, world_to_canvas_y
-from ..processing.models import CleaningLineModel, OpenBoxModel, StairCutModel
+from ..processing.models import CleaningLineModel, OpenBoxModel, StairCutModel, LineModel, PolygonModel, line_roi
 
 DRAG_THRESHOLD = 8          # canvas px (same as the ROI rectangle tool)
 ACTIVE_COLOR = "#ffd400"
@@ -46,6 +46,8 @@ class PatternTool:
         self.ring_center_canvas: Optional[tuple] = None
         self.ring_outer = 0.0                   # world length
         self.ring_inner = 0.0
+        self.line_start = self.line_end = None
+        self.poly_hover = None
         self.poly: Optional[list] = None        # canvas points
 
     def cancel(self) -> None:
@@ -58,7 +60,7 @@ class PatternTool:
 
     @property
     def drawing(self) -> bool:
-        return bool(self.rect_start or self.ring_drag or self.ring_stage or self.poly)
+        return bool(self.line_start or self.rect_start or self.ring_drag or self.ring_stage or self.poly)
 
     # ------------------------------------------------------------------ helpers
     @staticmethod
@@ -101,7 +103,18 @@ class PatternTool:
         canvas.view.setFocus()
         pt = canvas._canvas_point(e.position())
         kind = model.ROI_KIND
-        if kind == "rect":
+        if isinstance(model, LineModel):
+            self.line_start = self.line_end = pt
+        elif isinstance(model, PolygonModel):
+            if self.poly is None:
+                self.poly = []
+            if not self.poly or math.hypot(pt[0] - self.poly[-1][0], pt[1] - self.poly[-1][1]) >= 1:
+                self.poly.append(pt)
+            self.poly_hover = pt
+            if len(self.poly) == 4:
+                self._commit(model, {"points": [list(canvas._to_dut(q)) for q in self.poly]})
+                self.reset()
+        elif kind == "rect":
             self.rect_start, self.rect_draft = pt, None
         elif kind in ("circle", "ring"):
             if self.ring_stage == 1:
@@ -126,7 +139,11 @@ class PatternTool:
             return
         pt = canvas._canvas_point(e.position())
         kind = model.ROI_KIND
-        if kind == "rect" and self.rect_start is not None:
+        if isinstance(model, LineModel) and self.line_start is not None:
+            self.line_end = pt
+        elif isinstance(model, PolygonModel):
+            self.poly_hover = pt
+        elif kind == "rect" and self.rect_start is not None:
             if max(abs(pt[0] - self.rect_start[0]), abs(pt[1] - self.rect_start[1])) >= DRAG_THRESHOLD:
                 self.rect_draft = canvas._rect_from_points(self.rect_start, pt)
         elif kind in ("circle", "ring") and (self.ring_drag or self.ring_stage == 1):
@@ -149,7 +166,14 @@ class PatternTool:
         if model is None or e.button() != Qt.MouseButton.LeftButton:
             return
         kind = model.ROI_KIND
-        if kind == "rect" and self.rect_start is not None:
+        if isinstance(model, LineModel) and self.line_start is not None:
+            pt = canvas._canvas_point(e.position())
+            if math.hypot(pt[0] - self.line_start[0], pt[1] - self.line_start[1]) >= DRAG_THRESHOLD:
+                self._commit(model, line_roi(canvas._to_dut(self.line_start), canvas._to_dut(pt), float(model.parameters.get("lineWidth", 0.5))))
+            self.reset()
+        elif isinstance(model, PolygonModel):
+            pass  # vertices are committed on clicks, never on a freehand release
+        elif kind == "rect" and self.rect_start is not None:
             if self.rect_draft is not None:
                 self._commit(model, self.rect_draft)
             self.rect_start, self.rect_draft = None, None
@@ -177,6 +201,10 @@ class PatternTool:
 
     def mouse_leave(self, canvas) -> None:
         # a pending inner-circle placement survives the cursor leaving; drags do not
+        model = self.panel.active_model()
+        if isinstance(model, PolygonModel) and not isinstance(model, LineModel):
+            return
+        self.line_start = self.line_end = None
         self.rect_start, self.rect_draft, self.poly, self.ring_drag = None, None, None, False
         if self.ring_stage == 0:
             self.ring_center = None
@@ -198,7 +226,10 @@ class PatternTool:
         if active is None:
             return
         kind = active.ROI_KIND
-        if kind == "rect" and self.rect_draft:
+        if isinstance(active, LineModel) and self.line_start and self.line_end and self.line_start != self.line_end:
+            self._paint_roi(p, canvas, active, line_roi(canvas._to_dut(self.line_start), canvas._to_dut(self.line_end),
+                                                       float(active.parameters.get("lineWidth", 0.5))), True, draft=True)
+        elif kind == "rect" and self.rect_draft:
             self._paint_roi(p, canvas, active, self.rect_draft, True, draft=True)
         elif kind == "circle" and self.ring_drag and self.ring_outer > 0:
             self._paint_roi(p, canvas, active, {"cx": self.ring_center[0], "cy": self.ring_center[1],
@@ -207,12 +238,15 @@ class PatternTool:
             self._paint_roi(p, canvas, active, {"cx": self.ring_center[0], "cy": self.ring_center[1],
                                                 "r_inner": self.ring_inner if self.ring_stage == 1 else 0.0,
                                                 "r_outer": self.ring_outer}, True, draft=True)
-        elif kind == "polygon" and self.poly and len(self.poly) > 1:
+        elif kind == "polygon" and self.poly:
             pen = QPen(QColor(ACTIVE_COLOR), 1.2)
             pen.setStyle(Qt.PenStyle.DashLine)
             p.setPen(pen)
             p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawPolyline(QPolygonF([QPointF(*q) for q in self.poly]))
+            points = self.poly
+            if isinstance(active, PolygonModel) and self.poly_hover:
+                points = [*points, self.poly_hover, points[0]]
+            p.drawPolyline(QPolygonF([QPointF(*q) for q in points]))
 
     def _paint_roi(self, p, canvas, model, roi: dict, active: bool, *, draft: bool) -> None:
         col = QColor(ACTIVE_COLOR if active else OTHER_COLOR)

@@ -7,10 +7,13 @@ import { parseProcessingPatterns, readProcessingPatterns } from "../src/processi
 
 const shipped = path.resolve(__dirname, "..", "..", "..", "GlasgowDataIO", "Json", "processingPatterns.json");
 
-test("shipped file: seven active patterns in order, skipped ones dropped, no errors", () => {
+test("shipped file: nine active patterns in order, skipped ones dropped, no errors", () => {
   const cfg = readProcessingPatterns(shipped);
-  assert.deepEqual(cfg.patterns.map((p) => p.key), ["solidBox", "openBox", "stairCut", "cleaningLine", "circle", "ring", "freeHand"]);
+  assert.deepEqual(cfg.patterns.map((p) => p.key), ["solidBox", "openBox", "line", "stairCut", "cleaningLine", "circle", "ring", "polygon", "freeHand"]);
   assert.deepEqual(cfg.errors, []);
+  assert.equal(cfg.patterns.find(p => p.key === "line")?.model, "LineModel");
+  assert.equal(cfg.patterns.find(p => p.key === "line")?.parameters.find(p => p.name === "lineWidth")?.default, 0.5);
+  assert.equal(cfg.patterns.find(p => p.key === "polygon")?.model, "PolygonModel");
   assert.equal(cfg.patterns.find((p) => p.key === "circle")?.roi, "circle");
   assert.equal(cfg.patterns.find((p) => p.key === "circle")?.model, "CircleModel");
   assert.equal(cfg.patterns.find((p) => p.key === "ring")?.roi, "ring");
@@ -43,10 +46,10 @@ test("unusable files raise ConfigError", () => {
 });
 
 
-test("pilot workflows expose validated materials and one/two Spot steps", () => {
+test("pilot workflows expose validated materials and configured Spot steps", () => {
   const cfg = readProcessingPatterns(shipped);
   assert.deepEqual(cfg.workflows.map(w => w.name), ["default", "AreaRemoval", "MaterialLinelCut", "EvenLinelCut"]);
-  assert.deepEqual(cfg.workflows.map(w => w.steps.length), [1, 1, 1, 2]);
+  assert.deepEqual(cfg.workflows.map(w => w.steps.length), [1, 3, 1, 2]);
   assert.equal(cfg.materials.find(m => m.name === "SiO2")?.brightness, 1);
   assert.deepEqual(cfg.workflows[3].steps.map(s => s.actions[0].selection), ["dark", "bright"]);
   assert.equal(cfg.workflows[1].steps[0].actions[0].thresholdSource, "fullScaleAverage");

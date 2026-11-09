@@ -296,6 +296,10 @@ class FreeHandModel(PatternModel):
         for i in range(len(pts)):
             xi, yi = pts[i]
             xj, yj = pts[j]
+            dx, dy = xj - xi, yj - yi
+            if (abs(dx * (y - yi) - dy * (x - xi)) <= 1e-10 * max(1, math.hypot(dx, dy))
+                    and min(xi, xj) <= x <= max(xi, xj) and min(yi, yj) <= y <= max(yi, yj)):
+                return True
             if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
                 inside = not inside
             j = i
@@ -308,3 +312,57 @@ def _shoelace(pts) -> float:
         x1, y1 = pts[(i + 1) % len(pts)]
         s += x0 * y1 - x1 * y0
     return s / 2.0
+
+
+def line_roi(start, end, width):
+    """Flat-ended line strip, shared polygon representation for all mask consumers."""
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = math.hypot(dx, dy)
+    if not all(math.isfinite(v) for v in (*start, *end, width)) or length <= 0 or width <= 0:
+        raise ValueError("Line needs distinct endpoints and a positive width")
+    nx, ny = -dy / length * width / 2, dx / length * width / 2
+    return {"points": [[start[0] + nx, start[1] + ny], [end[0] + nx, end[1] + ny],
+                       [end[0] - nx, end[1] - ny], [start[0] - nx, start[1] - ny]]}
+
+
+def line_endpoints(roi):
+    a, b, c, d = roi["points"]
+    return ((a[0] + d[0]) / 2, (a[1] + d[1]) / 2), ((b[0] + c[0]) / 2, (b[1] + c[1]) / 2)
+
+
+@register_model
+class PolygonModel(FreeHandModel):
+    """Four-click simple polygon (PN 21021-B, p. 2-60)."""
+
+    def validate_roi(self, roi):
+        result = super().validate_roi(roi)
+        if len(result["points"]) != 4:
+            raise ValueError("Polygon needs four distinct vertices")
+        a, b, c, d = result["points"]
+        def cross(a, b, c):
+            return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        def intersects(a, b, c, d):
+            return cross(a, b, c) * cross(a, b, d) <= 0 and cross(c, d, a) * cross(c, d, b) <= 0
+        if intersects(a, b, c, d) or intersects(b, c, d, a):
+            raise ValueError("Polygon edges must not cross")
+        return result
+
+
+@register_model
+class LineModel(PolygonModel):
+    """Drag endpoints; width is a world-space strip, not just a display stroke."""
+
+    def set_parameter(self, name, value):
+        if name != "lineWidth":
+            return super().set_parameter(name, value)
+        coerced = self.param_specs[name].coerce(value)
+        if self.parameters.get(name) != coerced:
+            self.parameters[name] = coerced
+            if self.roi:
+                self.roi = line_roi(*line_endpoints(self.roi), coerced)
+            self._notify()
+        return coerced
+
+    def validate_roi(self, roi):
+        result = super().validate_roi(roi)
+        return line_roi(*line_endpoints(result), float(self.parameters.get("lineWidth", 0.5)))

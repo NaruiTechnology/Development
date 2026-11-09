@@ -145,6 +145,8 @@ REQUIRED_DIST_FILES = (
     # Shared Processing catalogue and the solid Circle tool's native artwork.
     'Development/GlasgowDataIO/Json/processingPatterns.json',
     'Development/ionbeam-native/ionbeam_native/resources/icons/patternCircle.svg',
+    'Development/ionbeam-native/ionbeam_native/resources/icons/patternLine.svg',
+    'Development/ionbeam-native/ionbeam_native/resources/icons/patternPolygon.svg',
     'Development/Scripts/manage-local-system.sh',
     'Development/Scripts/program-fpga-ram.py',
     'Development/ionbeam-web/backend/package.json',

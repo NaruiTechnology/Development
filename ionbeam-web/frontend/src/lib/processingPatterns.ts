@@ -165,11 +165,43 @@ const polygonDef: PatternModelDef = {
     for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
       const [xi, yi] = pts[i];
       const [xj, yj] = pts[j];
+      const dx = xj - xi, dy = yj - yi;
+      if (Math.abs(dx * (y - yi) - dy * (x - xi)) <= 1e-10 * Math.max(1, Math.hypot(dx, dy))
+        && x >= Math.min(xi, xj) && x <= Math.max(xi, xj) && y >= Math.min(yi, yj) && y <= Math.max(yi, yj)) return true;
       if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
     }
     return inside;
   },
 };
+
+/** A finite-width line uses a four-corner polygon so every existing mask consumer agrees.
+ * Points are start+normal, end+normal, end-normal, start-normal; ends are flat.
+ */
+export function lineRoi(start: readonly [number, number], end: readonly [number, number], width: number): PolygonRoi {
+  const dx = end[0] - start[0], dy = end[1] - start[1];
+  const length = Math.hypot(dx, dy);
+  if (![...start, ...end, width].every(Number.isFinite) || length <= 0 || width <= 0) throw new Error("Line needs distinct endpoints and a positive width");
+  const nx = -dy / length * width / 2, ny = dx / length * width / 2;
+  return { points: [[start[0] + nx, start[1] + ny], [end[0] + nx, end[1] + ny],
+    [end[0] - nx, end[1] - ny], [start[0] - nx, start[1] - ny]] };
+}
+
+export function lineEndpoints(roi: PolygonRoi): [[number, number], [number, number]] {
+  const [a, b, c, d] = roi.points;
+  return [[(a[0] + d[0]) / 2, (a[1] + d[1]) / 2], [(b[0] + c[0]) / 2, (b[1] + c[1]) / 2]];
+}
+
+/** Manual PN 21021-B p. 2-60 specifies four clicks. Reject crossing edges. */
+function validateFourPointPolygon(roi: unknown): PolygonRoi {
+  const result = validatePolygon(roi);
+  if (result.points.length !== 4) throw new Error("Polygon needs four distinct vertices");
+  const cross = (a: number[], b: number[], c: number[]) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const intersects = (a: number[], b: number[], c: number[], d: number[]) =>
+    cross(a, b, c) * cross(a, b, d) <= 0 && cross(c, d, a) * cross(c, d, b) <= 0;
+  const [a, b, c, d] = result.points;
+  if (intersects(a, b, c, d) || intersects(b, c, d, a)) throw new Error("Polygon edges must not cross");
+  return result;
+}
 
 /** Data models by the name used in processingPatterns.json. */
 export const MODEL_REGISTRY: Record<string, PatternModelDef> = {
@@ -180,6 +212,8 @@ export const MODEL_REGISTRY: Record<string, PatternModelDef> = {
   CircleModel: circleDef,
   RingModel: ringDef,
   FreeHandModel: polygonDef,
+  LineModel: { ...polygonDef, validateRoi: validateFourPointPolygon },
+  PolygonModel: { ...polygonDef, validateRoi: validateFourPointPolygon },
 };
 
 /* ---------------------------------------------------------------- derived geometry (previews) */

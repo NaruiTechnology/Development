@@ -11,6 +11,8 @@ const ICONS: Record<string, JSX.Element> = {
       <circle cx="12" cy="12" r="4.5" />
     </>
   ),
+  patternLine: <path d="M4 20L20 4" />,
+  patternPolygon: <path d="M4 19L8 5L17 6L21 19Z" fill="currentColor" />,
   patternFreeHand: <path d="M4 15C3 8 8 4 12 7C15 9 14 12 17 11C21 10 21 17 17 19C12 21 6 20 4 15Z" />,
 };
 
