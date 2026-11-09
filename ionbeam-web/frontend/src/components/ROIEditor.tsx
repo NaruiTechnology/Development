@@ -141,7 +141,12 @@ export function ROIEditor({
   // Gray readouts must not invalidate canvas painting or shape clipping.
   const processingRoiKey = JSON.stringify(processingPatterns.specs.map(spec =>
     [spec.key, spec.model, processingPatterns.instances[spec.key]?.enabled, processingPatterns.instances[spec.key]?.roi]));
-  const measurementKey = JSON.stringify([processingRoiKey, imageWorldBounds(roi), roi.imageDataUrl, roi.scanImageDataUrl, processingPreview]);
+  // Scan sample batches repaint the image through imageSlice.revision. Include
+  // that trigger so live ROI measurements are rescheduled as the frame fills.
+  const processingFrameRevision = useAppSelector(s => s.image.revision);
+  const processingFrameFilled = useAppSelector(s => processingPreview === "raster" ? s.image.filled : s.image.vectorFilled);
+  const measurementKey = JSON.stringify([processingRoiKey, imageWorldBounds(roi), roi.imageDataUrl, roi.scanImageDataUrl,
+    processingPreview, processingFrameRevision, processingFrameFilled]);
   const measurementKeyRef = useRef(measurementKey);
   measurementKeyRef.current = measurementKey;
   const averageQueueRef = useRef<ReturnType<typeof createIdleWorkQueue> | null>(null);

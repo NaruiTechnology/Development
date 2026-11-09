@@ -8133,7 +8133,7 @@ body {
 
 .pattern-roi-menu { max-width: calc(100% - 12px); }
 
-.pattern-card[aria-disabled="true"] { opacity: 0.5; }
+.pattern-card[aria-disabled="true"] > .pattern-card__body { opacity: 0.5; }
 
 /* Pattern enable switches use amber for their on state. */
 .pattern-card__enable { --pattern-enable-color: #f59e0b; }

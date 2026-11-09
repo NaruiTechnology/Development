@@ -106,8 +106,8 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
   const materials = useAppSelector(s => s.processing.materials);
   const [collapsed, setCollapsed] = useState(true);
   useEffect(() => {
-    setCollapsed(!active);
-  }, [active]);
+    setCollapsed(!active || !instance?.roi);
+  }, [active, instance?.roi]);
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
   const label = collapsed ? t("processing.expand") : t("processing.collapse");
   if (!instance) return null;
@@ -135,7 +135,7 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
           aria-label={`${caption}: ${label}`}
           data-tooltip={`${caption}: ${label}`}
           data-styled-tooltip="true"
-          disabled={disabled}
+          disabled={false}
           onClick={() => {
             setCollapsed((value) => !value);
             if (collapsed) dispatch(selectPattern(spec.key));
