@@ -125,7 +125,7 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
       <div className="card__header">
         <span className="card__title">{caption}</span>
         <label className="checkbox vacuum-switch app-switch pattern-card__enable">
-          <input type="checkbox" checked={instance.enabled !== false} disabled={disabled}
+          <input type="checkbox" checked={Boolean(instance.roi) && instance.enabled !== false} disabled={disabled || !instance.roi}
             aria-label={`${caption}: ${t("processing.enable")}`}
             onChange={(event) => dispatch(setPatternEnabled({ key: spec.key, enabled: event.target.checked }))} />
           <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>

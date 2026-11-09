@@ -102,7 +102,7 @@ const slice = createSlice({
     },
     setPatternEnabled(s, a: PayloadAction<{ key: string; enabled: boolean }>) {
       const inst = s.instances[a.payload.key];
-      if (inst) inst.enabled = a.payload.enabled;
+      if (inst) inst.enabled = a.payload.enabled && inst.roi !== null;
       s.workflowProgress = [];
     },
     setPatternParameter(s, a: PayloadAction<{ key: string; name: string; value: ParameterValue | string }>) {
@@ -146,6 +146,7 @@ const slice = createSlice({
       const previous = s.roiHistory.pop();
       if (!previous || !s.instances[previous.key]) return;
       s.instances[previous.key].roi = previous.roi;
+      if (!previous.roi) s.instances[previous.key].enabled = false;
       s.instances[previous.key].AvgGray = null;
       s.activeKey = previous.key;
     },
@@ -179,8 +180,9 @@ const slice = createSlice({
       s.materials = a.payload.materials ?? [];
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
-      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { workflow: "default", workflowEnabled: true, material: "", AvgGray: null, enabled: true, parameters: defaultParameters(p.parameters), roi: null }]));
+      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { workflow: "default", workflowEnabled: true, material: "", AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
       for (const inst of Object.values(s.instances)) {
+        if (!inst.roi) inst.enabled = false;
         if (!s.materials.some(m => m.name === inst.material)) inst.material = s.materials[0]?.name ?? "";
       }
       s.roiHistory = s.roiHistory.filter(entry => Boolean(s.instances[entry.key]));
