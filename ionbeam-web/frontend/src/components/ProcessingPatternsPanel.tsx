@@ -108,6 +108,7 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
   const previousRoi = useRef(instance?.roi);
   useEffect(() => {
     if (instance?.roi && previousRoi.current !== instance.roi) setCollapsed(false);
+    else if (!instance?.roi && previousRoi.current) setCollapsed(true);
     previousRoi.current = instance?.roi;
   }, [instance?.roi]);
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);

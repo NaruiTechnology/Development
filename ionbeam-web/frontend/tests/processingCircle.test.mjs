@@ -26,7 +26,8 @@ test("Circle draws an open outline on release, cancels drafts and clears its are
     const spec = { key: "circle", caption: "Circle", model: "CircleModel", icon: "patternCircle", roi: "circle", parameters: [] };
     store.dispatch(actions.fetchProcessingPatterns.fulfilled({ patterns: [spec] }, "test"));
     store.dispatch(updateROI({ x_origin: 0, x_end: 100, y_origin: 0, y_end: 200 }));
-    const api = { pointFromClient: (x, y) => ({ x, y }), toWorld: (p) => ({ x: p.x / 2, y: p.y / 2 }) };
+    const api = { pointFromClient: (x, y) => ({ x, y }), toWorld: (p) => ({ x: p.x / 2, y: p.y / 2 }),
+      sampleGrayAtClient: () => null };
     const focusCalls = [];
     const scrollCalls = [];
     await act(async () => { renderer = create(React.createElement(Provider, { store },
@@ -45,8 +46,8 @@ test("Circle draws an open outline on release, cancels drafts and clears its are
     const card = renderer.root.findByProps({ "data-pattern": "circle" });
     assert.equal(icon.props["aria-controls"], card.props.id);
     assert.equal(card.props.tabIndex, -1);
-    assert.deepEqual(focusCalls, [["circle", { preventScroll: true }]]);
-    assert.deepEqual(scrollCalls, [["circle", { block: "nearest", inline: "nearest" }]]);
+    assert.deepEqual(focusCalls, [], "selecting the drawing tool keeps focus on the canvas");
+    assert.deepEqual(scrollCalls, [], "selecting the drawing tool does not scroll to its card");
     assert.equal(store.getState().processing.activeKey, "circle");
     const overlay = () => renderer.root.findByProps({ "data-testid": "pattern-overlay" });
     const event = (x, y, button = 0) => ({ clientX: x, clientY: y, button, pointerId: 1,
@@ -79,9 +80,15 @@ test("Circle draws an open outline on release, cancels drafts and clears its are
       assert.deepEqual(roi(), saved);
       assert.equal(renderer.root.findAllByType("ellipse").length, 1);
     }
+    assert.equal(card.findByProps({ className: "pattern-card__body" }).props.hidden, false);
+    assert.equal(store.getState().processing.instances.circle.enabled, true);
     await act(async () => { store.dispatch(actions.clearPatternRoi("circle")); });
     assert.equal(roi(), null);
     assert.equal(renderer.root.findAllByType("ellipse").length, 0);
+    assert.equal(store.getState().processing.instances.circle.enabled, false);
+    assert.equal(card.findByProps({ className: "checkbox vacuum-switch app-switch pattern-card__enable" })
+      .findByType("input").props.checked, false);
+    assert.equal(card.findByProps({ className: "pattern-card__body" }).props.hidden, true);
   } finally {
     if (renderer) await act(async () => { renderer.unmount(); });
     await vite.close();

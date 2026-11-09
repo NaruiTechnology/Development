@@ -76,6 +76,7 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     const { ScanControls } = await vite.ssrLoadModule("/src/components/ScanControls.tsx");
     const scan = await vite.ssrLoadModule("/src/store/scanSlice.ts");
     const processing = await vite.ssrLoadModule("/src/store/processingSlice.ts");
+    const image = await vite.ssrLoadModule("/src/store/imageSlice.ts");
     store.dispatch(processing.fetchProcessingPatterns.fulfilled({ patterns: [
       { key: "ring", model: "RingModel", caption: "Ring", icon: "ring", roi: "ring", parameters: [] },
     ] }, "test"));
@@ -129,9 +130,18 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     const clickRun = async () => {
       const run = renderer.root.findAllByType("button").find((node) => node.props["aria-pressed"] !== undefined);
       assert.ok(run, "Processing exposes Run");
+      assert.equal(run.props.disabled, false, "Run is enabled when a canvas image is available");
       await act(async () => { await run.props.onClick(); });
       await settle();
     };
+    const emptyRun = renderer.root.findAllByType("button").find(node => node.props["aria-pressed"] !== undefined);
+    assert.equal(emptyRun.props.disabled, true, "Processing Run requires an image on the canvas");
+    assert.equal(renderer.root.findByProps({ className: "scan-primary-controls" })
+      .findAllByType("button")[0].props.disabled, false, "Scan remains available to acquire an image");
+    await act(async () => { await emptyRun.props.onClick(); });
+    assert.equal(sockets.length, 0, "the Run handler also rejects an empty canvas");
+    await act(async () => { store.dispatch(image.setupVector({ pattern: "default", edge: 128,
+      initialImage: new Uint16Array(128 * 128) })); });
     await clickRun();
     assert.equal(sockets.length, 1);
     assert.equal(sockets[0].requests[0].continuous, true);
@@ -161,7 +171,6 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     await settle();
     const config = JSON.parse(readFileSync(new URL("../../../GlasgowDataIO/Json/processingPatterns.json", import.meta.url)));
     const workflows = [config.Workflows.find(w => w.name === "EvenLinelCut")];
-    const image = await vite.ssrLoadModule("/src/store/imageSlice.ts");
     await act(async () => {
       store.dispatch(processing.fetchProcessingPatterns.fulfilled({ patterns: store.getState().processing.specs,
         workflows, materials: config.Materials }, "pilot"));
@@ -252,6 +261,10 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
       "an interrupted workflow remains enabled");
     // Toggle retains the selected workflow but restores an ordinary continuous scan.
     await act(async () => { store.dispatch(processing.setPatternWorkflow({key: "ring", enabled: false})); });
+    assert.equal(renderer.root.findAllByType("button").find(node => node.props["aria-pressed"] !== undefined)
+      .props.disabled, true, "Run disables again when stopping a single workflow clears the canvas");
+    await act(async () => { store.dispatch(image.setupVector({ pattern: "default", edge: 128,
+      initialImage: new Uint16Array(128 * 128) })); });
     await clickRun();
     assert.equal(sockets.length, 5);
     assert.equal(sockets[4].requests[0].pattern, "default");
@@ -350,6 +363,20 @@ test("Processing waits for Run, shares its stream and honors Stop", async () => 
     assert.equal(sockets.at(-1).requests[0].continuous, true);
     assert.equal(store.getState().scan.phase, "running");
     assert.equal(store.getState().scan.infiniteActive, true);
+    await act(async () => { renderer.root.findAllByType("button").find(n => n.props.className === "btn btn--stop").props.onClick(); });
+    await settle();
+    await act(async () => {
+      store.dispatch(processing.clearPatternRoi("ring"));
+      roiToggle().props.onChange({ target: { checked: true } });
+    });
+    const scanButton = renderer.root.findByProps({ className: "scan-primary-controls" })
+      .findAllByType("button")[0];
+    assert.equal(scanButton.props.disabled, false, "Processing allows Scan before an ROI is drawn");
+    const beforeFullField = sockets.length;
+    await act(async () => { await scanButton.props.onClick(); });
+    await settle();
+    assert.equal(sockets.length, beforeFullField + 1, "Scan starts acquisition without a pattern ROI");
+    assert.equal(sockets.at(-1).requests[0].roi ?? null, null, "no pattern ROI scans the full field");
   } finally {
     if (renderer) await act(async () => { renderer.unmount(); });
     await vite.close();

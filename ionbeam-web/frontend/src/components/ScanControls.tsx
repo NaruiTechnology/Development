@@ -273,6 +273,8 @@ export function ScanControls({
   const vectorImageFilled = useAppSelector((s) => s.image.vectorFilled);
   const preview = useAppSelector((s) => s.scan.preview);
   const baseROIState = useAppSelector((s) => s.scan.roi);
+  const processingImageAvailable = Boolean(baseROIState.imageDataUrl || baseROIState.scanImageDataUrl) ||
+    rasterImageFilled > 0 || vectorImageFilled > 0;
   const patterns = useAppSelector((s) => s.processing);
   const cutWorkflowRunning = patterns.workflowProgress.some(step => step.threshold !== null) &&
     patterns.workflowProgress.some(step => step.status === "current");
@@ -695,7 +697,7 @@ export function ScanControls({
   }
 
   async function startRunRequest(repeatRegions = false, preserveCurrentFrame = false) {
-    if (startBlocked || scanHasErrors || (processingMode && processingROIScanEnabled && !processingPlan.regions.length)) return;
+    if (startBlocked || scanHasErrors) return;
     runningROIScanEnabledRef.current = roiState.roi_scan_enabled;
     if (repeatRegions) runningParallelRegionsRef.current = parallelRegions;
     // Every run acquires only its requested regions. Preserve existing pixels
@@ -896,11 +898,11 @@ export function ScanControls({
   }
 
   async function startInfiniteRequest(preserveCurrentFrame = false): Promise<void> {
+    if (processingMode && !processingImageAvailable) return;
     if (processingMode && roiState.roi_scan_enabled && processingPlan.keys.some(key => patterns.instances[key].workflowEnabled && patterns.instances[key].workflow !== "default")) {
       await startRunRequest(false, preserveCurrentFrame);
       return;
     }
-    if (processingMode && processingROIScanEnabled && !processingPlan.regions.length) return;
     if ((kind !== "raster" && kind !== "vector") || startBlocked || infiniteScanActiveRef.current || scanHasErrors) return;
     const startGeneration = zoomRestartGenerationRef.current;
     runningROIScanEnabledRef.current = roiState.roi_scan_enabled;
@@ -1672,11 +1674,11 @@ export function ScanControls({
     closing ||
     runStarting ||
     targetGrayRunning ||
-    scanHasErrors ||
-    (processingMode && processingROIScanEnabled && !processingPlan.regions.length);
+    scanHasErrors;
   const stopDisabled = !stopAvailable || closing;
   const infiniteDisabled =
-    (kind !== "raster" && kind !== "vector") || runDisabled || infiniteScanActive;
+    (kind !== "raster" && kind !== "vector") || runDisabled || infiniteScanActive ||
+    (processingMode && !processingImageAvailable);
 
   useEffect(() => {
     let cancelled = false;

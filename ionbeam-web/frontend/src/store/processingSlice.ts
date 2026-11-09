@@ -161,6 +161,8 @@ const slice = createSlice({
         if (s.roiHistory.length > 100) s.roiHistory.shift();
         inst.roi = null;
         inst.AvgGray = null;
+        inst.enabled = false;
+        s.workflowProgress = [];
       }
     },
   },
@@ -177,7 +179,7 @@ const slice = createSlice({
       s.materials = a.payload.materials ?? [];
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
-      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { workflow: "default", workflowEnabled: true, material: "", AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
+      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { workflow: "default", workflowEnabled: true, material: "", AvgGray: null, enabled: true, parameters: defaultParameters(p.parameters), roi: null }]));
       for (const inst of Object.values(s.instances)) {
         if (!s.materials.some(m => m.name === inst.material)) inst.material = s.materials[0]?.name ?? "";
       }
