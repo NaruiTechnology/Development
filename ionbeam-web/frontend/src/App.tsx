@@ -49,6 +49,8 @@ import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { PatternOverlay } from "./components/PatternOverlay";
 import { ProcessingScanStatus } from "./components/ProcessingScanStatus";
+import { ExposureControls } from "./components/ExposureControls";
+import { exposureBusy } from "./store/exposureSlice";
 import { ProcessingPatternCards, ProcessingPatternsPanel } from "./components/ProcessingPatternsPanel";
 import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
@@ -157,6 +159,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   activeTopTab: LeftTopTab; setActiveTopTab: (tab: LeftTopTab) => void;
 }) {
   const imageWorkspace = useAppWorkspace();
+  const [exposureControlsHost, setExposureControlsHost] = useState<HTMLDivElement | null>(null);
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const mainRef = useRef<HTMLElement | null>(null);
@@ -646,8 +649,10 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   // A live-scan handover (for example switching Parallel/Sequential) briefly
   // stops one stream and starts the next. Keep the panel in its live-scan state
   // across that gap so wedge borders and enable/disable colors do not change.
-  const workflowRunning = useAppSelector(s => s.processing.workflowProgress.some(step => step.threshold !== null) &&
+  const exposureRunning = useAppSelector(s => exposureBusy(s.exposure.phase));
+  const pixelWorkflowRunning = useAppSelector(s => s.processing.workflowProgress.some(step => step.threshold !== null) &&
     s.processing.workflowProgress.some(step => step.status === "current"));
+  const workflowRunning = exposureRunning || pixelWorkflowRunning;
   const scanActive = phase === "running" || phase === "stopping" || streamRestarting;
   const pixelWorkflowSelected = useAppSelector(s => s.processing.specs.some(spec => {
     const inst = s.processing.instances[spec.key];
@@ -662,7 +667,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     vacuumEnabled: serviceStatus === null ? null : vacuumEnabled,
     vacuumReady: isVacuumSystemReady,
   });
-  const panelDisabled = scanActive || scanControlsSafetyDisabled;
+  const panelDisabled = scanActive || exposureRunning || scanControlsSafetyDisabled;
   // A scan started while the ADC test card is open would draw behind the
   // ADC timeline, so collapse the card to bring the scan canvas back.
   useEffect(() => {
@@ -1802,7 +1807,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                   />
                   {processingImageError && <p className="scan-inline-error" role="alert">{t("processing.imageError", { error: processingImageError })}</p>}
                   </>}
-                  {processingSubTab === "patterns" && <ProcessingPatternsPanel disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} />}
+                  {processingSubTab === "patterns" && <ProcessingPatternsPanel disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} exposureControlsRef={setExposureControlsHost} />}
                 </>
               ) : activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
@@ -1870,6 +1875,9 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                   </>
                 )
               )}
+              <WorkspaceProvider workspace="processing" active={activeTopTab === "processing"}>
+                <ExposureControls host={exposureControlsHost} disabled={scanControlsSafetyDisabled} />
+              </WorkspaceProvider>
               <div hidden={activeTopTab !== "scan" && activeTopTab !== "processing"}>
                 <>
                   <div hidden={activeTopTab === "processing" && processingSubTab !== "control"}>

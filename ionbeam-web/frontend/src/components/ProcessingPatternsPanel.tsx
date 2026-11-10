@@ -29,6 +29,7 @@ import { Icon } from "./Icon";
 import { NumberStepperField } from "./NumberStepperField";
 import { PatternIcon } from "./PatternIcon";
 import { PatternRuntimeReadouts } from "./PatternRuntimeReadouts";
+import { VectorScanPathPreview } from "./VectorScanPathPreview";
 import { ProcessingWorkflowPanel } from "./ProcessingWorkflowPanel";
 import { unitLabel } from "./ROIEditor";
 
@@ -44,7 +45,9 @@ function useTr() {
   return { t, fmt, tr };
 }
 
-export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
+export function ProcessingPatternsPanel({ disabled, exposureControlsRef }: {
+  disabled: boolean; exposureControlsRef?: (node: HTMLDivElement | null) => void;
+}) {
   const dispatch = useAppDispatch();
   const { t, tr } = useTr();
   const { status, error, entryErrors, specs, activeKey } = useAppSelector((s) => s.processing);
@@ -63,6 +66,7 @@ export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
       <div className="card patterns-card">
         <div className="card__header">
           <span className="card__title">{t("processing.patterns")}</span>
+          <div ref={exposureControlsRef} className="patterns-card__exposure-host" />
         </div>
         <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
           {specs.map((spec) => {
@@ -198,7 +202,7 @@ function PatternCard({ spec, instance, active, disabled, onExpansionChange }: {
         )}
         <ProcessingWorkflowPanel patternKey={spec.key} />
         <div className="pattern-card__parameters">
-        {spec.parameters.map((p) => (
+        {spec.parameters.filter((p) => p.name !== "axis").map((p) => (
           <ParameterField
             key={p.name}
             spec={p}
@@ -212,6 +216,20 @@ function PatternCard({ spec, instance, active, disabled, onExpansionChange }: {
           />
         ))}
         </div>
+        <fieldset className="pattern-axis-field" disabled={disabled}>
+          <legend>{t("processing.exposureAxis")}</legend>
+          {(["x", "y"] as const).map((axis) => {
+            const path = axis === "x" ? "horizontal_triangle" : "vertical_serpentine";
+            const label = t(axis === "x" ? "processing.exposureAxis.x" : "processing.exposureAxis.y");
+            return <label className="pattern-axis-option" key={axis}>
+              <input type="radio" name={`pattern-axis-${spec.key}`} value={axis}
+                checked={String(instance.parameters.axis ?? "x") === axis}
+                onChange={() => dispatch(setPatternParameter({ key: spec.key, name: "axis", value: axis }))} />
+              <VectorScanPathPreview path={path} label={label} />
+              <span>{label}</span>
+            </label>;
+          })}
+        </fieldset>
         <PatternRuntimeReadouts spec={spec} roi={instance.roi} />
         <p className="pattern-card__readout">{roiReadout(spec, instance.roi, unit)}{`\nAvgGray: ${instance.AvgGray == null ? "—" : instance.AvgGray.toFixed(2)}`}</p>
       </div>
@@ -287,10 +305,10 @@ function ParameterField({
       inputMode={spec.type === "int" ? "numeric" : "decimal"}
       invalid={error !== null}
       warning={error}
-      title={spec.name === "beamCurrent" ? "Requested beam current stored in the recipe; this field does not set the instrument beam current."
+      title={spec.name === "beamCurrent" ? "Used to look up the exposure spot size; this field does not set the instrument beam current."
         : spec.name === "depth" ? "Requested depth stored in the recipe; current workflows do not control physical milling depth."
-        : spec.name === "overlap" ? "Stored in the recipe; calibrated beam-spot overlap is not applied by current workflows."
-        : spec.name === "dwell" ? "Dwell for selected pixel workflows. Default acquisition uses the Controls dwell." : undefined}
+        : spec.name === "overlap" ? "Applied to exposure-lattice spacing; image Scan keeps its own Controls settings."
+        : spec.name === "dwell" ? "Used by pattern exposure Run. Image Scan uses the Controls dwell." : undefined}
       ariaLabel={withUnit}
       onValueChange={(v) => {
         setText(v);

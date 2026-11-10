@@ -14,6 +14,7 @@
  * circle whatever the image aspect and survives zoom.
  */
 import { useDeferredValue, memo, useEffect, useReducer, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { ExposureLatticeGeometry } from "./ExposureLatticeOverlay";
 import { createPortal } from "react-dom";
 
 import { MODEL_REGISTRY, lineRoi, patternBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
@@ -353,6 +354,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
           </g>
         ) : null;
       })}
+      <ExposureLatticeGeometry project={(x,y) => ({x:cx(x),y:cy(y)})} />
       {active && d?.kind === "rect" && d.rect && (
         <Shape spec={active} params={instances[active.key]?.parameters ?? {}} roi={d.rect} active draft cx={cx} cy={cy} sx={sx} sy={sy} />
       )}
@@ -457,7 +459,7 @@ function Shape({ spec, params, roi, active, draft = false, cx, cy, sx, sy }: Sha
     return (
       <g>
         {steps.map((s, i) => (
-          <rect key={i} {...rectBox(s)} fill={color} fillOpacity={0.1 + (0.35 * (i + 1)) / steps.length} {...common} />
+          <rect key={i} {...rectBox(s)} fill={`rgb(${225 - Math.round(170*(i+1)/steps.length)},${225 - Math.round(170*(i+1)/steps.length)},${225 - Math.round(170*(i+1)/steps.length)})`} fillOpacity={0.7} {...common} />
         ))}
       </g>
     );

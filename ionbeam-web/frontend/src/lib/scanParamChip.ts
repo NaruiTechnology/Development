@@ -35,6 +35,7 @@ export interface ScanParamSource {
   gray_level_skipped?: boolean | null;
   /** Present when several ROIs share one interleaved (Parallel) stream. */
   parallel_rois?: unknown[] | null;
+  lattice?: { pitch_x: number; pitch_y?: number | null; axis: "x" | "y" | "long"; dwell: number; passes: number } | null;
 }
 
 /** One ADC conversion on the current revC3 gateware (see lib/scanTiming). */
@@ -73,6 +74,10 @@ export function summarizeScanParams(
   if (kind === "raster") {
     const res = Math.trunc(req.resolution ?? 0);
     if (res > 0) items.push({ id: "resolution", labelKey: "canvas.scanParams.resolution", value: `${res}×${res}` });
+  } else if (req.pattern === "lattice" && req.lattice) {
+    const lattice = req.lattice;
+    items.push({ id: "exposureLattice", labelKey: "canvas.scanParams.exposureLattice",
+      value: `${lattice.axis.toUpperCase()} · ${lattice.pitch_x.toFixed(2)} × ${(lattice.pitch_y ?? lattice.pitch_x).toFixed(2)} DAC · ${lattice.passes} passes` });
   } else if (req.pattern === "custom") {
     const bitmap = req.simulation_bitmap;
     items.push({
@@ -88,13 +93,13 @@ export function summarizeScanParams(
   } else {
     const edge = Math.trunc(req.vector_resolution ?? 0);
     if (edge > 0) items.push({ id: "resolution", labelKey: "canvas.scanParams.resolution", value: `${edge}×${edge}` });
-    if (req.scan_path) {
+    if (req.pattern !== "lattice" && req.scan_path) {
       items.push({ id: "scanPath", labelKey: "canvas.scanParams.scanPath", valueKey: `vector.scanPath.${req.scan_path}` });
     }
   }
 
   // Custom points carry their own per-point dwell.
-  if (typeof req.dwell === "number" && !(kind === "vector" && req.pattern === "custom")) {
+  if (typeof req.dwell === "number" && !(kind === "vector" && (req.pattern === "custom" || req.pattern === "lattice"))) {
     items.push({
       id: "dwell",
       labelKey: "canvas.scanParams.dwell",

@@ -40,7 +40,7 @@ These additions define shapes in the existing execution framework. They do not i
 
 ## Execution limits that matter
 
-Default Processing uses rectangular bounding acquisition windows, including for Line and Polygon. The shape-clipped preview is not proof of beam blanking. Selected pixel workflows independently use MODEL_REGISTRY containment for actual vector-point blanking, and Line/Polygon participate in that path. They operate on sampled pixels rather than a line-length or polygon-edge-generated trajectory. Material brightness ratios are illustrative; they are not sputter-rate, overlap, or depth calibration. The existing 250,000-point bound and missing-source/no-sampled-pixel checks apply.
+Processing **Scan** is image acquisition: it uses the Controls ROI/Zoom/dwell/scan-path settings, with rectangular acquisition windows for pattern bounds. Processing **Run** is now a separate finite, service-generated exposure lattice for enabled pattern ROIs. It uses pattern dwell, beam-current spot lookup, overlap, dose/passes and per-card X/Y serpentine direction; it ignores Controls Zoom, ROI scan, dwell and scan path, and does not write detector samples into the image buffer. The per-card beam current is only a spot-size lookup input; it does not set instrument current. The first LENS reference voltage (30 kV) is used. Gray-directed workflow selectors remain present but do not alter the lattice request. OpenBox/StairCut/CleaningLine shape-specific milling semantics, physical depth from calibrated sputter rate, and hardware validation of Run remain open.
 
 Priority for a later milling implementation: repair outline containment first; specify a common exposure plan with beam blanking, per-pattern dwell/passes, dose/depth calibration and serial/parallel scheduling; then implement the stair-depth and cleaning-face recipes. EPD is a separate feature.
 
@@ -50,3 +50,19 @@ Hardware-free regression tests cover line geometry in every direction, width upd
 
 
 Validation result: the four new web tests, all 11 native pattern tests, all five backend catalogue tests, and all 41 deployment integrity tests passed. Frontend/backend production builds and the native wheel build succeeded. The compiled distribution archive passed its manifest/hash verification, and its catalogue, models, drawing sources, and icons were compared with the working files. Eight other existing Processing test files passed. The existing `frontend/tests/processingROI.test.mjs` fails at line 83 because its mocked run creates no socket; the same failure was reproduced in a separate checkout of unchanged HEAD `a97dec3a30a1`. This integration regression remains open and is not presented as a passing check. No running services or remote environments were modified; no hardware exposure was performed.
+
+
+Simulation exposure visualization now expands StairCut into overlapping box steps and
+CleaningLine into serial single-row steps, with sampled colored traces and gray requested-depth
+bands on the canvas. The bottom panel reports the frozen exposure settings. Production Run
+keeps the existing single lattice. See `exposure-planning.md` for reference interpretation,
+line-spacing override, preview limitations, and validation.
+
+
+The Patterns card header now contains independent exposure Parallel (off by default),
+Stop and Start controls, with no separate Exposure card. Regular Processing scan controls perform only
+image acquisition. Exposure has its own state/socket/queue and cannot alter scan settings,
+metadata or image buffers. Parallel interleaves pattern passes; cleaning lines require
+serial execution. A shared ownership guard excludes concurrent scan/exposure commands and
+holds ownership through abort acknowledgement. See the dedicated exposure controls section in
+`exposure-planning.md` for semantics and verification.

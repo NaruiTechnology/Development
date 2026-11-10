@@ -1,4 +1,3 @@
-import { patternDwellTicks } from "../lib/processingPatterns";
 /**
  * Run / Stop button group, plus a "Run validated" button that
  * uses the blocking REST endpoint (returns a ScanResult with timing,
@@ -8,6 +7,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { createPortal } from "react-dom";
 
 import { useAppDispatch, useAppSelector, useAppWorkspace } from "../store";
+import type { ROIState } from "../store/scanSlice";
 import { apiUrl } from "../lib/backendUrl";
 import {
   runRasterValidated,
@@ -48,9 +48,14 @@ import { displayScanError } from "../lib/scanError";
 import { Icon } from "./Icon";
 import { TransformCard } from "./TransformCard";
 import { imageWorldBounds } from "../lib/roiGeometry";
-import { workflowPoints, type WorkflowProgress } from "../lib/processingWorkflows";
+import { type WorkflowProgress } from "../lib/processingWorkflows";
 import { setWorkflowProgress, updateWorkflowStep } from "../store/processingSlice";
 import { processingScanRegions } from "../lib/processingScanRegions";
+import { effectiveScanRegions, zoomInterleavedVectorPoints, zoomVectorPoints } from "../lib/scanRegions";
+import { worldSelectionToDacROI } from "../lib/roiDac";
+import { targetGrayFilter } from "../lib/roiTargetGray";
+import { assessScan, assessTypedZoom, hasScanErrors, type ScanIssue } from "../lib/scanValidation";
+import { ScanZoomStatus } from "./ScanZoomStatus";
 import { VectorScanPathField } from "./VectorScanPathField";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { RunValidatedHelp } from "./RunValidatedHelp";
@@ -87,13 +92,6 @@ type InfiniteScanEntry =
       hasSimulationBitmap?: boolean;
       initialFrame: Uint16Array | null;
     };
-import type { ROIState } from "../store/scanSlice";
-import { effectiveScanRegions, zoomInterleavedVectorPoints, zoomVectorPoints } from "../lib/scanRegions";
-import { worldSelectionToDacROI } from "../lib/roiDac";
-import { targetGrayFilter } from "../lib/roiTargetGray";
-import { assessScan, assessTypedZoom, hasScanErrors, type ScanIssue } from "../lib/scanValidation";
-import { ScanZoomStatus } from "./ScanZoomStatus";
-
 type RegionScanEntry = { workflowStepIds?: string[] } & (
   | {
       kind: "raster";
@@ -260,6 +258,7 @@ export function ScanControls({
   const dispatch = useAppDispatch();
   const workspace = useAppWorkspace();
   const otherWorkspaceActive = useOtherWorkspaceBusy();
+  const exposureActive = useAppSelector(s => ["preparing", "running", "stopping"].includes(s.exposure.phase));
   const { t } = useTranslation();
   const phase = useAppSelector((s) => s.scan.phase);
   const streamRestarting = useAppSelector((s) => s.scan.streamRestarting);
@@ -562,7 +561,7 @@ export function ScanControls({
       return;
     }
     onScanRunStart?.(entry.scanType);
-    const continuous = entry.req.feedback_mode !== "adaptive_gray_feedback";
+    const continuous = entry.req.pattern === "lattice" ? false : entry.req.feedback_mode !== "adaptive_gray_feedback";
     stream.startVector(
       { ...entry.req, preview: entry.req.preview ?? preview, continuous },
       {
@@ -592,7 +591,7 @@ export function ScanControls({
       hasSimulationBitmap?: boolean,
       pointPixelIndices?: number[],
     ) => {
-    stream.startVector({ ...req, preview }, {
+    stream.startVector({ ...req, preview: req.preview ?? preview }, {
       preserveFrame,
       displayROI,
       displayROIs,
@@ -620,7 +619,7 @@ export function ScanControls({
       }
       const next = regionScanQueueRef.current.shift();
       if (next) startEntry(next, true);
-      else if (entry.workflowStepIds?.length && !regionScanRepeatRef.current.length) {
+      else if (entry.workflowStepIds?.length && !processingMode && !regionScanRepeatRef.current.length) {
         setWorkflowLivePending(true);
       }
     };
@@ -705,87 +704,6 @@ export function ScanControls({
     // outside the ROI instead of sending an extra full-field pass to the DAC.
     const allowed = await refreshScanPrivilege();
     if (!allowed) return;
-    if (processingMode && roiState.roi_scan_enabled && patterns.workflows.length && processingPlan.keys.some(key => {
-      const inst = patterns.instances[key];
-      return inst.workflowEnabled && inst.workflow !== "default";
-    })) {
-      try {
-        // Prepare every step before opening a stream; an invalid plan cannot mill partially.
-        const edge = vector.vector_resolution;
-        const loadedSource = !isProduction && roiState.imageDataUrl ? await bitmapImageFrame(roiState, edge) : null;
-        const useAcquired = !loadedSource && vectorImageFilled >= vectorImageEdge * vectorImageEdge && vectorImageEdge > 0;
-        const source = loadedSource ?? (useAcquired
-          ? resizeImageFrame(vectorImageFrame, vectorImageEdge, edge)
-          : await bitmapImageFrame(roiState, edge));
-        if (!source) throw new Error("Load or acquire a complete image before running a workflow.");
-        const bounds = useAcquired ? roiState : imageWorldBounds(roiState);
-        const field = { x_start: bounds.x_origin, x_end: bounds.x_end, y_start: bounds.y_origin, y_end: bounds.y_end };
-        const entries: RegionScanEntry[] = [];
-        const progress: WorkflowProgress[] = [];
-        for (let index = 0; index < processingPlan.keys.length; index++) {
-          const key = processingPlan.keys[index], inst = patterns.instances[key];
-          const spec = patterns.specs.find(p => p.key === key)!;
-          const name = inst.workflowEnabled ? inst.workflow : "default";
-          const workflow = patterns.workflows.find(w => w.name === name);
-          if (!workflow) throw new Error(`Unknown workflow: ${name}`);
-          const steps = workflowPoints(spec, inst.roi!, processingPlan.regions[index], field, source, edge,
-            workflow, patterns.materials, patternDwellTicks(inst.parameters.dwell, vector.dwell), vector.scan_path, (x, y) => {
-              const point = worldSelectionToDacROI({ x_start: x, x_end: x, y_start: y, y_end: y }, roiState);
-              return { x: point.x_start, y: point.y_start };
-            }, inst.material);
-          for (const [stepIndex, result] of steps.entries()) {
-            const id = `${key}:${stepIndex}`;
-            const areaRemoval = result.step.actions[0].thresholdSource === "fullScaleAverage";
-            const roiAverageFilter = result.step.actions[0].thresholdSource === "roiAverage";
-            const materialTarget = result.step.actions[0].thresholdSource === "selectedMaterial" ? result.threshold : null;
-            const hasWork = !areaRemoval || result.spot > 0;
-            progress.push({ id, pattern: spec.caption, caption: result.step.caption,
-              action: result.step.actions[0].caption, status: hasWork ? "upcoming" : "completed", threshold: result.threshold,
-              ...(!hasWork ? { finishedAt: Date.now() } : {}),
-              spot: result.spot, total: result.points.length });
-            if (!hasWork) continue;
-            if ((areaRemoval || roiAverageFilter) && isProduction && !vectorPixelFallbackBlank)
-              throw new Error("This workflow requires live ADC gray-level feedback on this instrument.");
-            const areaTarget = areaRemoval ? result.threshold : null;
-            const grayRange: [number, number] | null = areaRemoval && areaTarget !== null
-              ? [Math.min(255, Math.floor(areaTarget) + 1), 255]
-              : roiAverageFilter ? result.grayRange
-              : materialTarget === null ? null : [0, materialTarget];
-            const adaptiveGrayWorkflow = (areaRemoval || roiAverageFilter) && isProduction;
-            entries.push({ kind: "vector", scanType: adaptiveGrayWorkflow ? ScanType.VECTOR_ADAPTIVE_GRAN_FEED_BLANK : ScanType.VECTOR, workflowStepIds: [id],
-              req: { ...vector, pattern: "custom", points: result.points, roi: result.simulationBitmap.source_roi,
-                continuous: areaRemoval || (!isProduction && (materialTarget !== null || roiAverageFilter)),
-                frames: areaRemoval || (!isProduction && (materialTarget !== null || roiAverageFilter)) ? result.targetGrayFrames : undefined,
-                pre_process: false, feedback_mode: adaptiveGrayWorkflow ? "adaptive_gray_feedback" : "standard",
-                ...(adaptiveGrayWorkflow ? { output_mode: "SixteenBit" as const } : {}),
-                ...(adaptiveGrayWorkflow ? { adc_valid: true } : {}),
-                // In simulation the loaded ROI image is the ADC source. Keep
-                // it paired with the bitmap-derived gray filter and points.
-                simulation_bitmap: isProduction ? null : result.simulationBitmap, simulation_bitmap_id: null,
-                parallel_rois: null, parallel_simulation_bitmaps: null, parallel_simulation_bitmap_ids: null,
-                // Simulation has no live ADC: mill the spotted range toward its target so gray levels actually change.
-                target_gray_level: !isProduction ? areaTarget ?? materialTarget ?? (roiAverageFilter ? result.targetGrayLevel : null) : null,
-                gray_level_range: grayRange,
-                gray_level_skipped: areaRemoval || roiAverageFilter ? false : materialTarget === null ? null : true },
-              displayROI: worldSelectionToDacROI(processingPlan.regions[index], roiState), initialFrame: source,
-              simulationBitmapInfo: { width: edge, height: edge }, hasSimulationBitmap: !isProduction,
-              pointPixelIndices: result.pointPixelIndices });
-          }
-        }
-        if (!entries.length) {
-          dispatch(setWorkflowProgress(progress));
-          if (progress.length) setWorkflowLivePending(true);
-          return;
-        }
-        const prepared = await persistScanSequence(entries, false);
-        dispatch(setWorkflowProgress(progress));
-        onScanRunStart?.(ScanType.VECTOR);
-        startRegionScanSequence(prepared, false, false);
-      } catch (e) {
-        dispatch(streamErrored(e instanceof Error ? e.message : String(e)));
-      }
-      return;
-    }
     if (processingMode) dispatch(setWorkflowProgress(defaultWorkflowProgress()));
     if (!processingMode && !repeatRegions && !isProduction && selectedTargetGray !== null && roiState.imageDataUrl) {
       dispatch(requestROITargetGrayRun());
@@ -1669,13 +1587,13 @@ export function ScanControls({
   const onRunValidated = guardRunStart(startValidatedRunRequest);
 
   const runDisabled =
-    otherWorkspaceActive ||
+    otherWorkspaceActive || exposureActive ||
     controlsDisabled ||
     streaming ||
     closing ||
     runStarting ||
     targetGrayRunning ||
-    scanHasErrors;
+    (!processingMode && scanHasErrors);
   const stopDisabled = !stopAvailable || closing;
   const infiniteDisabled =
     (kind !== "raster" && kind !== "vector") || runDisabled || infiniteScanActive ||
@@ -2012,7 +1930,7 @@ export function ScanControls({
         <button
           type="button"
           className="btn btn--primary"
-          disabled={runDisabled || kind === "roi"}
+          disabled={runDisabled || (processingMode && scanHasErrors) || kind === "roi"}
           onClick={onRun}
           title={t("scan.run.title.start")}
         >
@@ -2049,7 +1967,7 @@ export function ScanControls({
             aria-pressed={infiniteScanActive}
           >
             <Icon name="infinity" tone="accent" />
-            {t(processingMode ? "processing.run" : "scan.infinite")}
+            {t("scan.infinite")}
           </button>
         )}
       </div>

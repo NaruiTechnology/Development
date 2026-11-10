@@ -9,6 +9,7 @@ import themeReducer from "./themeSlice";
 import localeReducer from "./localeSlice";
 import settingsReducer from "./settingsSlice";
 import magCalibrationReducer from "./magCalibrationSlice";
+import exposureReducer from "./exposureSlice";
 import processingReducer from "./processingSlice";
 import dimensionCalibrationReducer, { saveDimensionCalibration } from "./dimensionCalibrationSlice";
 import { persistDimensionCalibration } from "../lib/dimensionCalibrationPersistence";
@@ -22,6 +23,7 @@ const reducers = {
     settings: settingsReducer,
     magCalibration: magCalibrationReducer,
     processing: processingReducer,
+    exposure: exposureReducer,
     dimensionCalibration: dimensionCalibrationReducer,
 };
 
@@ -78,7 +80,7 @@ export type AppDispatch = typeof store.dispatch;
 const sharedKeys = ["status", "theme", "locale", "settings", "dimensionCalibration"] as const;
 const reduceWorkspace = combineReducers(reducers);
 const forwardSharedActions: Middleware = () => next => action => {
-  if (isAction(action) && !/^(scan|image|processing|magCalibration|workspace)\//.test(action.type)) {
+  if (isAction(action) && !/^(scan|image|processing|exposure|magCalibration|workspace)\//.test(action.type)) {
     return store.dispatch(action);
   }
   return next(action);

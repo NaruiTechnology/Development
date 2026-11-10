@@ -43,6 +43,7 @@ import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/gray
 import { Icon } from "./Icon";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { CanvasViewHelp } from "./CanvasViewHelp";
+import { ExposureLatticeOverlay, ExposureLatticeMessage } from "./ExposureLatticeOverlay";
 import { ScanRegionOverlay } from "./ScanRegionOverlay";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
 import { paintVectorScanOrderOverlay } from "../lib/scanPathOverlay";
@@ -1960,6 +1961,7 @@ export function ImageCanvas({
                       {(targetRunRunning || targetProgressVisible) && (
                         <canvas ref={targetProgressCanvasRef} className="canvas-target-progress" aria-hidden="true" />
                       )}
+                      <ExposureLatticeOverlay transforms={streamTransforms} />
                       <ScanRegionOverlay disabled={!streamRestarting && (phase === "stopping" || (phase === "running" && !infiniteActive))} />
                       {onTargetGrayPick && selectedTargetGrayPoint && (
                         <span
@@ -2003,6 +2005,7 @@ export function ImageCanvas({
           {(kind === "raster" || kind === "vector") && (
             <ScanRegionOverlay disabled={!streamRestarting && (phase === "stopping" || (phase === "running" && !infiniteActive))} />
           )}
+          {!targetParked && <ExposureLatticeOverlay transforms={streamTransforms} />}
           {liveScanParamItems && !mergedFigureUrl && <ScanParamChip items={liveScanParamItems} t={t} />}
           {!targetParked && hasRenderedCanvasImage && <ImageScaleChip extent={imageExtent} rotate90={streamTransforms.rotate90} zoom={roi.scan_zoom} />}
           {displayedFigureUrl && (
@@ -2277,6 +2280,7 @@ export function ImageCanvas({
         <span style={{ width: `${pct}%` }} />
       </div>
 
+      <ExposureLatticeMessage />
       <div className="canvas-meta">
         <span>
           {t("canvas.meta.phase")} <b>{phaseLabel}</b>

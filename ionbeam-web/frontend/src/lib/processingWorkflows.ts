@@ -19,6 +19,16 @@ export interface WorkflowProgress {
   status: "upcoming" | "current" | "completed" | "stopped" | "error";
   threshold: number | null; spot: number; total: number;
   startedAt?: number; finishedAt?: number;
+  exposure?: {
+    shape: PatternRoi; model: string;
+    plan: import("./exposurePlan.js").ExposurePlan;
+    dwellUS: number; beamCurrentPA: number;
+    requestedDepthUM?: number;
+    depthBand?: PatternRoi;
+    lineSpacingUM?: number;
+    simulation: boolean;
+    receivedSamples?: number;
+  };
 }
 
 export function materialTargetGrayLevel(avgGray: number, brightness: number): number {

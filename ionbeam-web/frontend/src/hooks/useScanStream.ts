@@ -346,11 +346,6 @@ export function useScanStream(regionCountOverride?: number) {
         dispatch(streamErrored("The instrument is in use by the other workspace."));
         return;
       }
-      if (req.pattern === "lattice") {
-        // Lattice spots are not an image grid; the canvas cannot place their samples yet.
-        dispatch(streamErrored("Lattice exposure is not available in the image display yet."));
-        return;
-      }
       const hasBitmapSource = Boolean(
         req.simulation_bitmap || req.simulation_bitmap_id ||
         req.parallel_simulation_bitmaps?.length || req.parallel_simulation_bitmap_ids?.length ||
@@ -382,7 +377,7 @@ export function useScanStream(regionCountOverride?: number) {
         : req.pattern === "custom"
         ? 2048
         : req.vector_resolution;
-      dispatch(
+      if (req.pattern !== "lattice") dispatch(
         setupVector({
           pattern: displayPattern,
           scanPath: req.scan_path,
@@ -454,12 +449,18 @@ export function useScanStream(regionCountOverride?: number) {
           }
           const buf = ev.data as ArrayBuffer;
           markScanPerformanceChunk(buf.byteLength);
-          queuePendingSamples(
-            pendingVectorRef.current,
-            decodeScanSamples(buf, req.output_mode),
-            buf.byteLength,
-            flushVectorSamples,
-          );
+          if (req.pattern === "lattice") {
+            // Exposure samples are detector stream payload, not pixels. Keep
+            // them out of the image buffer so Run cannot alter the Scan image.
+            dispatch(streamProgress({ bytes: buf.byteLength, chunks: 1 }));
+          } else {
+            queuePendingSamples(
+              pendingVectorRef.current,
+              decodeScanSamples(buf, req.output_mode),
+              buf.byteLength,
+              flushVectorSamples,
+            );
+          }
           return;
         }
         flushVectorSamples();
@@ -488,6 +489,7 @@ export function useScanStream(regionCountOverride?: number) {
           // A live scan keeps painting in raw scan order across passes;
           // rolling the image at Stop would misalign the next live run.
           continuous ? 0 : vectorLineShiftPerXRow,
+          req.pattern === "lattice",
         );
         if (!valid) {
           controlFailed = true;
@@ -667,12 +669,13 @@ function handleVectorControlMessage(
   sawDoneRef: React.MutableRefObject<boolean>,
   pendingCompletionRef: React.MutableRefObject<PendingCompletion | null>,
   lineShiftPerXRow: number,
+  latticeExposure = false,
 ): boolean {
   try {
     const msg = JSON.parse(data);
     if (msg.event === "done") {
       sawDoneRef.current = true;
-      dispatch(correctVectorLineShift({ lineShiftPerXRow }));
+      if (!latticeExposure) dispatch(correctVectorLineShift({ lineShiftPerXRow }));
       pendingCompletionRef.current = {
         chunks: Number(msg.chunks) || 0,
         kind: "vector",
