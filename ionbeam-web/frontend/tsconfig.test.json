@@ -43,6 +43,7 @@
     "src/lib/processingPatterns.ts",
     "src/lib/lensLookup.ts",
     "src/lib/processingWorkflows.ts",
+    "src/lib/exposurePlan.ts",
     "src/lib/idleWork.ts",
     "src/lib/processingScanRegions.ts",
     "src/lib/controlCanvasKind.ts",
