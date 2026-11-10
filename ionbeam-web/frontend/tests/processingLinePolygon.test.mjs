@@ -11,6 +11,7 @@ import { workflowPoints, DEFAULT_WORKFLOW } from "../.test-dist/lib/processingWo
 
 const catalogue = JSON.parse(readFileSync(new URL("../../../GlasgowDataIO/Json/processingPatterns.json", import.meta.url)));
 const specs = ["line", "polygon"].map(key => ({ key, ...catalogue.Patterns.find(p => p[key])[key],
+  readouts: Object.entries(catalogue.Patterns.find(p => p[key])[key].readouts ?? {}).map(([name, p]) => ({name, ...p})),
   parameters: Object.entries(catalogue.Patterns.find(p => p[key])[key].parameters).map(([name, p]) => ({name, ...p})) }));
 
 test("line masks have world-space width in every direction and usable acquisition bounds", () => {

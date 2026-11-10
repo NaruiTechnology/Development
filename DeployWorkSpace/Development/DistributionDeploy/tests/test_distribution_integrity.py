@@ -68,6 +68,7 @@ def make_workspace(base):
     stubs = {
         "GlasgowDataIO/Json/streamData.json": '{"Version": "0.8.0"}',
         "GlasgowDataIO/Json/processingPatterns.json": '{"Patterns": []}',
+        "ionbeam-web/frontend/src/components/PatternRuntimeReadouts.tsx": "export const PatternRuntimeReadouts = () => null;\n",
         "ionbeam-native/ionbeam_native/resources/icons/patternCircle.svg": '<svg xmlns="http://www.w3.org/2000/svg"/>',
         "ionbeam-native/ionbeam_native/resources/icons/patternLine.svg": '<svg xmlns="http://www.w3.org/2000/svg"/>',
         "ionbeam-native/ionbeam_native/resources/icons/patternPolygon.svg": '<svg xmlns="http://www.w3.org/2000/svg"/>',

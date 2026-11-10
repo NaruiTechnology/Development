@@ -59,3 +59,18 @@ test("pilot workflows expose validated materials and configured Spot steps", () 
   assert.throws(() => parseProcessingPatterns({ Patterns: [], Materials: [{ name: "SiO2", brightness: -1 }] }), ConfigError);
   assert.throws(() => parseProcessingPatterns({ Patterns: [], Workflows: [{ name: "bad", steps: [{name: "step", actions: [{name: "spot", mode: "spot", selection: "dark", thresholdMaterial: "missing"}]}] }] }), ConfigError);
 });
+
+
+test("all active patterns expose bounded recipe inputs and runtime readouts", () => {
+  const cfg = readProcessingPatterns(shipped);
+  for (const pattern of cfg.patterns) {
+    for (const name of ["depth", "dwell", "overlap"]) assert.ok(pattern.parameters.some(p => p.name === name));
+    assert.deepEqual(pattern.readouts?.map(p => p.source), ["elapsed", "centerX", "centerY"]);
+  }
+  const ring = cfg.patterns.find(p => p.key === "ring")!;
+  assert.ok(ring.parameters.some(p => p.name === "rInner"));
+  assert.ok(ring.parameters.some(p => p.name === "rOuter"));
+  const invalid = parseProcessingPatterns({Patterns:[{bad:{model:"SolidBoxModel",readouts:{time:{source:"arbitrary"}}}}]});
+  assert.equal(invalid.patterns.length, 0);
+  assert.equal(invalid.errors.length, 1);
+});

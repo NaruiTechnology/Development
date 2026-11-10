@@ -93,7 +93,9 @@ class PatternModel:
             raise KeyError(f"{self.key}: unknown parameter {name!r}")
         coerced = spec.coerce(value)
         if self.parameters.get(name) != coerced:
+            next_roi = edit_geometry(self, self.roi, name, coerced) if self.roi and isinstance(coerced, (int, float)) else self.roi
             self.parameters[name] = coerced
+            self.roi = next_roi
             self._notify()
         return coerced
 
@@ -102,6 +104,10 @@ class PatternModel:
         if roi is not None:
             roi = self.validate_roi(roi)
         self.roi = roi
+        if roi:
+            for name, value in geometry_values(self, roi).items():
+                if name in self.param_specs:
+                    self.parameters[name] = value
         self._notify()
 
     def clear_roi(self) -> None:
@@ -352,17 +358,60 @@ class PolygonModel(FreeHandModel):
 class LineModel(PolygonModel):
     """Drag endpoints; width is a world-space strip, not just a display stroke."""
 
-    def set_parameter(self, name, value):
-        if name != "lineWidth":
-            return super().set_parameter(name, value)
-        coerced = self.param_specs[name].coerce(value)
-        if self.parameters.get(name) != coerced:
-            self.parameters[name] = coerced
-            if self.roi:
-                self.roi = line_roi(*line_endpoints(self.roi), coerced)
-            self._notify()
-        return coerced
-
     def validate_roi(self, roi):
         result = super().validate_roi(roi)
         return line_roi(*line_endpoints(result), float(self.parameters.get("lineWidth", 0.5)))
+
+
+def geometry_values(model, roi):
+    if "r_inner" in roi:
+        return {"rInner": roi["r_inner"], "rOuter": roi["r_outer"]}
+    if "radius" in roi:
+        return {"radius": roi["radius"]}
+    if isinstance(model, LineModel):
+        a, b = line_endpoints(roi)
+        p, _, _, q = roi["points"]
+        return {"length": math.dist(a, b), "lineWidth": math.dist(p, q)}
+    x0, x1, y0, y1 = roi_bounds(roi)
+    return {"width": x1-x0, "height": y1-y0}
+
+
+def roi_bounds(roi):
+    if "x_start" in roi:
+        return roi["x_start"], roi["x_end"], roi["y_start"], roi["y_end"]
+    if "cx" in roi:
+        radius = roi.get("radius", roi.get("r_outer"))
+        return roi["cx"]-radius, roi["cx"]+radius, roi["cy"]-radius, roi["cy"]+radius
+    points = roi["points"]
+    return min(p[0] for p in points), max(p[0] for p in points), min(p[1] for p in points), max(p[1] for p in points)
+
+
+def edit_geometry(model, roi, name, value):
+    values = geometry_values(model, roi)
+    if name not in values:
+        return roi
+    if not math.isfinite(value) or value < 0 or (name != "rInner" and value == 0):
+        raise ValueError("Dimension must be positive")
+    if "r_inner" in roi:
+        out = {**roi, "r_inner" if name == "rInner" else "r_outer": value}
+        if out["r_inner"] >= out["r_outer"]:
+            raise ValueError("Rin must be smaller than Rout")
+        return out
+    if "radius" in roi:
+        return {**roi, "radius": value}
+    if isinstance(model, LineModel):
+        a, b = line_endpoints(roi)
+        length = value if name == "length" else values["length"]
+        width = value if name == "lineWidth" else values["lineWidth"]
+        mx, my = (a[0]+b[0])/2, (a[1]+b[1])/2
+        dx, dy = (b[0]-a[0])*length/values["length"]/2, (b[1]-a[1])*length/values["length"]/2
+        return line_roi((mx-dx,my-dy),(mx+dx,my+dy),width)
+    x0,x1,y0,y1 = roi_bounds(roi)
+    mx,my = (x0+x1)/2,(y0+y1)/2
+    sx,sy = value/(x1-x0) if name == "width" else 1, value/(y1-y0) if name == "height" else 1
+    def point(x,y):
+        return [mx+(x-mx)*sx,my+(y-my)*sy]
+    if "points" in roi:
+        return {"points": [point(*p) for p in roi["points"]]}
+    a,b = point(x0,y0),point(x1,y1)
+    return {"x_start":a[0],"x_end":b[0],"y_start":a[1],"y_end":b[1]}

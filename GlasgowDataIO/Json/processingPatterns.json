@@ -182,7 +182,13 @@
                 "caption": "Solid box",
                 "icon": "patternSolidBox",
                 "roi": "rect",
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
+                    "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
                     "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
                 }
@@ -195,7 +201,13 @@
                 "caption": "Open box",
                 "icon": "patternOpenBox",
                 "roi": "rect",
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
+                    "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "lineWidth": {"label": "Line width", "type": "float", "default": 0.5, "min": 0.01, "max": 1000.0, "step": 0.1, "unit": "um"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
                     "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
@@ -209,7 +221,12 @@
                 "caption": "Line",
                 "icon": "patternLine",
                 "roi": "polygon",
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "length": {"label": "Length", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
+                    "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "lineWidth": {"label": "Line width", "type": "float", "default": 0.5, "min": 0.01, "max": 1000.0, "step": 0.1, "unit": "um"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
                     "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
@@ -223,9 +240,14 @@
                 "caption": "Stair cut",
                 "icon": "patternStairCut",
                 "roi": "rect",
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
+                    "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "steps": {"label": "Steps", "type": "int", "default": 5, "min": 2, "max": 50, "step": 1},
-                    "depth": {"label": "Total depth", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "um"},
+                    "depth": {"label": "Z", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "um"},
                     "direction": {"label": "Direction", "type": "choice", "default": "down", "choices": ["down", "up", "left", "right"]}
                 }
             }
@@ -237,7 +259,13 @@
                 "caption": "Cleaning line",
                 "icon": "patternCleaningLine",
                 "roi": "rect",
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
+                    "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "spacing": {"label": "Line spacing", "type": "float", "default": 0.2, "min": 0.001, "max": 1000.0, "step": 0.05, "unit": "um", "comment": "Later: derived from the beam current / spot size."},
                     "orientation": {"label": "Orientation", "type": "choice", "default": "horizontal", "choices": ["horizontal", "vertical"]},
                     "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
@@ -251,7 +279,12 @@
                 "caption": "Circle",
                 "icon": "patternCircle",
                 "roi": "circle",
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "radius": {"label": "Radius", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
+                    "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
                     "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
                 }
@@ -264,7 +297,13 @@
                 "caption": "Ring",
                 "icon": "patternRing",
                 "roi": "ring",
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "rInner": {"label": "Rin", "type": "float", "default": 0.25, "min": 0, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "rOuter": {"label": "Rout", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
+                    "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
                     "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
                 }
@@ -277,7 +316,13 @@
                 "caption": "Polygon",
                 "icon": "patternPolygon",
                 "roi": "polygon",
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
+                    "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
                     "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1}
                 }
@@ -290,7 +335,13 @@
                 "caption": "Free hand",
                 "icon": "patternFreeHand",
                 "roi": "polygon",
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
+                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
+                    "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
                     "passes": {"label": "Passes", "type": "int", "default": 1, "min": 1, "max": 10000, "step": 1},
                     "smoothing": {"label": "Point spacing", "type": "float", "default": 2.0, "min": 0.0, "max": 1.0, "step": 0.5, "unit": "px"}

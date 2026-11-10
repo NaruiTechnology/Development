@@ -33,6 +33,7 @@ class PatternSpec:
     icon: str
     roi: str
     parameters: list = field(default_factory=list)
+    readouts: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -70,6 +71,17 @@ def _parameters(key: str, raw) -> list:
     return out
 
 
+def _readouts(key, raw):
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"{key}: readouts must be an object")
+    for name, value in raw.items():
+        if not isinstance(value, dict) or value.get("source") not in ("elapsed", "centerX", "centerY"):
+            raise ValueError(f"{key}.{name}: invalid readout source")
+    return raw
+
+
 def parse_config(data) -> ProcessingConfig:
     if not isinstance(data, dict) or not isinstance(data.get("Patterns"), list):
         raise PatternConfigError("processing patterns file needs a top-level 'Patterns' list")
@@ -99,7 +111,7 @@ def parse_config(data) -> ProcessingConfig:
             seen.add(key)
             cfg.specs.append(PatternSpec(key=key, skip=skip, model=model,
                                          caption=str(body.get("caption", key)), icon=str(body.get("icon", "")),
-                                         roi=roi, parameters=[] if skip else _parameters(key, body.get("parameters"))))
+                                         roi=roi, parameters=[] if skip else _parameters(key, body.get("parameters")), readouts={} if skip else _readouts(key, body.get("readouts"))))
         except ValueError as e:
             log.warning("processing patterns: %s", e)
             cfg.errors.append(str(e))
@@ -121,8 +133,13 @@ def load_config(path) -> ProcessingConfig:
 
 def build_models(cfg: ProcessingConfig) -> dict:
     """One model instance per non-skipped spec, in file order (dicts keep it)."""
-    return {s.key: MODEL_REGISTRY[s.model](s.key, s.parameters, caption=s.caption, icon=s.icon)
-            for s in cfg.active_specs}
+    models = {}
+    for s in cfg.active_specs:
+        model = MODEL_REGISTRY[s.model](s.key, s.parameters, caption=s.caption, icon=s.icon)
+        model.readouts = s.readouts
+        models[s.key] = model
+    return models
+
 
 
 def load_models(path) -> tuple:

@@ -27,6 +27,13 @@ export interface ParameterSpec {
   choices: string[];
 }
 
+export interface PatternReadoutSpec {
+  name: string;
+  label: string;
+  source: "elapsed" | "centerX" | "centerY";
+  unit: string;
+}
+
 export interface PatternSpec {
   key: string;
   model: string;
@@ -34,6 +41,7 @@ export interface PatternSpec {
   icon: string;
   roi: RoiKind;
   parameters: ParameterSpec[];
+  readouts?: PatternReadoutSpec[];
 }
 
 export interface RectRoi { x_start: number; x_end: number; y_start: number; y_end: number }
@@ -316,4 +324,85 @@ export function patternAvgGray(...args: Parameters<typeof patternAvgGraySteps>):
   let result = steps.next();
   while (!result.done) result = steps.next();
   return result.value;
+}
+
+
+/** Editable geometry is measured in the same world units as the drawn ROI. */
+export function patternGeometryValues(spec: Pick<PatternSpec, "model">, roi: PatternRoi): Record<string, number> {
+  if ("r_inner" in roi) return { rInner: roi.r_inner, rOuter: roi.r_outer };
+  if ("radius" in roi) return { radius: roi.radius };
+  if (spec.model === "LineModel") {
+    const [a, b] = lineEndpoints(roi as PolygonRoi);
+    const [p, , , q] = (roi as PolygonRoi).points;
+    return { length: Math.hypot(b[0] - a[0], b[1] - a[1]), lineWidth: Math.hypot(p[0] - q[0], p[1] - q[1]) };
+  }
+  const bounds = patternBounds(roi);
+  return { width: bounds.x_end - bounds.x_start, height: bounds.y_end - bounds.y_start };
+}
+
+export function syncPatternGeometry(spec: PatternSpec, roi: PatternRoi, parameters: PatternParameters): void {
+  for (const [name, value] of Object.entries(patternGeometryValues(spec, roi))) {
+    if (spec.parameters.some(p => p.name === name)) parameters[name] = value;
+  }
+}
+
+export function editPatternGeometry(spec: Pick<PatternSpec, "model">, roi: PatternRoi, name: string, value: number): PatternRoi {
+  if (!(name in patternGeometryValues(spec, roi))) return roi;
+  if (!Number.isFinite(value) || value < 0 || (name !== "rInner" && value === 0)) throw new Error("Dimension must be positive");
+  if ("r_inner" in roi) {
+    const next = { ...roi, ...(name === "rInner" ? { r_inner: value } : { r_outer: value }) };
+    if (next.r_inner >= next.r_outer) throw new Error("Rin must be smaller than Rout");
+    return next;
+  }
+  if ("radius" in roi) return { ...roi, radius: value };
+  if (spec.model === "LineModel") {
+    const [a, b] = lineEndpoints(roi as PolygonRoi);
+    const values = patternGeometryValues(spec, roi), oldLength = values.length;
+    const length = name === "length" ? value : oldLength;
+    const width = name === "lineWidth" ? value : values.lineWidth;
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    const dx = (b[0] - a[0]) * length / oldLength / 2, dy = (b[1] - a[1]) * length / oldLength / 2;
+    return lineRoi([mx - dx, my - dy], [mx + dx, my + dy], width);
+  }
+  const b = patternBounds(roi), mx = (b.x_start + b.x_end) / 2, my = (b.y_start + b.y_end) / 2;
+  const sx = name === "width" ? value / (b.x_end - b.x_start) : 1;
+  const sy = name === "height" ? value / (b.y_end - b.y_start) : 1;
+  const point = (x: number, y: number): [number, number] => [mx + (x - mx) * sx, my + (y - my) * sy];
+  if ("points" in roi) return { points: roi.points.map(([x,y]) => point(x,y)) };
+  const [x_start,y_start] = point(b.x_start,b.y_start), [x_end,y_end] = point(b.x_end,b.y_end);
+  return { x_start,y_start,x_end,y_end };
+}
+
+export function patternParameterError(spec: ParameterSpec, value: unknown, pattern?: PatternSpec, roi?: PatternRoi | null): string | null {
+  if (spec.type !== "int" && spec.type !== "float") return null;
+  const n = typeof value === "string" && value.trim() === "" ? NaN : Number(value);
+  if (!Number.isFinite(n)) return "Enter a finite number";
+  if (spec.type === "int" && !Number.isInteger(n)) return "Enter a whole number";
+  if (spec.min != null && n < spec.min) return `Minimum: ${spec.min}`;
+  if (spec.max != null && n > spec.max) return `Maximum: ${spec.max}`;
+  if (pattern && roi) {
+    try { editPatternGeometry(pattern, roi, spec.name, n); }
+    catch (e) { return e instanceof Error ? e.message : String(e); }
+  }
+  return null;
+}
+
+/** Signed displacement from the full image centre; independent of acquisition ROI and Zoom. */
+export function patternCenterOffset(roi: PatternRoi | null, field: {x_origin: number; x_end: number; y_origin: number; y_end: number}): {x:number; y:number} | null {
+  if (!roi) return null;
+  const b = patternBounds(roi);
+  return { x: (b.x_start + b.x_end - field.x_origin - field.x_end) / 2,
+    y: (b.y_start + b.y_end - field.y_origin - field.y_end) / 2 };
+}
+
+export function formatPatternTime(milliseconds: number): string {
+  const seconds = Math.floor(Math.max(0, milliseconds) / 1000);
+  return `${String(Math.floor(seconds / 3600)).padStart(2,"0")}:${String(Math.floor(seconds / 60) % 60).padStart(2,"0")}:${String(seconds % 60).padStart(2,"0")}`;
+}
+
+
+/** RevC3 pixels average dwell+1 ADC conversions at 8 MS/s. */
+export function patternDwellTicks(microseconds: unknown, fallback: number): number {
+  const us = Number(microseconds);
+  return Number.isFinite(us) && us > 0 ? Math.min(65535, Math.max(0, Math.ceil(us / 0.125) - 1)) : fallback;
 }

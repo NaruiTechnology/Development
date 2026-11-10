@@ -5,6 +5,9 @@ import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
 import {
   MODEL_REGISTRY,
+  editPatternGeometry,
+  syncPatternGeometry,
+  patternParameterError,
   lineEndpoints,
   lineRoi,
   type PolygonRoi,
@@ -109,21 +112,26 @@ const slice = createSlice({
       s.workflowProgress = [];
     },
     setPatternParameter(s, a: PayloadAction<{ key: string; name: string; value: ParameterValue | string }>) {
-      const spec = s.specs.find((p) => p.key === a.payload.key)?.parameters.find((q) => q.name === a.payload.name);
+      const pattern = s.specs.find(p => p.key === a.payload.key);
+      const spec = pattern?.parameters.find(q => q.name === a.payload.name);
       const inst = s.instances[a.payload.key];
-      if (!spec || !inst) return;
+      if (!pattern || !spec || !inst || patternParameterError(spec, a.payload.value, pattern, inst.roi)) return;
       try {
-        inst.parameters[a.payload.name] = coerceParameter(spec, a.payload.value);
-        if (a.payload.name === "lineWidth" && inst.roi && s.specs.find(p => p.key === a.payload.key)?.model === "LineModel") {
-          const previous = inst.roi as PolygonRoi;
-          inst.roi = lineRoi(...lineEndpoints(previous), Number(inst.parameters.lineWidth));
-          s.roiHistory.push({ key: a.payload.key, roi: previous });
-          if (s.roiHistory.length > 100) s.roiHistory.shift();
-          s.workflowProgress = [];
+        const value = coerceParameter(spec, a.payload.value);
+        if (inst.roi && typeof value === "number") {
+          const previous = inst.roi;
+          const next = editPatternGeometry(pattern, previous, spec.name, value);
+          if (JSON.stringify(previous) !== JSON.stringify(next)) {
+            s.roiHistory.push({ key: a.payload.key, roi: previous });
+            if (s.roiHistory.length > 100) s.roiHistory.shift();
+            inst.roi = MODEL_REGISTRY[pattern.model].validateRoi(next);
+            inst.AvgGray = null;
+            syncPatternGeometry(pattern, inst.roi, inst.parameters);
+          }
         }
-      } catch {
-        // not a usable value (e.g. half-typed number): keep the previous one
-      }
+        inst.parameters[spec.name] = value;
+        s.workflowProgress = [];
+      } catch { /* keep the last valid parameter and geometry */ }
     },
     setPatternRoi(s, a: PayloadAction<{ key: string; roi: PatternRoi; preview?: boolean }>) {
       const spec = s.specs.find((p) => p.key === a.payload.key);
@@ -142,6 +150,7 @@ const slice = createSlice({
           if (s.roiHistory.length > 100) s.roiHistory.shift();
         }
         inst.roi = next;
+        syncPatternGeometry(spec, next, inst.parameters);
         s.workflowProgress = [];
       } catch {
         // degenerate shape: keep the previous ROI
@@ -157,10 +166,8 @@ const slice = createSlice({
       const previous = s.roiHistory.pop();
       if (!previous || !s.instances[previous.key]) return;
       s.instances[previous.key].roi = previous.roi;
-      if (previous.roi && s.specs.find(p => p.key === previous.key)?.model === "LineModel") {
-        const [a, , , d] = (previous.roi as PolygonRoi).points;
-        s.instances[previous.key].parameters.lineWidth = Math.hypot(a[0] - d[0], a[1] - d[1]);
-      }
+      const spec = s.specs.find(p => p.key === previous.key);
+      if (previous.roi && spec) syncPatternGeometry(spec, previous.roi, s.instances[previous.key].parameters);
       if (!previous.roi) s.instances[previous.key].enabled = false;
       s.instances[previous.key].AvgGray = null;
       s.activeKey = previous.key;
@@ -195,7 +202,11 @@ const slice = createSlice({
       s.materials = a.payload.materials ?? [];
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
-      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ?? { workflow: "default", workflowEnabled: true, material: "", AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
+      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ? { ...s.instances[p.key], parameters: { ...defaultParameters(p.parameters), ...s.instances[p.key].parameters } } : { workflow: "default", workflowEnabled: true, material: "", AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
+      for (const spec of specs) {
+        const inst = s.instances[spec.key];
+        if (inst.roi) syncPatternGeometry(spec, inst.roi, inst.parameters);
+      }
       for (const inst of Object.values(s.instances)) {
         if (!inst.roi) inst.enabled = false;
         if (!s.materials.some(m => m.name === inst.material)) inst.material = s.materials[0]?.name ?? "";

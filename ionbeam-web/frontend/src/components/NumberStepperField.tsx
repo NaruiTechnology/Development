@@ -14,6 +14,7 @@ interface NumberStepperFieldProps {
   warning?: ReactNode;
   title?: string;
   ariaLabel?: string;
+  fractionDigits?: number;
 }
 
 export function NumberStepperField({
@@ -30,6 +31,7 @@ export function NumberStepperField({
   warning,
   title,
   ariaLabel,
+  fractionDigits,
 }: NumberStepperFieldProps) {
   return (
     <div className="field">
@@ -46,6 +48,7 @@ export function NumberStepperField({
         warning={warning}
         title={title}
         ariaLabel={ariaLabel}
+        fractionDigits={fractionDigits}
       />
     </div>
   );
@@ -64,8 +67,10 @@ export function NumberStepperInput({
   warning,
   title,
   ariaLabel,
+  fractionDigits,
 }: Omit<NumberStepperFieldProps, "label">) {
   const [local, setLocal] = useState(String(value));
+  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
     setLocal(String(value));
@@ -85,7 +90,7 @@ export function NumberStepperInput({
     let next = base + direction * stepSize;
     if (min !== undefined) next = Math.max(min, next);
     if (max !== undefined) next = Math.min(max, next);
-    commit(formatNumeric(next, stepSize));
+    commit(fractionDigits === undefined ? formatNumeric(next, stepSize) : String(Number(next.toPrecision(15))));
   }
 
   return (
@@ -94,7 +99,10 @@ export function NumberStepperInput({
         className={`input number-stepper__input${invalid ? " input--invalid" : ""}`}
         type="text"
         inputMode={inputMode}
-        value={local}
+        value={!focused && fractionDigits !== undefined && local.trim() !== "" && Number.isFinite(Number(local))
+          ? Number(local).toFixed(fractionDigits) : local}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         disabled={disabled}
         readOnly={readOnly}
         aria-invalid={invalid ? "true" : "false"}

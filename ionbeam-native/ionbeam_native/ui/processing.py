@@ -18,6 +18,8 @@ from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtWidgets import QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QToolButton, QVBoxLayout
 
 from ..i18n import fmt, t
+from ..core.geometry import image_world_bounds
+from ..processing.models import roi_bounds
 from ..paths import processing_patterns_path
 from ..processing import PatternConfigError, load_models
 from . import theme
@@ -42,10 +44,11 @@ class PatternCard(Card):
     collapse_toggled = pyqtSignal(str, bool)        # (pattern key, collapsed) - user-driven only
     _silent = True                                  # Card.__init__ calls set_collapsed before we exist
 
-    def __init__(self, model, unit_provider):
+    def __init__(self, model, unit_provider, field_provider=None):
         super().__init__("", collapsible=True, collapsed=True)
         self.model = model
         self._unit = unit_provider
+        self._field = field_provider
         self._widgets: dict = {}
         self._build()
         self._silent = False
@@ -102,6 +105,8 @@ class PatternCard(Card):
             self._widgets[spec.name] = (name_lbl, w, unit_lbl)
         grid.setColumnStretch(3, 1)
         self.body.addLayout(grid)
+        self.runtime_readout = label("", "dim", wrap=True)
+        self.body.addWidget(self.runtime_readout)
         self.readout = label("", "dim", wrap=True)
         self.body.addWidget(self.readout)
         row = QHBoxLayout()
@@ -129,7 +134,7 @@ class PatternCard(Card):
         self.hint.setText(t(f"processing.hint.{hint}"))
         self.clear_btn.setText(t("processing.clear"))
         for name, (name_lbl, w, _u) in self._widgets.items():
-            name_lbl.setText(tr(f"processing.param.{m.key}.{name}", m.param_specs[name].label))
+            name_lbl.setText(tr(f"processing.param.common.{name}", tr(f"processing.param.{m.key}.{name}", m.param_specs[name].label)))
             if isinstance(w, QComboBox):
                 for i, c in enumerate(m.param_specs[name].choices):
                     w.setItemText(i, tr(f"processing.choice.{c}", str(c)))
@@ -139,6 +144,25 @@ class PatternCard(Card):
     def refresh(self) -> None:
         m, r = self.model, self.model.roi
         unit = self._unit()
+        for name, (_, widget, unit_lbl) in self._widgets.items():
+            if isinstance(widget, NumberStepper):
+                widget.blockSignals(True)
+                widget.set_value(m.parameters[name])
+                widget.blockSignals(False)
+            u = m.param_specs[name].unit
+            unit_lbl.setText(unit if u == "world" else "µs" if u == "us" else "µm" if u == "um" else u)
+        lines = []
+        field = self._field() if self._field else None
+        for name, output in getattr(m, "readouts", {}).items():
+            value = "—"
+            source = output.get("source")
+            if r and field and source in ("centerX", "centerY"):
+                x0,x1,y0,y1 = roi_bounds(r)
+                value = f"{(x0+x1-field['x_origin']-field['x_end'])/2:.2f}" if source == "centerX" else f"{(y0+y1-field['y_origin']-field['y_end'])/2:.2f}"
+            u = unit if output.get("unit") == "world" else output.get("unit", "")
+            caption = tr(f"processing.readout.{name}", output.get("label",name))
+            lines.append(f"{caption} ({u}): {value}")
+        self.runtime_readout.setText("\n".join(lines))
         if not r:
             text = t("processing.roi.none")
         else:
@@ -209,7 +233,7 @@ class ProcessingPanel(Panel):
         lay.addWidget(self.patterns_card)
         # one card per pattern, created from the configuration
         for key, model in self.models.items():
-            card = PatternCard(model, self._unit)
+            card = PatternCard(model, self._unit, lambda: image_world_bounds(self.ctl.scan.roi))
             card.collapse_toggled.connect(self._card_toggled)
             model.subscribe(lambda _m: self.canvas_dirty.emit())
             self.cards[key] = card

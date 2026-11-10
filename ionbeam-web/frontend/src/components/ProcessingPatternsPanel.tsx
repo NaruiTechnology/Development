@@ -12,6 +12,7 @@ import { useTranslation, type TranslationKey } from "../i18n";
 import { materialTargetGrayLevel } from "../lib/processingWorkflows";
 import {
   MODEL_REGISTRY,
+  patternParameterError,
   lineEndpoints,
   type CircleRoi,
   type ParameterSpec,
@@ -27,6 +28,7 @@ import { fetchProcessingPatterns, setPatternMaterial, setPatternWorkflow, select
 import { Icon } from "./Icon";
 import { NumberStepperField } from "./NumberStepperField";
 import { PatternIcon } from "./PatternIcon";
+import { PatternRuntimeReadouts } from "./PatternRuntimeReadouts";
 import { ProcessingWorkflowPanel } from "./ProcessingWorkflowPanel";
 import { unitLabel } from "./ROIEditor";
 
@@ -187,13 +189,17 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
           <ParameterField
             key={p.name}
             spec={p}
-            label={tr(`processing.param.${spec.key}.${p.name}`, p.label)}
+            label={tr(`processing.param.common.${p.name}`, tr(`processing.param.${spec.key}.${p.name}`, p.label))}
             value={instance.parameters[p.name]}
+            unit={p.unit === "world" ? unit : p.unit === "us" ? "µs" : p.unit === "um" ? "µm" : p.unit}
+            pattern={spec}
+            roi={instance.roi}
             disabled={disabled}
             onChange={(value) => dispatch(setPatternParameter({ key: spec.key, name: p.name, value }))}
           />
         ))}
         </div>
+        <PatternRuntimeReadouts spec={spec} roi={instance.roi} />
         <p className="pattern-card__readout">{roiReadout(spec, instance.roi, unit)}{`\nAvgGray: ${instance.AvgGray == null ? "—" : instance.AvgGray.toFixed(2)}`}</p>
       </div>
     </div>
@@ -224,8 +230,9 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
 }
 
 function ParameterField({
-  spec, label, value, disabled, onChange,
-}: { spec: ParameterSpec; label: string; value: ParameterValue; disabled: boolean; onChange: (value: ParameterValue | string) => void }) {
+  spec, label, value, unit, pattern, roi, disabled, onChange,
+}: { spec: ParameterSpec; label: string; value: ParameterValue; unit: string; pattern: PatternSpec; roi: PatternRoi | null;
+  disabled: boolean; onChange: (value: ParameterValue | string) => void }) {
   const { tr } = useTr();
   const [text, setText] = useState(String(value));
   // follow external changes (reload, another view of the same instance) without fighting half-typed input
@@ -233,7 +240,8 @@ function ParameterField({
     if (spec.type === "int" || spec.type === "float") setText((cur) => (Number(cur) === value ? cur : String(value)));
   }, [value, spec.type]);
 
-  const withUnit = spec.unit ? `${label} (${spec.unit})` : label;
+  const withUnit = unit ? `${label} (${unit})` : label;
+  const error = patternParameterError(spec, text, pattern, roi);
   if (spec.type === "bool") {
     return (
       <label className="checkbox">
@@ -256,17 +264,23 @@ function ParameterField({
   }
   return (
     <NumberStepperField
-      label={withUnit}
+      label={<>{label}{unit && <span className="pattern-card__unit"> ({unit})</span>}</>}
       value={text}
       disabled={disabled}
       step={spec.step}
+      fractionDigits={spec.type === "float" ? 2 : 0}
       min={spec.min ?? undefined}
       max={spec.max ?? undefined}
       inputMode={spec.type === "int" ? "numeric" : "decimal"}
-      invalid={text.trim() === "" || !Number.isFinite(Number(text))}
+      invalid={error !== null}
+      warning={error}
+      title={spec.name === "depth" ? "Requested depth stored in the recipe; current workflows do not control physical milling depth."
+        : spec.name === "overlap" ? "Stored in the recipe; calibrated beam-spot overlap is not applied by current workflows."
+        : spec.name === "dwell" ? "Dwell for selected pixel workflows. Default acquisition uses the Controls dwell." : undefined}
+      ariaLabel={withUnit}
       onValueChange={(v) => {
         setText(v);
-        onChange(v);
+        if (!patternParameterError(spec, v, pattern, roi)) onChange(v);
       }}
     />
   );

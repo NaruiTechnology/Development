@@ -171,3 +171,6 @@ ROI and parallel scans show their active region list.
 Line and Polygon follow PN 21021-B p. 2-60: drag-and-release for Line, four successive vertex clicks for Polygon. Esc/right-click cancels drafts. A Line is stored as a finite-width four-corner polygon to share the acquisition bounds and workflow masks; `lineWidth` changes its geometry, not only its appearance. Polygon rejects zero-area and crossing-edge drawings. Both have icons and cards in the shared catalogue; native model and drawing support is kept compatible.
 
 See [patterning-audit.md](patterning-audit.md) for the comparison with the supplied manual, remaining outline/stair/cleaning execution gaps, and the distinction between rectangular Default acquisition and selected shape-masked Spot workflows.
+
+
+See [processing-pattern-parameters.md](processing-pattern-parameters.md) for catalogue-defined dimensions, Z/Dwell/Overlap inputs, runtime Time/X/Y labels, and their validation and execution scope.

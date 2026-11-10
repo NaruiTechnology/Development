@@ -144,6 +144,7 @@ REQUIRED_DIST_FILES = (
     'Development/GlasgowDataIO/Json/streamData.json',
     # Shared Processing catalogue and the solid Circle tool's native artwork.
     'Development/GlasgowDataIO/Json/processingPatterns.json',
+    'Development/ionbeam-web/frontend/src/components/PatternRuntimeReadouts.tsx',
     'Development/ionbeam-native/ionbeam_native/resources/icons/patternCircle.svg',
     'Development/ionbeam-native/ionbeam_native/resources/icons/patternLine.svg',
     'Development/ionbeam-native/ionbeam_native/resources/icons/patternPolygon.svg',

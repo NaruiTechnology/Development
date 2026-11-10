@@ -30,6 +30,13 @@ export interface PatternParameterSpec {
   choices: string[];
 }
 
+export interface PatternReadoutSpec {
+  name: string;
+  label: string;
+  source: "elapsed" | "centerX" | "centerY";
+  unit: string;
+}
+
 export interface PatternSpec {
   key: string;
   model: string;
@@ -37,6 +44,7 @@ export interface PatternSpec {
   icon: string;
   roi: RoiKind;
   parameters: PatternParameterSpec[];
+  readouts?: PatternReadoutSpec[];
 }
 
 export interface WorkflowSpec {
@@ -137,6 +145,16 @@ function parseParameters(key: string, raw: unknown): PatternParameterSpec[] {
   });
 }
 
+function parseReadouts(key: string, raw: unknown): PatternReadoutSpec[] {
+  if (raw === undefined) return [];
+  if (!isObject(raw)) throw new Error(`${key}: readouts must be an object`);
+  return Object.entries(raw).map(([name, value]) => {
+    if (!isObject(value) || !["elapsed", "centerX", "centerY"].includes(String(value.source))) throw new Error(`${key}.${name}: invalid readout source`);
+    return { name, label: typeof value.label === "string" ? value.label : name,
+      source: value.source as PatternReadoutSpec["source"], unit: typeof value.unit === "string" ? value.unit : "" };
+  });
+}
+
 export function parseProcessingPatterns(data: unknown): ProcessingPatternsConfig {
   if (!isObject(data) || !Array.isArray(data.Patterns)) {
     throw new ConfigError("processing patterns file needs a top-level 'Patterns' list", 500);
@@ -159,7 +177,7 @@ export function parseProcessingPatterns(data: unknown): ProcessingPatternsConfig
       out.patterns.push({
         key, model: body.model, caption: typeof body.caption === "string" ? body.caption : key,
         icon: typeof body.icon === "string" ? body.icon : "", roi: roi as RoiKind,
-        parameters: parseParameters(key, body.parameters),
+        parameters: parseParameters(key, body.parameters), readouts: parseReadouts(key, body.readouts),
       });
     } catch (err) {
       out.errors.push(err instanceof Error ? err.message : String(err));

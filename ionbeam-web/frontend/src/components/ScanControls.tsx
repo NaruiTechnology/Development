@@ -1,3 +1,4 @@
+import { patternDwellTicks } from "../lib/processingPatterns";
 /**
  * Run / Stop button group, plus a "Run validated" button that
  * uses the blocking REST endpoint (returns a ScanResult with timing,
@@ -728,7 +729,7 @@ export function ScanControls({
           const workflow = patterns.workflows.find(w => w.name === name);
           if (!workflow) throw new Error(`Unknown workflow: ${name}`);
           const steps = workflowPoints(spec, inst.roi!, processingPlan.regions[index], field, source, edge,
-            workflow, patterns.materials, vector.dwell, vector.scan_path, (x, y) => {
+            workflow, patterns.materials, patternDwellTicks(inst.parameters.dwell, vector.dwell), vector.scan_path, (x, y) => {
               const point = worldSelectionToDacROI({ x_start: x, x_end: x, y_start: y, y_end: y }, roiState);
               return { x: point.x_start, y: point.y_start };
             }, inst.material);

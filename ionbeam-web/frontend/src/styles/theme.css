@@ -8070,10 +8070,26 @@ body {
 }
 
 .pattern-card__parameters {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 10px 8px;
 }
+
+.pattern-card__unit { text-transform: none; }
+
+.pattern-card__runtime {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.pattern-card__result { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pattern-card__result:first-child { grid-column: 1 / -1; }
+.pattern-card__result span { font-size: 11px; color: var(--c-text-dim); }
+.pattern-card__result output { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
 
 .pattern-card__parameters > * {
   flex: 1 1 0;

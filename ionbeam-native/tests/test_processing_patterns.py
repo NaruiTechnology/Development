@@ -167,3 +167,22 @@ def test_line_and_polygon_pointer_gestures():
     tool.mouse_press(canvas, event(40, 30))
     tool.mouse_press(canvas, event(50, 30, Qt.MouseButton.RightButton))
     assert not tool.drawing and models["polygon"].roi == saved
+
+
+def test_numeric_dimensions_sync_with_drawing_and_ring_edits():
+    _, models = load_models(processing_patterns_path())
+    for model in models.values():
+        assert all(name in model.parameters for name in ("depth", "dwell", "overlap"))
+        assert set(model.readouts) == {"time", "centerX", "centerY"}
+    ring = models["ring"]
+    ring.set_roi({"cx": 10, "cy": 20, "r_inner": 2, "r_outer": 5})
+    assert ring.parameters["rInner"] == 2 and ring.parameters["rOuter"] == 5
+    ring.set_parameter("rOuter", 8)
+    assert ring.roi["r_outer"] == 8
+    with pytest.raises(ValueError):
+        ring.set_parameter("rInner", 9)
+    assert ring.roi["r_inner"] == 2 and ring.parameters["rInner"] == 2
+    box = models["solidBox"]
+    box.set_roi({"x_start":10,"x_end":20,"y_start":30,"y_end":40})
+    box.set_parameter("width",20)
+    assert box.roi == {"x_start":5,"x_end":25,"y_start":30,"y_end":40}
