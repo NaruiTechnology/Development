@@ -8,6 +8,7 @@ User=@ADMIN_USER@
 WorkingDirectory=@SERVICE_ROOT@
 Environment=PYTHONPATH=@OPERATIONS_ROOT@/Development:@SERVICE_ROOT@
 Environment=GLASGOW_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/streamData.json
+Environment=PROCESSING_PATTERNS_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/processingPatterns.json
 Environment=GLASGOW_SCAN_ASSET_DIR=/var/lib/glasgow-service/scan-assets
 EnvironmentFile=-/etc/glasgow-svc.env
 # Credentials (GLASGOW_TOKEN, DB, FTP): owner-only file outside the deploy root.

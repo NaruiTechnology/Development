@@ -2064,6 +2064,17 @@ body {
 .scan-primary-controls > .btn { flex: 1 1 0; min-width: 0; justify-content: center; }
 .roi-action-controls { margin-top: 12px; }
 .scan-action-with-help { display: inline-flex; align-items: center; gap: 4px; }
+/* Scan / Stop / Live / Run and calibration Confirm share a compact action height. */
+.scan-primary-controls > .btn,
+.scan-action-with-help > .btn,
+.roi-calibration-card > .btn {
+  height: 45px;
+  min-height: 45px;
+  padding: 0 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 /* Run validated + Clear, portalled from ScanControls to the bottom of the
    scan parameters card, directly under Validated run options. */
 .validated-run-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
@@ -8086,7 +8097,6 @@ body {
 }
 
 .pattern-card__result { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.pattern-card__result:first-child { grid-column: 1 / -1; }
 .pattern-card__result span { font-size: 11px; color: var(--c-text-dim); }
 .pattern-card__result output { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
@@ -8203,3 +8213,14 @@ body {
 .processing-workflow__node--current .processing-workflow__step { border-color: var(--c-accent); background: color-mix(in srgb, var(--c-accent) 15%, transparent); }
 .processing-workflow__node--current .processing-workflow__number, .processing-workflow__node--completed .processing-workflow__number { color: var(--workflow-direction-color); border-color: var(--workflow-direction-color); }
 .processing-workflow__node--error .processing-workflow__step, .processing-workflow__node--stopped .processing-workflow__step { border-color: #d98853; }
+
+
+.processing-patterns-tab-help { display: inline-flex; align-items: center; padding-inline: 4px; }
+.lens-lookup-controls { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 12px; }
+.lens-reference-table { max-height: 380px; overflow: auto; border: 1px solid var(--c-border); border-radius: var(--r-md); }
+.lens-reference-table table { width: 100%; min-width: 640px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.lens-reference-table caption { text-align: left; padding: 10px; font-weight: 600; }
+.lens-reference-table th, .lens-reference-table td { padding: 8px 10px; border-bottom: 1px solid var(--c-border); text-align: right; white-space: nowrap; }
+.lens-reference-table th { position: sticky; top: 0; background: var(--c-bg-elev-2); }
+.lens-reference-row--selected { background: var(--c-bg-elev-2); color: var(--c-accent); }
+.lens-depth-formula { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }

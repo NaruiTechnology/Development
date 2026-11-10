@@ -174,6 +174,152 @@
             ]
         }
     ],
+    "LensLookup": {
+        "schemaVersion": 1,
+        "name": "LENS 1 PRELENS",
+        "source": {
+            "file": "LENS 1 PRELENS.xls",
+            "sheet": "Sheet1",
+            "range": "A1:F22",
+            "sha256": "5dd6960120e36b1bc8646aedbbf1224af423fef829d81426b4b58c6a8efa723d"
+        },
+        "sourceHeaders": [
+            "Steps Between Apertures",
+            "KV",
+            "ID      (um)",
+            "pA",
+            "Lens 1   (kV)",
+            "Spot Size   (Angstroms)"
+        ],
+        "rows": [
+            {
+                "sourceRow": 2,
+                "stepsBetweenApertures": 2000,
+                "beamVoltageKV": 30,
+                "apertureDiameterUM": "<10",
+                "beamCurrentPA": "<1",
+                "lens1KV": 14,
+                "spotSizeAngstrom": 80
+            },
+            {
+                "sourceRow": 3,
+                "stepsBetweenApertures": 2000,
+                "beamVoltageKV": 30,
+                "apertureDiameterUM": 20,
+                "beamCurrentPA": 4,
+                "lens1KV": 9.5,
+                "spotSizeAngstrom": 120
+            },
+            {
+                "sourceRow": 4,
+                "stepsBetweenApertures": 2000,
+                "beamVoltageKV": 30,
+                "apertureDiameterUM": 30,
+                "beamCurrentPA": 11,
+                "lens1KV": 8.4,
+                "spotSizeAngstrom": 150
+            },
+            {
+                "sourceRow": 5,
+                "stepsBetweenApertures": 2000,
+                "beamVoltageKV": 30,
+                "apertureDiameterUM": 70,
+                "beamCurrentPA": 70,
+                "lens1KV": 7.1,
+                "spotSizeAngstrom": 250
+            },
+            {
+                "sourceRow": 6,
+                "stepsBetweenApertures": 2000,
+                "beamVoltageKV": 30,
+                "apertureDiameterUM": 100,
+                "beamCurrentPA": 150,
+                "lens1KV": 6.65,
+                "spotSizeAngstrom": 350
+            },
+            {
+                "sourceRow": 7,
+                "stepsBetweenApertures": 2000,
+                "beamVoltageKV": 30,
+                "apertureDiameterUM": 150,
+                "beamCurrentPA": 350,
+                "lens1KV": 6.35,
+                "spotSizeAngstrom": 550
+            },
+            {
+                "sourceRow": 8,
+                "stepsBetweenApertures": 3000,
+                "beamVoltageKV": 30,
+                "apertureDiameterUM": 250,
+                "beamCurrentPA": 1000,
+                "lens1KV": 6.04,
+                "spotSizeAngstrom": 800
+            },
+            {
+                "sourceRow": 9,
+                "stepsBetweenApertures": 3000,
+                "beamVoltageKV": 30,
+                "apertureDiameterUM": 400,
+                "beamCurrentPA": 2700,
+                "lens1KV": "5.82*",
+                "spotSizeAngstrom": 1200
+            },
+            {
+                "sourceRow": 10,
+                "stepsBetweenApertures": 3000,
+                "beamVoltageKV": 30,
+                "apertureDiameterUM": 600,
+                "beamCurrentPA": 6600,
+                "lens1KV": "5.69*",
+                "spotSizeAngstrom": 2700
+            },
+            {
+                "sourceRow": 11,
+                "stepsBetweenApertures": 3000,
+                "beamVoltageKV": 30,
+                "apertureDiameterUM": 825,
+                "beamCurrentPA": 11500,
+                "lens1KV": "5.62*",
+                "spotSizeAngstrom": 5000
+            },
+            {
+                "sourceRow": 12,
+                "stepsBetweenApertures": null,
+                "beamVoltageKV": 10,
+                "apertureDiameterUM": 150,
+                "beamCurrentPA": 250,
+                "lens1KV": 3.1,
+                "spotSizeAngstrom": 3000
+            }
+        ],
+        "notes": [
+            {
+                "sourceRow": 14,
+                "text": "*Need to perform SLF for 2700pA, 6600pA and 11500pA beams. "
+            },
+            {
+                "sourceRow": 17,
+                "text": "SLF "
+            },
+            {
+                "sourceRow": 18,
+                "text": "At 11500 turn Lens 2 all the way down and focus with Lens 1.  This values is SLF."
+            },
+            {
+                "sourceRow": 20,
+                "text": "SLF + .1 = Lens1 for 11500."
+            },
+            {
+                "sourceRow": 21,
+                "text": "SLF + .2 = Lens1 for 6600."
+            },
+            {
+                "sourceRow": 22,
+                "text": "SLF + .3 = Lens1 for 2700."
+            }
+        ],
+        "interpolation": "Exact match by voltage and current by default. Optional linear interpolation of spot size between numeric current anchors at the same voltage. No extrapolation; bounded current rows are reference only. Lens 1 settings are never interpolated."
+    },
     "Patterns": [
         {
             "solidBox": {
@@ -182,11 +328,12 @@
                 "caption": "Solid box",
                 "icon": "patternSolidBox",
                 "roi": "rect",
-                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "count": {"label": "Count", "source": "spotCount", "unit": "spots"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
                     "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
                     "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
-                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
                     "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
                     "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
@@ -201,11 +348,12 @@
                 "caption": "Open box",
                 "icon": "patternOpenBox",
                 "roi": "rect",
-                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "count": {"label": "Count", "source": "spotCount", "unit": "spots"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
                     "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
                     "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
-                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
                     "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
                     "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "lineWidth": {"label": "Line width", "type": "float", "default": 0.5, "min": 0.01, "max": 1000.0, "step": 0.1, "unit": "um"},
@@ -221,10 +369,11 @@
                 "caption": "Line",
                 "icon": "patternLine",
                 "roi": "polygon",
-                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "count": {"label": "Count", "source": "spotCount", "unit": "spots"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
                     "length": {"label": "Length", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
-                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
                     "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
                     "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "lineWidth": {"label": "Line width", "type": "float", "default": 0.5, "min": 0.01, "max": 1000.0, "step": 0.1, "unit": "um"},
@@ -240,14 +389,15 @@
                 "caption": "Stair cut",
                 "icon": "patternStairCut",
                 "roi": "rect",
-                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "count": {"label": "Count", "source": "spotCount", "unit": "spots"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
                     "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
                     "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
                     "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
                     "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "steps": {"label": "Steps", "type": "int", "default": 5, "min": 2, "max": 50, "step": 1},
-                    "depth": {"label": "Z", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "um"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "um"},
                     "direction": {"label": "Direction", "type": "choice", "default": "down", "choices": ["down", "up", "left", "right"]}
                 }
             }
@@ -259,11 +409,12 @@
                 "caption": "Cleaning line",
                 "icon": "patternCleaningLine",
                 "roi": "rect",
-                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "count": {"label": "Count", "source": "spotCount", "unit": "spots"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
                     "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
                     "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
-                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
                     "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
                     "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "spacing": {"label": "Line spacing", "type": "float", "default": 0.2, "min": 0.001, "max": 1000.0, "step": 0.05, "unit": "um", "comment": "Later: derived from the beam current / spot size."},
@@ -279,10 +430,11 @@
                 "caption": "Circle",
                 "icon": "patternCircle",
                 "roi": "circle",
-                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "count": {"label": "Count", "source": "spotCount", "unit": "spots"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
                     "radius": {"label": "Radius", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
-                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
                     "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
                     "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
@@ -297,11 +449,12 @@
                 "caption": "Ring",
                 "icon": "patternRing",
                 "roi": "ring",
-                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "count": {"label": "Count", "source": "spotCount", "unit": "spots"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
                     "rInner": {"label": "Rin", "type": "float", "default": 0.25, "min": 0, "max": 1000000, "step": 0.1, "unit": "world"},
                     "rOuter": {"label": "Rout", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
-                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
                     "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
                     "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
@@ -311,16 +464,17 @@
         },
         {
             "polygon": {
-                "skip": false,
+                "skip": true,
                 "model": "PolygonModel",
                 "caption": "Polygon",
                 "icon": "patternPolygon",
                 "roi": "polygon",
-                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "count": {"label": "Count", "source": "spotCount", "unit": "spots"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
                     "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
                     "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
-                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
                     "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
                     "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
@@ -335,11 +489,12 @@
                 "caption": "Free hand",
                 "icon": "patternFreeHand",
                 "roi": "polygon",
-                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
+                "readouts": {"time": {"label": "Time", "source": "elapsed", "unit": "h:m:s"}, "count": {"label": "Count", "source": "spotCount", "unit": "spots"}, "centerX": {"label": "X", "source": "centerX", "unit": "world"}, "centerY": {"label": "Y", "source": "centerY", "unit": "world"}},
                 "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
                     "width": {"label": "Width", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
                     "height": {"label": "Height", "type": "float", "default": 1, "min": 0.001, "max": 1000000, "step": 0.1, "unit": "world"},
-                    "depth": {"label": "Z", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"},
                     "dwell": {"label": "Dwell", "type": "float", "default": 1, "min": 0.125, "max": 8192, "step": 0.125, "unit": "us"},
                     "overlap": {"label": "Overlap", "type": "float", "default": 50, "min": 0, "max": 99.9, "step": 1, "unit": "%"},
                     "dose": {"label": "Dose", "type": "float", "default": 1.0, "min": 0.001, "max": 1000.0, "step": 0.1, "unit": "nC/um2"},
@@ -356,7 +511,10 @@
                 "icon": "patternSolidBox",
                 "roi": "rect",
                 "comment": "Item 7: needs the Manufacture Data Set (MDS) format first.",
-                "parameters": {}
+                "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"}
+                }
             }
         },
         {
@@ -367,7 +525,10 @@
                 "icon": "patternSolidBox",
                 "roi": "rect",
                 "comment": "Item 8: width + depth, auto beam current, drift correction.",
-                "parameters": {}
+                "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"}
+                }
             }
         },
         {
@@ -378,7 +539,10 @@
                 "icon": "patternSolidBox",
                 "roi": "rect",
                 "comment": "Item 9: width + depth + final thickness.",
-                "parameters": {}
+                "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"}
+                }
             }
         },
         {
@@ -389,7 +553,10 @@
                 "icon": "patternSolidBox",
                 "roi": "rect",
                 "comment": "Item 10: width + depth.",
-                "parameters": {}
+                "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"}
+                }
             }
         },
         {
@@ -400,7 +567,10 @@
                 "icon": "patternSolidBox",
                 "roi": "rect",
                 "comment": "Item 11.",
-                "parameters": {}
+                "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"}
+                }
             }
         },
         {
@@ -411,7 +581,10 @@
                 "icon": "patternSolidBox",
                 "roi": "rect",
                 "comment": "Item 12.",
-                "parameters": {}
+                "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"}
+                }
             }
         },
         {
@@ -422,7 +595,10 @@
                 "icon": "patternSolidBox",
                 "roi": "rect",
                 "comment": "Item 13: large,area milling.",
-                "parameters": {}
+                "parameters": {
+                    "beamCurrent": {"label": "Beam current", "type": "float", "default": 150, "min": 0, "step": 1, "unit": "pA"},
+                    "depth": {"label": "Depth", "type": "float", "default": 1, "min": 0.001, "max": 1000, "step": 0.1, "unit": "um"}
+                }
             }
         }
     ]

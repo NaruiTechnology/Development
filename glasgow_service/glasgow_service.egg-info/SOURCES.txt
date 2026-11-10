@@ -11,8 +11,10 @@ glasgow_service/executor_config.py
 glasgow_service/executor_lifecycle.py
 glasgow_service/executor_logging.py
 glasgow_service/failover_executor.py
+glasgow_service/lens_lookup.py
 glasgow_service/models.py
 glasgow_service/pfeiffer.py
+glasgow_service/processing_reference_api.py
 glasgow_service/redis_coordination.py
 glasgow_service/roi_scaling.py
 glasgow_service/sample_stage.py
@@ -30,6 +32,7 @@ glasgow_service/vacuum_executor_app.py
 glasgow_service/vacuum_failover_runtime.py
 glasgow_service/vacuum_health.py
 glasgow_service/vacuum_io_board.py
+glasgow_service/zoom_queue_diagnostic.py
 glasgow_service.egg-info/PKG-INFO
 glasgow_service.egg-info/SOURCES.txt
 glasgow_service.egg-info/dependency_links.txt
@@ -49,6 +52,7 @@ tests/test_beam_hold.py
 tests/test_bitmap_vector_dwell.py
 tests/test_configuration_restart.py
 tests/test_distribution_dependencies.py
+tests/test_dump_background.py
 tests/test_dump_scan_params.py
 tests/test_dwell_boundary.py
 tests/test_emulation_board.py
@@ -62,6 +66,7 @@ tests/test_executor_logging.py
 tests/test_failover_executor.py
 tests/test_figure_levels.py
 tests/test_host_sbc_decoupling.py
+tests/test_lens_lookup.py
 tests/test_link_pacing.py
 tests/test_live_scan_continuous.py
 tests/test_parallel_regions.py
@@ -77,7 +82,10 @@ tests/test_sbc_service_boundary.py
 tests/test_sbc_vacuum_app.py
 tests/test_sbc_watchdog.py
 tests/test_scan_abort.py
+tests/test_scan_asset_api.py
 tests/test_scan_assets.py
+tests/test_scan_resources.py
+tests/test_simulated_command_queue.py
 tests/test_simulation_scan_path.py
 tests/test_stack_manager_sbc.py
 tests/test_stream_disconnect.py

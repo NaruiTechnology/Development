@@ -11,7 +11,7 @@ from ionbeam_native.processing.config import parse_config
 def test_shipped_config_loads_and_skips():
     cfg, models = load_models(processing_patterns_path())
     assert not cfg.errors
-    assert list(models) == ["solidBox", "openBox", "line", "stairCut", "cleaningLine", "circle", "ring", "polygon", "freeHand"]
+    assert list(models) == ["solidBox", "openBox", "line", "stairCut", "cleaningLine", "circle", "ring", "freeHand"]
     assert all(s.skip for s in cfg.specs if s.key not in models)
     assert models["stairCut"].parameters["steps"] == 5
 
@@ -127,7 +127,9 @@ def test_line_width_and_four_vertex_polygon():
     assert math.isclose(line.area(), 20)
     with pytest.raises(ValueError):
         line_roi((0, 0), (0, 0), 1)
-    poly = models["polygon"]
+    # Polygon is not in the shipped stock; its reusable geometry remains testable.
+    from ionbeam_native.processing.models import PolygonModel
+    poly = PolygonModel("polygon", [])
     poly.set_roi({"points": [[0, 0], [4, 0], [1, 1], [0, 4]]})
     assert poly.area() == 4 and poly.contains(0.5, 0.5) and poly.contains(0, 0)
     assert not poly.contains(3, 3)
@@ -142,6 +144,8 @@ def test_line_and_polygon_pointer_gestures():
     from ionbeam_native.ui.pattern_tool import PatternTool
     from ionbeam_native.processing.models import line_endpoints
     _, models = load_models(processing_patterns_path())
+    from ionbeam_native.processing.models import PolygonModel
+    models["polygon"] = PolygonModel("polygon", [])  # explicit test-only catalogue entry
     panel = SimpleNamespace(active_model=lambda: models["line"], models=models)
     tool = PatternTool(panel)
     canvas = SimpleNamespace(disabled=False, view=SimpleNamespace(setFocus=lambda: None, update=lambda: None),
@@ -172,8 +176,9 @@ def test_line_and_polygon_pointer_gestures():
 def test_numeric_dimensions_sync_with_drawing_and_ring_edits():
     _, models = load_models(processing_patterns_path())
     for model in models.values():
-        assert all(name in model.parameters for name in ("depth", "dwell", "overlap"))
-        assert set(model.readouts) == {"time", "centerX", "centerY"}
+        assert all(name in model.parameters for name in ("beamCurrent", "depth", "dwell", "overlap"))
+        assert model.parameters["beamCurrent"] == 150
+        assert set(model.readouts) == {"time", "count", "centerX", "centerY"}
     ring = models["ring"]
     ring.set_roi({"cx": 10, "cy": 20, "r_inner": 2, "r_outer": 5})
     assert ring.parameters["rInner"] == 2 and ring.parameters["rOuter"] == 5

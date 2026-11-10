@@ -23,14 +23,18 @@ export function PatternRuntimeReadouts({spec, roi}: {spec: PatternSpec; roi: Pat
   const offset = patternCenterOffset(roi, imageWorldBounds(field));
   const elapsed = nodes.reduce((total,n) => total + workflowElapsedMs(n, now),0);
   const measured = nodes.some(n => n.startedAt !== undefined);
+  const spotCount = nodes.some(node => node.total > 0)
+    ? nodes.reduce((sum, node) => sum + node.spot, 0) : null;
   const tr = (key: string, fallback: string) => { const value=t(key as TranslationKey); return value === key ? fallback : value; };
   return <div className="pattern-card__runtime" aria-label={tr("processing.runtime", "Runtime results")}>
     {(spec.readouts ?? []).map(readout => {
       const unit = readout.unit === "world" ? unitLabel(field.scale_unit) : readout.unit;
       const value = readout.source === "elapsed" ? measured ? formatPatternTime(elapsed) : "—"
+        : readout.source === "spotCount" ? spotCount === null ? "—" : spotCount.toLocaleString()
         : offset ? (readout.source === "centerX" ? offset.x : offset.y).toFixed(2) : "—";
       const caption = tr(`processing.readout.${readout.name}`, readout.label);
-      return <div className="pattern-card__result" key={readout.name}>
+      return <div className="pattern-card__result" key={readout.name}
+        title={readout.source === "spotCount" ? "Unblanked spots in the prepared workflow, summed across steps. Repeated passes are not accumulated; this is not a measured exposure counter." : undefined}>
         <span>{caption}{unit ? ` (${unit})` : ""}</span>
         <output aria-label={`${spec.caption}: ${caption}`} data-readout={readout.name}>{value}</output>
       </div>;

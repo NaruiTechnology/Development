@@ -325,7 +325,8 @@
                     "commandFormat": "internal",
                     "bashrcPath": "~/.bashrc",
                     "exports": {
-                        "GLASGOW_CONFIG": "Development/GlasgowDataIO/Json/streamData.json"
+                        "GLASGOW_CONFIG": "Development/GlasgowDataIO/Json/streamData.json",
+                        "PROCESSING_PATTERNS_CONFIG": "Development/GlasgowDataIO/Json/processingPatterns.json"
                     }
                 },
                 "timeout": 5.0
@@ -344,6 +345,7 @@
                             "resolve": false
                         },
                         "GLASGOW_CONFIG": "Development/GlasgowDataIO/Json/streamData.json",
+                        "PROCESSING_PATTERNS_CONFIG": "Development/GlasgowDataIO/Json/processingPatterns.json",
                         "PYTHONPATH": [
                             "Development",
                             "Development/glasgow_service"
@@ -418,7 +420,8 @@
                             "value": "${GLASGOW_TOKEN}",
                             "resolve": false
                         },
-                        "GLASGOW_CONFIG": "Development/GlasgowDataIO/Json/streamData.json"
+                        "GLASGOW_CONFIG": "Development/GlasgowDataIO/Json/streamData.json",
+                        "PROCESSING_PATTERNS_CONFIG": "Development/GlasgowDataIO/Json/processingPatterns.json"
                     },
                     "log": "/tmp/ionbeam-backend.log",
                     "pid": "/tmp/ionbeam-backend.pid",

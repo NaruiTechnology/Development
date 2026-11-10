@@ -68,6 +68,11 @@ def make_workspace(base):
     stubs = {
         "GlasgowDataIO/Json/streamData.json": '{"Version": "0.8.0"}',
         "GlasgowDataIO/Json/processingPatterns.json": '{"Patterns": []}',
+        "GlasgowDataIO/Calibration/LENS 1 PRELENS.xls": "source-fixture",
+        "ionbeam-web/frontend/src/components/ProcessingPatternsHelp.tsx": "export const ProcessingPatternsHelp = () => null;\n",
+        "ionbeam-web/frontend/src/lib/lensLookup.ts": "export {};\n",
+        "glasgow_service/glasgow_service/lens_lookup.py": "LOOKUP = 1\n",
+        "glasgow_service/glasgow_service/processing_reference_api.py": "ROUTER = 1\n",
         "ionbeam-web/frontend/src/components/PatternRuntimeReadouts.tsx": "export const PatternRuntimeReadouts = () => null;\n",
         "ionbeam-native/ionbeam_native/resources/icons/patternCircle.svg": '<svg xmlns="http://www.w3.org/2000/svg"/>',
         "ionbeam-native/ionbeam_native/resources/icons/patternLine.svg": '<svg xmlns="http://www.w3.org/2000/svg"/>',

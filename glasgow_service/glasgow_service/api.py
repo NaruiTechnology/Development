@@ -21,6 +21,7 @@ from .models  import (
 )
 from .auth    import require_token
 from . import scan_assets
+from .processing_reference_api import router as processing_reference_router
 from .config  import find_config_path
 from .service import LOG_NAME
 from AutomationPy.buildingblocks.automation_log import AutomationLog
@@ -78,6 +79,9 @@ async def get_status():
          summary="Default scan parameters from streamData.json")
 async def get_defaults():
     return svc.defaults()
+
+
+app.include_router(processing_reference_router)
 
 
 # ---------- raster ---------------------------------------------------------

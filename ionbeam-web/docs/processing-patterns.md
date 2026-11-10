@@ -177,3 +177,9 @@ See [processing-pattern-parameters.md](processing-pattern-parameters.md) for cat
 
 
 While editing, the expanded pattern card moves to the first position below the Patterns toolbar. Collapsing it restores catalogue order; expanding or drawing another pattern promotes that card. Card state stays keyed by pattern, and acquisition/execution still uses catalogue order. During execution the presentation uses catalogue order.
+
+
+Polygon is excluded from the shipped pattern stock (`skip: true` in its catalogue node), so neither the web nor native app displays its icon or card. Free hand remains available. Polygon geometry support is retained for shared geometry handling and explicitly configured catalogues.
+
+
+The PROCESS / PATTERNS header includes **?** help with the imported Lens 1 Prelens data table and a spot-size lookup. See [lens-reference.md](lens-reference.md) for provenance, calculation helpers, service endpoints, interpolation rules, and the additional calibration needed for milling depth.

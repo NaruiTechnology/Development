@@ -41,6 +41,7 @@
     "src/lib/scanPathOverlay.ts",
     "src/lib/roiTargetGray.ts",
     "src/lib/processingPatterns.ts",
+    "src/lib/lensLookup.ts",
     "src/lib/processingWorkflows.ts",
     "src/lib/idleWork.ts",
     "src/lib/processingScanRegions.ts",

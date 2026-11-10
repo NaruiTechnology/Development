@@ -30,7 +30,7 @@ export interface ParameterSpec {
 export interface PatternReadoutSpec {
   name: string;
   label: string;
-  source: "elapsed" | "centerX" | "centerY";
+  source: "elapsed" | "spotCount" | "centerX" | "centerY";
   unit: string;
 }
 

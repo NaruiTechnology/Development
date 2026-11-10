@@ -8,6 +8,7 @@ User=vboxuser
 WorkingDirectory=/home/vboxuser/Project/Operations
 Environment=PYTHONPATH=/home/vboxuser/Project/Operations/Development:/home/vboxuser/Project/Operations/Development/glasgow_service
 Environment=GLASGOW_CONFIG=/home/vboxuser/Project/Operations/Development/GlasgowDataIO/Json/streamData.json
+Environment=PROCESSING_PATTERNS_CONFIG=/home/vboxuser/Project/Operations/Development/GlasgowDataIO/Json/processingPatterns.json
 Environment=GLASGOW_SCAN_ASSET_DIR=/var/lib/glasgow-service/scan-assets
 # GLASGOW_TOKEN (bearer auth) and other credentials come from the
 # service account's secrets file; see secretstore/README.md.

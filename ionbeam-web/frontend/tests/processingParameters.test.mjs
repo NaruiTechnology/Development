@@ -13,8 +13,9 @@ const specs=json.Patterns.filter(p=>!Object.values(p)[0].skip).map(p=>{const [ke
 
 test("every active pattern defines recipe spinners and runtime labels in the catalogue",()=>{
  for(const spec of specs){
-  for(const name of ["depth","dwell","overlap"]) assert.ok(spec.parameters.some(p=>p.name===name),`${spec.key}: ${name}`);
-  assert.deepEqual(spec.readouts.map(p=>p.source),["elapsed","centerX","centerY"]);
+  for(const name of ["beamCurrent","depth","dwell","overlap"]) assert.ok(spec.parameters.some(p=>p.name===name),`${spec.key}: ${name}`);
+  assert.equal(spec.parameters.find(p=>p.name==="beamCurrent").default,150);
+  assert.deepEqual(spec.readouts.map(p=>p.source),["elapsed","spotCount","centerX","centerY"]);
  }
 });
 
@@ -70,22 +71,34 @@ test("Ring spinners update geometry; drawing/undo sync values; runtime outputs u
   await act(async()=>input("Rin (μm)").props.onBlur());
   assert.equal(input("Rin (μm)").props.value,"2.12");
   await act(async()=>store.dispatch(actions.setPatternRoi({key:"ring",roi:{cx:30,cy:40,r_inner:2,r_outer:5}})));
+  assert.equal(input("Beam current (pA)").props.value,"150.00");
+  assert.equal(input("Depth (µm)").props.value,"1.00");
+  await act(async()=>input("Beam current (pA)").props.onChange({target:{value:"200"}}));
+  assert.equal(store.getState().processing.instances.ring.parameters.beamCurrent,200);
   const output=name=>card().findByProps({"data-readout":name}).children.join("");
-  assert.equal(output("centerX"),"-20.00");assert.equal(output("centerY"),"-60.00");assert.equal(output("time"),"—");
+  assert.equal(output("centerX"),"-20.00");assert.equal(output("centerY"),"-60.00");assert.equal(output("time"),"—");assert.equal(output("count"),"—");
   await act(async()=>input("Rout (μm)").props.onChange({target:{value:"8"}}));
   assert.equal(store.getState().processing.instances.ring.roi.r_outer,8);
   await act(async()=>input("Rin (μm)").props.onChange({target:{value:"9"}}));
   assert.equal(store.getState().processing.instances.ring.roi.r_inner,2);assert.equal(input("Rin (μm)").props["aria-invalid"],"true");
   await act(async()=>store.dispatch(actions.undoPatternRoi()));
   assert.equal(store.getState().processing.instances.ring.parameters.rOuter,5);
-  await act(async()=>store.dispatch(actions.setWorkflowProgress([{id:"ring:0",pattern:"Ring",caption:"Step",action:"Scan",status:"completed",threshold:null,spot:0,total:0,startedAt:1000,finishedAt:3662000}])));
+  await act(async()=>store.dispatch(actions.setWorkflowProgress([{id:"ring:0",pattern:"Ring",caption:"Step",action:"Scan",status:"completed",threshold:null,spot:1234,total:2000,startedAt:1000,finishedAt:3662000}])));
   assert.equal(output("time"),"01:01:01");
+  assert.equal(output("count"),"1,234");
+  await act(async()=>store.dispatch(actions.setWorkflowProgress([
+    {id:"ring:0",pattern:"Ring",caption:"Step",action:"Spot",status:"completed",threshold:null,spot:1234,total:2000,startedAt:1000,finishedAt:3662000},
+    {id:"ring:1",pattern:"Ring",caption:"Step 2",action:"Spot",status:"upcoming",threshold:null,spot:66,total:100},
+    {id:"circle:0",pattern:"Circle",caption:"Other pattern",action:"Spot",status:"upcoming",threshold:null,spot:999,total:1000}
+  ])));
+  assert.equal(output("count"),"1,300","counts only this pattern's workflow steps");
+
   await act(async()=>store.dispatch(updateROI({scan_zoom:4,selection:{x_start:5,x_end:20,y_start:5,y_end:20}})));
   assert.equal(output("centerX"),"-20.00");assert.equal(output("time"),"01:01:01");
   await act(async()=>store.dispatch(updateROI({imageDataUrl:"test-image",imageBounds:{x_start:0,x_end:200,y_start:0,y_end:100}})));
   assert.equal(output("centerX"),"-70.00");assert.equal(output("centerY"),"-10.00");
-  assert.equal(card().findAllByType("output").length,3,"derived fields are labels, not editable inputs");
+  assert.equal(card().findAllByType("output").length,4,"derived fields are labels, not editable inputs");
   await act(async()=>store.dispatch(actions.clearPatternRoi("ring")));
-  assert.equal(output("centerX"),"—");
+  assert.equal(output("centerX"),"—");assert.equal(output("count"),"—");
  }finally{if(renderer)await act(async()=>renderer.unmount());await vite.close();globalThis.window=originalWindow;}
 });

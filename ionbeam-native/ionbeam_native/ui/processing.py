@@ -162,7 +162,7 @@ class PatternCard(Card):
             u = unit if output.get("unit") == "world" else output.get("unit", "")
             caption = tr(f"processing.readout.{name}", output.get("label",name))
             lines.append(f"{caption} ({u}): {value}")
-        self.runtime_readout.setText("\n".join(lines))
+        self.runtime_readout.setText("\n".join("    ".join(lines[i:i+2]) for i in range(0, len(lines), 2)))
         if not r:
             text = t("processing.roi.none")
         else:

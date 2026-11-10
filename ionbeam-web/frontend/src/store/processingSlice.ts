@@ -1,3 +1,4 @@
+import { parseLensLookup, type LensLookup } from "../lib/lensLookup";
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 import { DEFAULT_WORKFLOW, type WorkflowSpec, type WorkflowProgress } from "../lib/processingWorkflows";
@@ -33,6 +34,7 @@ export interface PatternInstance {
 }
 
 export interface ProcessingState {
+  lensLookup: LensLookup | null;
   workflows: WorkflowSpec[];
   materials: { name: string; caption?: string; brightness: number }[];
   workflowProgress: WorkflowProgress[];
@@ -46,9 +48,10 @@ export interface ProcessingState {
   roiHistory: Array<{ key: string; roi: PatternRoi | null }>;
 }
 
-const initialState: ProcessingState = { workflows: [DEFAULT_WORKFLOW], materials: [], workflowProgress: [], status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiHistory: [] };
+const initialState: ProcessingState = { lensLookup: null, workflows: [DEFAULT_WORKFLOW], materials: [], workflowProgress: [], status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiHistory: [] };
 
 interface PatternsResponse {
+  lensLookup?: unknown;
   ok?: boolean;
   error?: string;
   patterns?: PatternSpec[];
@@ -192,11 +195,17 @@ const slice = createSlice({
   extraReducers: (b) => {
     b.addCase(fetchProcessingPatterns.pending, (s) => {
       s.status = "loading";
+      s.lensLookup = null;
       s.error = null;
     });
     b.addCase(fetchProcessingPatterns.fulfilled, (s, a) => {
       const { specs, errors } = resolveCatalogue(a.payload.patterns ?? [], a.payload.errors ?? []);
       s.status = "ready";
+      s.lensLookup = null;
+      if (a.payload.lensLookup != null) {
+        try { s.lensLookup = parseLensLookup(a.payload.lensLookup); }
+        catch (e) { errors.push(`LensLookup: ${e instanceof Error ? e.message : String(e)}`); }
+      }
       s.specs = specs;
       s.workflows = [DEFAULT_WORKFLOW, ...(a.payload.workflows ?? []).filter(w => w.name !== "default")];
       s.materials = a.payload.materials ?? [];

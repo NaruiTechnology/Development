@@ -7,13 +7,13 @@ import { parseProcessingPatterns, readProcessingPatterns } from "../src/processi
 
 const shipped = path.resolve(__dirname, "..", "..", "..", "GlasgowDataIO", "Json", "processingPatterns.json");
 
-test("shipped file: nine active patterns in order, skipped ones dropped, no errors", () => {
+test("shipped file: eight active patterns in order, skipped ones dropped, no errors", () => {
   const cfg = readProcessingPatterns(shipped);
-  assert.deepEqual(cfg.patterns.map((p) => p.key), ["solidBox", "openBox", "line", "stairCut", "cleaningLine", "circle", "ring", "polygon", "freeHand"]);
+  assert.deepEqual(cfg.patterns.map((p) => p.key), ["solidBox", "openBox", "line", "stairCut", "cleaningLine", "circle", "ring", "freeHand"]);
   assert.deepEqual(cfg.errors, []);
   assert.equal(cfg.patterns.find(p => p.key === "line")?.model, "LineModel");
   assert.equal(cfg.patterns.find(p => p.key === "line")?.parameters.find(p => p.name === "lineWidth")?.default, 0.5);
-  assert.equal(cfg.patterns.find(p => p.key === "polygon")?.model, "PolygonModel");
+  assert.equal(cfg.patterns.some(p => p.key === "polygon"), false);
   assert.equal(cfg.patterns.find((p) => p.key === "circle")?.roi, "circle");
   assert.equal(cfg.patterns.find((p) => p.key === "circle")?.model, "CircleModel");
   assert.equal(cfg.patterns.find((p) => p.key === "ring")?.roi, "ring");
@@ -64,8 +64,10 @@ test("pilot workflows expose validated materials and configured Spot steps", () 
 test("all active patterns expose bounded recipe inputs and runtime readouts", () => {
   const cfg = readProcessingPatterns(shipped);
   for (const pattern of cfg.patterns) {
-    for (const name of ["depth", "dwell", "overlap"]) assert.ok(pattern.parameters.some(p => p.name === name));
-    assert.deepEqual(pattern.readouts?.map(p => p.source), ["elapsed", "centerX", "centerY"]);
+    for (const name of ["beamCurrent", "depth", "dwell", "overlap"]) assert.ok(pattern.parameters.some(p => p.name === name));
+    assert.equal(pattern.parameters.find(p => p.name === "beamCurrent")?.default, 150);
+    assert.equal(pattern.parameters.find(p => p.name === "depth")?.label, "Depth");
+    assert.deepEqual(pattern.readouts?.map(p => p.source), ["elapsed", "spotCount", "centerX", "centerY"]);
   }
   const ring = cfg.patterns.find(p => p.key === "ring")!;
   assert.ok(ring.parameters.some(p => p.name === "rInner"));
@@ -73,4 +75,16 @@ test("all active patterns expose bounded recipe inputs and runtime readouts", ()
   const invalid = parseProcessingPatterns({Patterns:[{bad:{model:"SolidBoxModel",readouts:{time:{source:"arbitrary"}}}}]});
   assert.equal(invalid.patterns.length, 0);
   assert.equal(invalid.errors.length, 1);
+});
+
+
+test("lens reference is exposed with source bounds and original SLF notes",()=>{
+  const lookup=readProcessingPatterns(shipped).lensLookup!;
+  const rows=lookup.rows as Record<string,unknown>[];
+  assert.equal(rows.length,11);
+  assert.equal(rows[0].beamCurrentPA,"<1");
+  assert.equal(rows[7].lens1KV,"5.82*");
+  assert.equal(rows[10].beamVoltageKV,10);
+  assert.equal(rows[10].stepsBetweenApertures,null);
+  assert.throws(()=>parseProcessingPatterns({Patterns:[],LensLookup:{schemaVersion:2,rows:[]}}),ConfigError);
 });

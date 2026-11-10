@@ -1,4 +1,4 @@
-Metadata-Version: 2.4
+Metadata-Version: 2.2
 Name: glasgow-service
 Version: 0.2.0
 Summary: Long-lived HTTP/WebSocket service wrapping a single Glasgow device.
@@ -14,13 +14,13 @@ Requires-Dist: numpy>=2.0
 Provides-Extra: examples
 Requires-Dist: websockets>=12; extra == "examples"
 Provides-Extra: tests
-Requires-Dist: pytest>=8; extra == "tests"
-Requires-Dist: pytest-cov>=5; extra == "tests"
 Requires-Dist: pillow>=10; extra == "tests"
+Requires-Dist: pytest-cov>=5; extra == "tests"
+Requires-Dist: pytest>=8; extra == "tests"
 Provides-Extra: sbc
 Requires-Dist: gpiozero>=2.0; extra == "sbc"
-Requires-Dist: smbus2>=0.4; extra == "sbc"
 Requires-Dist: pyserial>=3.5; extra == "sbc"
+Requires-Dist: smbus2>=0.4; extra == "sbc"
 
 # Glasgow Device Service
 
@@ -224,3 +224,31 @@ file. A local executor still requires Redis Sentinel; initialize the single-VM
 development instance with `deploy/setup-redis-sentinel.sh` before starting it.
 After `start` or `restart`, open `http://127.0.0.1:5173`; do not run a second
 `npm run dev`, because the backend and frontend are already supervised.
+
+## Live gray-rule updates
+
+A continuous vector stream accepts an `update_geometry` control frame with
+`geometry: {"gray_rule": {"target_gray_level": 50, "gray_level_range": [0, 50],
+"gray_level_skipped": false}}`. All three rule fields are required; use nulls to
+clear them. The existing `geometry_updated` / `geometry_update_error` replies
+acknowledge the update ID. Bitmap simulation applies the validated rule between
+passes without replacing the active command or closing the socket. Full-field
+background regions and existing pixel intensities are preserved. Hardware modes
+that cannot change feedback in-band reject the update while keeping the scan
+running; adaptive hardware passes receive new rules at their natural boundary.
+
+Target-gray bitmap simulation uses the same two-gray-level, 60 Hz fade cadence
+as the single-scan preview. ROI samples approach the target while a live pass
+is being acquired, rather than waiting for a complete high-resolution frame
+for each two-level decrement. Values at or below the target remain unchanged;
+background regions and uploaded bitmap assets are never modified.
+
+Live range changes preserve Spot/Skip semantics, including Spot ranges with no
+matching pixels. Composite background regions remain unfiltered. Confirmed range
+updates and turning filtering off use the same control protocol and keep the
+active simulation command and socket intact.
+
+
+### Processing lens reference
+
+The shared `GlasgowDataIO/Json/processingPatterns.json` now includes the imported Lens 1 Prelens lookup. Read-only endpoints `/processing/lens-lookup`, `/processing/spot-size`, and `/processing/milling-depth` expose the reference and unit-explicit calculations. Set `PROCESSING_PATTERNS_CONFIG` consistently with the web backend. See [lens-reference.md](../ionbeam-web/docs/lens-reference.md) for source qualifiers, opt-in interpolation, and the required material removal calibration for depth estimates.

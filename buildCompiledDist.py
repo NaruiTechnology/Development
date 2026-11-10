@@ -130,6 +130,8 @@ REQUIRED_DIST_MODULES = (
     'Development/GlasgowDataIO/IobeamControl/macros/vector',
     'Development/GlasgowDataIO/IobeamControl/transfer/linkStats',
     'Development/glasgow_service/glasgow_service/api',
+    'Development/glasgow_service/glasgow_service/lens_lookup',
+    'Development/glasgow_service/glasgow_service/processing_reference_api',
     'Development/glasgow_service/glasgow_service/service',
     'Development/glasgow_service/glasgow_service/device_lock',
     # Native desktop client (ionbeam-native): entry point, persistent Glasgow
@@ -144,6 +146,9 @@ REQUIRED_DIST_FILES = (
     'Development/GlasgowDataIO/Json/streamData.json',
     # Shared Processing catalogue and the solid Circle tool's native artwork.
     'Development/GlasgowDataIO/Json/processingPatterns.json',
+    'Development/GlasgowDataIO/Calibration/LENS 1 PRELENS.xls',
+    'Development/ionbeam-web/frontend/src/components/ProcessingPatternsHelp.tsx',
+    'Development/ionbeam-web/frontend/src/lib/lensLookup.ts',
     'Development/ionbeam-web/frontend/src/components/PatternRuntimeReadouts.tsx',
     'Development/ionbeam-native/ionbeam_native/resources/icons/patternCircle.svg',
     'Development/ionbeam-native/ionbeam_native/resources/icons/patternLine.svg',
@@ -627,6 +632,10 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False, package_roots=None
     # from per-file processing.
     copy_source_trees(src_dir, dist_dir, COPY_TREES)
     copy_preserved_files(src_dir, dist_dir, [
+        (
+            os.path.join('Development', 'GlasgowDataIO', 'Calibration', 'LENS 1 PRELENS.xls'),
+            os.path.join('Development', 'GlasgowDataIO', 'Calibration', 'LENS 1 PRELENS.xls'),
+        ),
         # Keep this command-line test runnable by its documented .py path,
         # including in compiled distributions.
         (

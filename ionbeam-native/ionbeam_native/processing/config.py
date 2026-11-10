@@ -77,7 +77,7 @@ def _readouts(key, raw):
     if not isinstance(raw, dict):
         raise ValueError(f"{key}: readouts must be an object")
     for name, value in raw.items():
-        if not isinstance(value, dict) or value.get("source") not in ("elapsed", "centerX", "centerY"):
+        if not isinstance(value, dict) or value.get("source") not in ("elapsed", "spotCount", "centerX", "centerY"):
             raise ValueError(f"{key}.{name}: invalid readout source")
     return raw
 

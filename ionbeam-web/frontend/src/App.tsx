@@ -1,3 +1,4 @@
+import { ProcessingPatternsHelp } from "./components/ProcessingPatternsHelp";
 /**
  * Top-level layout. Two columns:
  *
@@ -1786,6 +1787,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                     onClick={() => setProcessingSubTab("control")}>{t("card.controls")}</button>
                   <button type="button" role="tab" className="tab tab--sub" aria-selected={processingSubTab === "patterns"}
                     onClick={() => setProcessingSubTab("patterns")}>{t("processing.patterns")}</button>
+                  <span className="processing-patterns-tab-help"><ProcessingPatternsHelp /></span>
                 </div>
               )}
               {activeTopTab === "processing" ? (

@@ -223,3 +223,8 @@ Live range changes preserve Spot/Skip semantics, including Spot ranges with no
 matching pixels. Composite background regions remain unfiltered. Confirmed range
 updates and turning filtering off use the same control protocol and keep the
 active simulation command and socket intact.
+
+
+### Processing lens reference
+
+The shared `GlasgowDataIO/Json/processingPatterns.json` now includes the imported Lens 1 Prelens lookup. Read-only endpoints `/processing/lens-lookup`, `/processing/spot-size`, and `/processing/milling-depth` expose the reference and unit-explicit calculations. Set `PROCESSING_PATTERNS_CONFIG` consistently with the web backend. See [lens-reference.md](../ionbeam-web/docs/lens-reference.md) for source qualifiers, opt-in interpolation, and the required material removal calibration for depth estimates.

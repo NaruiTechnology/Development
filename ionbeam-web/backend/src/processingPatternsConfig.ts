@@ -33,7 +33,7 @@ export interface PatternParameterSpec {
 export interface PatternReadoutSpec {
   name: string;
   label: string;
-  source: "elapsed" | "centerX" | "centerY";
+  source: "elapsed" | "spotCount" | "centerX" | "centerY";
   unit: string;
 }
 
@@ -97,6 +97,7 @@ function parseWorkflows(data: Record<string, unknown>): Pick<ProcessingPatternsC
 }
 
 export interface ProcessingPatternsConfig {
+  lensLookup: Record<string, unknown> | null;
   header: Record<string, unknown>;
   patterns: PatternSpec[];
   errors: string[];
@@ -149,7 +150,7 @@ function parseReadouts(key: string, raw: unknown): PatternReadoutSpec[] {
   if (raw === undefined) return [];
   if (!isObject(raw)) throw new Error(`${key}: readouts must be an object`);
   return Object.entries(raw).map(([name, value]) => {
-    if (!isObject(value) || !["elapsed", "centerX", "centerY"].includes(String(value.source))) throw new Error(`${key}.${name}: invalid readout source`);
+    if (!isObject(value) || !["elapsed", "spotCount", "centerX", "centerY"].includes(String(value.source))) throw new Error(`${key}.${name}: invalid readout source`);
     return { name, label: typeof value.label === "string" ? value.label : name,
       source: value.source as PatternReadoutSpec["source"], unit: typeof value.unit === "string" ? value.unit : "" };
   });
@@ -159,7 +160,11 @@ export function parseProcessingPatterns(data: unknown): ProcessingPatternsConfig
   if (!isObject(data) || !Array.isArray(data.Patterns)) {
     throw new ConfigError("processing patterns file needs a top-level 'Patterns' list", 500);
   }
-  const out: ProcessingPatternsConfig = { header: isObject(data.Header) ? data.Header : {}, patterns: [], errors: [], ...parseWorkflows(data) };
+  const lookup = data.LensLookup;
+  if (lookup !== undefined && (!isObject(lookup) || lookup.schemaVersion !== 1 || !Array.isArray(lookup.rows) || !lookup.rows.length || !isObject(lookup.source))) {
+    throw new ConfigError("Invalid LensLookup reference table", 500);
+  }
+  const out: ProcessingPatternsConfig = { lensLookup: isObject(lookup) ? lookup : null, header: isObject(data.Header) ? data.Header : {}, patterns: [], errors: [], ...parseWorkflows(data) };
   const seen = new Set<string>();
   data.Patterns.forEach((entry, i) => {
     try {

@@ -287,7 +287,8 @@ function ParameterField({
       inputMode={spec.type === "int" ? "numeric" : "decimal"}
       invalid={error !== null}
       warning={error}
-      title={spec.name === "depth" ? "Requested depth stored in the recipe; current workflows do not control physical milling depth."
+      title={spec.name === "beamCurrent" ? "Requested beam current stored in the recipe; this field does not set the instrument beam current."
+        : spec.name === "depth" ? "Requested depth stored in the recipe; current workflows do not control physical milling depth."
         : spec.name === "overlap" ? "Stored in the recipe; calibrated beam-spot overlap is not applied by current workflows."
         : spec.name === "dwell" ? "Dwell for selected pixel workflows. Default acquisition uses the Controls dwell." : undefined}
       ariaLabel={withUnit}

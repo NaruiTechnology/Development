@@ -10,6 +10,7 @@ import { processingScanRegions } from "../.test-dist/lib/processingScanRegions.j
 import { workflowPoints, DEFAULT_WORKFLOW } from "../.test-dist/lib/processingWorkflows.js";
 
 const catalogue = JSON.parse(readFileSync(new URL("../../../GlasgowDataIO/Json/processingPatterns.json", import.meta.url)));
+// Explicit geometry-test catalogue includes optional Polygon; shipped availability is checked by the backend tests.
 const specs = ["line", "polygon"].map(key => ({ key, ...catalogue.Patterns.find(p => p[key])[key],
   readouts: Object.entries(catalogue.Patterns.find(p => p[key])[key].readouts ?? {}).map(([name, p]) => ({name, ...p})),
   parameters: Object.entries(catalogue.Patterns.find(p => p[key])[key].parameters).map(([name, p]) => ({name, ...p})) }));
