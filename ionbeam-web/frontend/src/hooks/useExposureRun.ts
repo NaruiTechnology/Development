@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector, useAppStore, useAppWorkspace } from "../store";
 import { claimWorkspaceRun } from "./useScanWorkspace";
+import { useTranslation } from "../i18n";
 import { apiUrl, wsUrl } from "../lib/backendUrl";
 import { scanAuthHeaders, withScanAuthQuery } from "../lib/authIdentity";
 import { prepareExposureSequence, exposureRuns } from "../lib/exposureSequence";
@@ -10,6 +11,7 @@ import type { VectorRequest } from "../types/api";
 
 /** Exposure owns its socket and queue. It never dispatches scan/image actions. */
 export function useExposureRun() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch(), store = useAppStore(), workspace = useAppWorkspace();
   const state = useAppSelector(s => s.exposure);
   const running = useRef(false), cancelled = useRef(false);
@@ -58,9 +60,15 @@ export function useExposureRun() {
       auth.current = new AbortController();
       const response = await fetch(apiUrl("/api/admin/iobeam/auth/current-account"),
         {cache: "no-store", headers: scanAuthHeaders(), signal: auth.current.signal});
+      if (!response.ok) throw new Error(`Account check failed: HTTP ${response.status}`);
       const account = await response.json();
-      if (!response.ok || !account?.ok || !account.registered || account.session_expired ||
-        !account.user?.is_active || Number(account.user.role) < 1) throw new Error("Sign in with scan permission to start exposure.");
+      if (!account?.ok) throw new Error(account?.error ?? "Account check failed.");
+      if (account.session_expired) throw new Error(t("auth.sessionExpired"));
+      if (!account.registered || !account.user?.is_active)
+        throw new Error("Sign in with an active scan account to start exposure.");
+      const role = Number(account.user.role);
+      if (!Number.isFinite(role) || role < 1)
+        throw new Error("Your account does not have permission to expose pattern lattices.");
       if (cancelled.current) return;
       const snapshot = store.getState();
       if (!snapshot.status.defaults) throw new Error("Service defaults are unavailable.");

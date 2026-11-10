@@ -45,9 +45,7 @@ function useTr() {
   return { t, fmt, tr };
 }
 
-export function ProcessingPatternsPanel({ disabled, exposureControlsRef }: {
-  disabled: boolean; exposureControlsRef?: (node: HTMLDivElement | null) => void;
-}) {
+export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
   const { t, tr } = useTr();
   const { status, error, entryErrors, specs, activeKey } = useAppSelector((s) => s.processing);
@@ -66,7 +64,6 @@ export function ProcessingPatternsPanel({ disabled, exposureControlsRef }: {
       <div className="card patterns-card">
         <div className="card__header">
           <span className="card__title">{t("processing.patterns")}</span>
-          <div ref={exposureControlsRef} className="patterns-card__exposure-host" />
         </div>
         <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
           {specs.map((spec) => {

@@ -159,7 +159,6 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   activeTopTab: LeftTopTab; setActiveTopTab: (tab: LeftTopTab) => void;
 }) {
   const imageWorkspace = useAppWorkspace();
-  const [exposureControlsHost, setExposureControlsHost] = useState<HTMLDivElement | null>(null);
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const mainRef = useRef<HTMLElement | null>(null);
@@ -1807,7 +1806,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                   />
                   {processingImageError && <p className="scan-inline-error" role="alert">{t("processing.imageError", { error: processingImageError })}</p>}
                   </>}
-                  {processingSubTab === "patterns" && <ProcessingPatternsPanel disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} exposureControlsRef={setExposureControlsHost} />}
+                  {processingSubTab === "patterns" && <ProcessingPatternsPanel disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} />}
                 </>
               ) : activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
@@ -1876,7 +1875,9 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                 )
               )}
               <WorkspaceProvider workspace="processing" active={activeTopTab === "processing"}>
-                <ExposureControls host={exposureControlsHost} disabled={scanControlsSafetyDisabled} />
+                {activeTopTab === "processing" && processingSubTab === "patterns" && (
+                  <ExposureControls disabled={scanControlsSafetyDisabled} />
+                )}
               </WorkspaceProvider>
               <div hidden={activeTopTab !== "scan" && activeTopTab !== "processing"}>
                 <>

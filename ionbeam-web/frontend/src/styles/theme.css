@@ -8246,8 +8246,6 @@ body {
 .patterns-exposure__controls .btn { min-width: 76px; }
 .patterns-exposure__controls .checkbox { min-width: 0; }
 
-.patterns-card .card__header { justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; }
-.patterns-card__exposure-host { margin-left: auto; min-width: 0; max-width: 100%; }
 .patterns-exposure__controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .patterns-exposure__controls .checkbox { margin-right: 4px; }
 .patterns-exposure .scan-inline-error { max-width: 360px; margin-bottom: 0; }

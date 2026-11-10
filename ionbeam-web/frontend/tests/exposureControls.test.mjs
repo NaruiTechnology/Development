@@ -7,14 +7,15 @@ import { act, create } from "react-test-renderer";
 import { createServer } from "vite";
 
 const lensLookup = JSON.parse(readFileSync(new URL("../../../GlasgowDataIO/Json/processingPatterns.json",import.meta.url))).LensLookup;
-test("Patterns header exposure controls default to serial and leave scan state and pixels intact", async()=>{
+test("Exposure controls default to serial and leave scan state and pixels intact", async()=>{
   const old = {window:globalThis.window, fetch:globalThis.fetch, WebSocket:globalThis.WebSocket};
   globalThis.window={location:{hostname:"example.test",port:"",protocol:"http:",host:"example.test"},
     localStorage:{getItem:()=>null,setItem(){}},addEventListener(){},removeEventListener(){},setTimeout,clearTimeout,setInterval,clearInterval};
+  let account={ok:true,registered:true,user:{is_active:true,role:5}};
   let abortResolve=null, aborts=0;
   globalThis.fetch=async url=>{
     if(String(url).includes("/api/scan/abort")) {aborts++; return new Promise(resolve=>{abortResolve=()=>resolve({ok:true,status:200});});}
-    return {ok:true,status:200,json:async()=>({ok:true,registered:true,user:{is_active:true,role:5}})};
+    return {ok:true,status:200,json:async()=>account};
   };
   const sockets=[];
   class Socket {
@@ -70,6 +71,19 @@ test("Patterns header exposure controls default to serial and leave scan state a
     assert.ok(store.getState().exposure.progress.every(n=>n.status==="completed"));
     assert.equal(store.getState().scan,beforeScan,"exposure never modifies scan phase, parameters or counters");
     assert.equal(store.getState().image,beforeImage,"exposure never modifies acquired pixels");
+    const savedTrace=structuredClone(store.getState().exposure.progress);
+    await act(async()=>store.dispatch(scan.streamStarted()));
+    await act(async()=>store.dispatch(image.resetVector()));
+    assert.deepEqual(store.getState().exposure.progress,savedTrace,"starting a scan and replacing image pixels preserve the exposure trace");
+    await act(async()=>store.dispatch(scan.streamReset()));
+    const scanAfterTraceTest=store.getState().scan, imageAfterTraceTest=store.getState().image;
+    account={ok:true,registered:true,session_expired:true,user:null};
+    await act(async()=>start().props.onClick());await settle();
+    assert.equal(store.getState().exposure.phase,"error");
+    assert.match(store.getState().exposure.error,/Session expired/);
+    assert.deepEqual(store.getState().exposure.progress,savedTrace,"failed authentication preserves the last completed trace");
+    assert.equal(sockets.length,5,"expired auth is rejected before opening a stream");
+    account={ok:true,registered:true,user:{is_active:true,role:5}};
     // Stop remains exposure-owned and holds the instrument until the abort acknowledgement.
     await act(async()=>{start().props.onClick();}); await settle();
     const pending=sockets.at(-1);
@@ -79,7 +93,7 @@ test("Patterns header exposure controls default to serial and leave scan state a
     await act(async()=>{abortResolve();});await settle();
     assert.equal(store.getState().exposure.phase,"stopped");assert.equal(sockets.length,6,"Stop discards all future steps");
     assert.equal(store.getState().exposure.progress[0].exposure.receivedSamples,4);
-    assert.equal(store.getState().scan,beforeScan);assert.equal(store.getState().image,beforeImage);
+    assert.equal(store.getState().scan,scanAfterTraceTest);assert.equal(store.getState().image,imageAfterTraceTest);
     const release=claimWorkspaceRun("scan");assert.ok(release);release();
     // Scan ownership disables the card and also guards direct invocation of Start.
     await act(async()=>store.dispatch(scan.streamStarted()));

@@ -13,7 +13,7 @@ export interface ExposureState {
 const initialState: ExposureState = { parallel: false, phase: "idle", progress: [], activeStepId: null, error: null };
 const slice = createSlice({ name: "exposure", initialState, reducers: {
   setExposureParallel(s, a: PayloadAction<boolean>) { if (!exposureBusy(s.phase)) s.parallel = a.payload; },
-  exposurePreparing(s) { s.phase = "preparing"; s.error = null; s.progress = []; s.activeStepId = null; },
+  exposurePreparing(s) { s.phase = "preparing"; s.error = null; s.activeStepId = null; },
   exposurePrepared(s, a: PayloadAction<WorkflowProgress[]>) {
     s.progress = a.payload; s.phase = "running"; s.activeStepId = null;
   },

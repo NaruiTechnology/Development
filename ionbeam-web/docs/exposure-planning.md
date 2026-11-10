@@ -115,7 +115,11 @@ it uses the saved pattern recipes and the field-to-DAC mapping. It never dispatc
 phase/counter/parameter capture or image-buffer actions. Overlays, bottom messages and
 pattern exposure readouts use `exposure.progress`; image workflows keep their own
 `processing.workflowProgress`. Editing pattern geometry/parameters clears a finished
-exposure preview; ordinary scanning does not rewrite the exposure recipe or results.
+exposure preview; ordinary scanning does not rewrite the exposure recipe or results. A
+new run keeps the prior preview visible while authentication and planning are in progress,
+replacing it only when the new step queue is ready. Authentication failures therefore do
+not erase the last trace. Expired sessions and insufficient exposure permissions have
+distinct errors.
 
 Parallel off finishes each step and all its passes before advancing. Parallel on lazily
 interleaves one pass of each enabled pattern on the single beam, preserving dependencies
@@ -131,11 +135,12 @@ Exposure Stop cancels future queue entries and holds ownership until the HTTP ab
 socket shutdown settle, preventing a delayed exposure abort from cancelling a newly started
 scan. Completed/stopped/error previews remain available. The existing scan Stop handles
 only its scan controller; exposure Stop handles only its exposure controller.
+Replacing the scan image buffer also leaves the separate exposure overlay intact.
 
 Validation for this iteration: real component/hook integration with a mocked transport
-checks the three header controls and Parallel off, serial five-step execution, repeated-click exclusion,
+checks the three standalone exposure controls and Parallel off, serial five-step execution, repeated-click exclusion,
 Stop/abort acknowledgement, scan-versus-exposure ownership, error isolation, unchanged scan
 state and acquired pixels, and the cleaning-line restriction. Scheduler tests verify pass
 interleaving, dependency order, and lazy high-pass recipes. Production build and deployment
-packaging are refreshed, with the new controller, state, scheduler, and header controls explicitly
+packaging are refreshed, with the new controller, state, scheduler, and standalone exposure controls explicitly
 required by the distribution builder.
