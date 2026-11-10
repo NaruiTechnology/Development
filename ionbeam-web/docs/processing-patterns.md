@@ -174,3 +174,6 @@ See [patterning-audit.md](patterning-audit.md) for the comparison with the suppl
 
 
 See [processing-pattern-parameters.md](processing-pattern-parameters.md) for catalogue-defined dimensions, Z/Dwell/Overlap inputs, runtime Time/X/Y labels, and their validation and execution scope.
+
+
+While editing, the expanded pattern card moves to the first position below the Patterns toolbar. Collapsing it restores catalogue order; expanding or drawing another pattern promotes that card. Card state stays keyed by pattern, and acquisition/execution still uses catalogue order. During execution the presentation uses catalogue order.

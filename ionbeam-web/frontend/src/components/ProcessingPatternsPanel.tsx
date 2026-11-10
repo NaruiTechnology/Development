@@ -6,7 +6,7 @@
  * Picking an icon arms drawing on the image canvas (PatternOverlay); picking it again disarms.
  * Cards start collapsed and expand when their ROI is drawn or edited.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { materialTargetGrayLevel } from "../lib/processingWorkflows";
@@ -97,13 +97,23 @@ export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
 
 export function ProcessingPatternCards({ disabled }: { disabled: boolean }) {
   const { specs, instances, activeKey } = useAppSelector((s) => s.processing);
-  return <>{specs.map((spec) => (
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const onExpansionChange = useCallback((key: string, expanded: boolean) => {
+    setExpandedKey(current => expanded ? key : current === key ? null : current);
+  }, []);
+  // Only presentation order changes. Catalogue order still determines acquisition/execution order.
+  const promoted = !disabled ? specs.find(spec => spec.key === expandedKey) : undefined;
+  const ordered = promoted ? [promoted, ...specs.filter(spec => spec.key !== promoted.key)] : specs;
+  return <>{ordered.map((spec) => (
     <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key}
-      disabled={disabled || !instances[spec.key]?.roi} />
+      disabled={disabled || !instances[spec.key]?.roi} onExpansionChange={onExpansionChange} />
   ))}</>;
 }
 
-function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; instance: PatternInstance | undefined; active: boolean; disabled: boolean }) {
+function PatternCard({ spec, instance, active, disabled, onExpansionChange }: {
+  spec: PatternSpec; instance: PatternInstance | undefined; active: boolean; disabled: boolean;
+  onExpansionChange: (key: string, expanded: boolean) => void;
+}) {
   const dispatch = useAppDispatch();
   const { t, tr } = useTr();
   const unit = unitLabel(useAppSelector((s) => s.scan.roi.scale_unit));
@@ -113,6 +123,9 @@ function PatternCard({ spec, instance, active, disabled }: { spec: PatternSpec; 
   useEffect(() => {
     setCollapsed(!active || !instance?.roi);
   }, [active, instance?.roi]);
+  useEffect(() => {
+    onExpansionChange(spec.key, !collapsed);
+  }, [spec.key, collapsed, onExpansionChange]);
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
   const label = collapsed ? t("processing.expand") : t("processing.collapse");
   if (!instance) return null;
