@@ -346,6 +346,11 @@ export function useScanStream(regionCountOverride?: number) {
         dispatch(streamErrored("The instrument is in use by the other workspace."));
         return;
       }
+      if (req.pattern === "lattice") {
+        // Lattice spots are not an image grid; the canvas cannot place their samples yet.
+        dispatch(streamErrored("Lattice exposure is not available in the image display yet."));
+        return;
+      }
       const hasBitmapSource = Boolean(
         req.simulation_bitmap || req.simulation_bitmap_id ||
         req.parallel_simulation_bitmaps?.length || req.parallel_simulation_bitmap_ids?.length ||
@@ -370,6 +375,7 @@ export function useScanStream(regionCountOverride?: number) {
       // custom bitmap simulations render in compact bitmap space, but a
       // default-pattern request with simulation_bitmap still scans at the
       // configured vector resolution.
+      const displayPattern: "default" | "custom" = req.pattern === "custom" ? "custom" : "default";
       const bitmapInfo = req.simulation_bitmap ?? options?.simulationBitmapInfo;
       const edge = req.pattern === "custom" && bitmapInfo
         ? Math.max(bitmapInfo.width, bitmapInfo.height)
@@ -378,7 +384,7 @@ export function useScanStream(regionCountOverride?: number) {
         : req.vector_resolution;
       dispatch(
         setupVector({
-          pattern: req.pattern,
+          pattern: displayPattern,
           scanPath: req.scan_path,
           points: req.points,
           edge,

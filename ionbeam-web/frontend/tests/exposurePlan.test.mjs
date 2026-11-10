@@ -97,3 +97,35 @@ test("DAC-finer-than-LSB spacing warns and merged spots keep their dwell", () =>
   const pts = exposureVectorPoints([[0, 0], [0.1, 0], [10, 0]], 7, (x, y) => ({ x: Math.round(x), y }));
   assert.deepEqual(pts, [[0, 0, 15, false, 1], [10, 0, 7, false, 1]]);
 });
+
+test("TypeScript lattice matches the shared golden fixture the Python service is also tested against", () => {
+  const golden = JSON.parse(readFileSync(new URL("../../../glasgow_service/tests/fixtures/lattice_golden.json", import.meta.url)));
+  for (const c of golden) {
+    const spec = { model: c.model, caption: c.name };
+    const l = latticeSpec(c.roi, c.pitch, c.axis), spots = exposureSpots(spec, c.roi, l), e = c.expected;
+    assert.deepEqual([l.nx, l.ny, l.axis, spots.length, countSpots(spec, c.roi, l).count], [e.nx, e.ny, e.axis, e.spotCount, e.count], c.name);
+    near(l.pitchX, e.pitchX); near(l.pitchY, e.pitchY);
+    spots.slice(0, 6).forEach((p, i) => { near(p[0], e.head[i][0]); near(p[1], e.head[i][1]); });
+    spots.slice(-6).forEach((p, i) => { near(p[0], e.tail[i][0]); near(p[1], e.tail[i][1]); });
+  }
+});
+
+import { buildLatticeRequest, linearDacMap } from "../.test-dist/lib/latticeRequest.js";
+test("lattice request converts um pitch to DAC codes per axis and keeps shapes round on a linear map", () => {
+  const map = linearDacMap({ x_origin: 0, x_end: 1000, y_origin: 0, y_end: 500 });
+  const plan = { spacingUM: 0.5, passes: 3 };
+  const rect = buildLatticeRequest({ x_start: 100, x_end: 200, y_start: 50, y_end: 100 }, plan, 7, map, { widthUM: 1000, heightUM: 500 });
+  assert.equal(rect.shape.kind, "rect");
+  near(rect.shape.x0, 1638.3); near(rect.shape.x1, 3276.6); near(rect.shape.y0, 1638.3);
+  near(rect.pitch_x, 0.5 / (1000 / 16383)); near(rect.pitch_y, 0.5 / (500 / 16383));
+  assert.deepEqual([rect.dwell, rect.passes, rect.axis], [7, 3, "long"]);
+  const disk = buildLatticeRequest({ cx: 500, cy: 250, radius: 100 }, plan, 7, map, { widthUM: 1000, heightUM: 500 });
+  assert.equal(disk.shape.kind, "ellipse");
+  near(disk.shape.rx, 1638.3); near(disk.shape.ry, 3276.6); // anisotropic DAC scale -> ellipse
+  const ring = buildLatticeRequest({ cx: 500, cy: 250, r_inner: 50, r_outer: 100 }, plan, 7, map, { widthUM: 1000, heightUM: 500 });
+  near(ring.shape.inner_rx, 819.15);
+  const rotated = { linear: false, toDac: (x, y) => ({ x: x + y, y: y }) };
+  assert.equal(buildLatticeRequest({ cx: 5, cy: 5, radius: 2 }, plan, 7, rotated, { widthUM: 10, heightUM: 10 }).shape.kind, "polygon");
+  assert.throws(() => buildLatticeRequest({ cx: 5, cy: 5, r_inner: 1, r_outer: 2 }, plan, 7, rotated, { widthUM: 10, heightUM: 10 }), /ring/);
+  assert.throws(() => buildLatticeRequest({ x_start: 0, x_end: 1, y_start: 0, y_end: 1 }, plan, 7, map, { widthUM: 0, heightUM: 5 }));
+});

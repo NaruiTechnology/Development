@@ -15,7 +15,7 @@ backward compatible with frontends that don't send the field yet.
 """
 from enum import Enum
 from typing import List, Literal, Optional, Tuple, Union
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class DeviceState(str, Enum):
@@ -286,6 +286,8 @@ class AdcTestRequest(BaseModel):
 class VectorPattern(str, Enum):
     default = "default"
     custom  = "custom"
+    # Service-generated beam-spot lattice (see exposure_lattice.py); no point list is sent.
+    lattice = "lattice"
 
 
 class VectorScanPath(str, Enum):
@@ -332,6 +334,56 @@ class SimulationBitmapPixel(BaseModel):
     isHighlighted: Optional[bool] = None
     isSkipped: Optional[bool] = None
     blank: Optional[bool] = None
+
+
+class LatticeRect(BaseModel):
+    kind: Literal["rect"] = "rect"
+    x0: float = Field(..., ge=0, le=16383)
+    x1: float = Field(..., ge=0, le=16383)
+    y0: float = Field(..., ge=0, le=16383)
+    y1: float = Field(..., ge=0, le=16383)
+
+
+class LatticeEllipse(BaseModel):
+    """Solid ellipse, or a ring when both inner radii are given. DAC codes."""
+    kind: Literal["ellipse"] = "ellipse"
+    cx: float = Field(..., ge=0, le=16383)
+    cy: float = Field(..., ge=0, le=16383)
+    rx: float = Field(..., gt=0, le=16383)
+    ry: float = Field(..., gt=0, le=16383)
+    inner_rx: float = Field(0.0, ge=0, le=16383)
+    inner_ry: float = Field(0.0, ge=0, le=16383)
+
+
+class LatticePolygon(BaseModel):
+    kind: Literal["polygon"] = "polygon"
+    points: List[Tuple[float, float]] = Field(..., min_length=3, max_length=4096)
+
+
+class LatticeRequest(BaseModel):
+    """Shape and spacing of a physically-spaced exposure, in DAC codes.
+
+    The client converts spot size and overlap (um) to DAC-code pitch using the field width,
+    so the service needs no calibration knowledge. `dwell` is in ADC-average ticks (N + 1
+    conversions), as for `VectorRequest.dwell`.
+    """
+    shape: Union[LatticeRect, LatticeEllipse, LatticePolygon] = Field(..., discriminator="kind")
+    pitch_x: float = Field(..., gt=0, description="Spot spacing along X, DAC codes (may be < 1).")
+    pitch_y: Optional[float] = Field(None, gt=0, description="Spot spacing along Y; defaults to pitch_x.")
+    axis: Literal["long", "x", "y"] = "long"
+    dwell: int = Field(..., ge=0, le=65535)
+    passes: int = Field(1, ge=1, le=100000)
+
+    @model_validator(mode="after")
+    def _check_geometry(self):
+        # Local import keeps models.py free of scan code until a lattice is actually used.
+        from .exposure_lattice import MAX_LATTICE_POINTS, build_lattice, total_points
+        from .exposure_lattice_adapter import shape_from_request
+        shape = shape_from_request(self.shape)
+        lattice = build_lattice(shape, self.pitch_x, self.pitch_y, self.axis)
+        if total_points(shape, lattice, self.passes) > MAX_LATTICE_POINTS:
+            raise ValueError(f"lattice exceeds {MAX_LATTICE_POINTS:,} points; increase the pitch or reduce passes")
+        return self
 
 
 class VectorRequest(BaseModel):
@@ -444,6 +496,19 @@ class VectorRequest(BaseModel):
         default=None,
         description="Browser-session simulation override. Ignored in production mode.",
     )
+    lattice: Optional[LatticeRequest] = Field(
+        default=None,
+        description="Required for pattern=lattice: shape, pitch, axis, dwell and passes; the service streams the spots.",
+    )
+
+    @model_validator(mode="after")
+    def _check_lattice(self):
+        if (self.pattern is VectorPattern.lattice) != (self.lattice is not None):
+            raise ValueError("`lattice` is required for, and only valid with, pattern=lattice")
+        if self.pattern is VectorPattern.lattice and self.pre_process:
+            # pre_process encodes every point into memory before transfer; a lattice may have millions.
+            raise ValueError("pre_process is not supported with pattern=lattice (the stream is generated lazily)")
+        return self
 
     @field_validator("vector_resolution")
     @classmethod

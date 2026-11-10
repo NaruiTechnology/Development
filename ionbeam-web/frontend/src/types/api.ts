@@ -94,6 +94,22 @@ export interface RasterRequest {
 }
 
 export type VectorPattern = "default" | "custom";
+/** What the service accepts. "lattice" has no image-grid display path yet, so the display layer keeps VectorPattern. */
+export type VectorRequestPattern = VectorPattern | "lattice";
+/** Service-generated beam-spot lattice, in DAC codes (see glasgow_service/exposure_lattice.py). */
+export type LatticeShapeRequest =
+  | { kind: "rect"; x0: number; x1: number; y0: number; y1: number }
+  | { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number; inner_rx?: number; inner_ry?: number }
+  | { kind: "polygon"; points: [number, number][] };
+export interface LatticeRequest {
+  shape: LatticeShapeRequest;
+  pitch_x: number;
+  pitch_y?: number | null;
+  axis: "long" | "x" | "y";
+  /** ADC-average ticks: N averages N + 1 conversions. */
+  dwell: number;
+  passes: number;
+}
 export type VectorScanPath =
   | "vertical_raster"
   | "vertical_serpentine"
@@ -117,9 +133,11 @@ export type VectorPointTuple =
   | [number, number, number, boolean | null, number | null];
 
 export interface VectorRequest {
-  pattern: VectorPattern;
+  pattern: VectorRequestPattern;
   scan_path: VectorScanPath;
   points: Array<VectorPointTuple | VectorPoint> | null;
+  /** Required with pattern "lattice" (and only then); pre_process must be false. */
+  lattice?: LatticeRequest | null;
   preview?: boolean;
   /** Infinite / live scan (WebSocket only): the service replays the point
    *  list pass after pass on one FPGA command stream until Stop. Samples

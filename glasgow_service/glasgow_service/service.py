@@ -65,6 +65,7 @@ from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 from .device_lock import DeviceHeld, DeviceLock
 from .roi_scaling import dac_step, roi_zoom
 from GlasgowDataIO.IobeamControl.transfer.linkStats import LinkStats
+from .exposure_lattice_adapter import lattice_stream
 from .models import (
     DeviceState, ServiceStatus, RasterRequest, VectorRequest, AdcTestRequest,
     DacRampRequest, DacRampAxis, BeamHoldRequest, BeamHoldState,
@@ -162,6 +163,8 @@ def _simulated_pass_samples(kind: str, req) -> int:
         return req.resolution * req.resolution * len(req.parallel_rois or [None])
     if req.pattern is VectorPattern.custom and req.points is not None:
         return len(req.points)
+    if req.pattern is VectorPattern.lattice:
+        return lattice_stream(req)[1]
     bitmap = getattr(req, "simulation_bitmap", None)
     if req.pattern is VectorPattern.custom and bitmap is not None:
         return int(bitmap.width) * int(bitmap.height)
@@ -942,7 +945,7 @@ async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
     """Vector stream for the configured simulation source: one sample per point."""
     import numpy as np
     sampler = await asyncio.to_thread(_simulation_sampler, simulation)
-    if req.pattern is not VectorPattern.custom:
+    if req.pattern not in (VectorPattern.custom, VectorPattern.lattice):
         regions = req.parallel_rois or [req.roi]
         count = req.vector_resolution ** 2 * len(regions)
         size = min(65536, max(1, math.ceil(req.latency_bytes / req.dwell)))
@@ -961,6 +964,8 @@ async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
         return
     if req.pattern is VectorPattern.custom and req.points is not None:
         iter_points = iter(req.points)
+    elif req.pattern is VectorPattern.lattice:
+        iter_points = lattice_stream(req)[0]()
     elif req.parallel_rois:
         iter_points = _parallel_roi_iter(
             req.vector_resolution, req.parallel_rois, req.dwell, req.scan_path)
@@ -1289,6 +1294,11 @@ class DeviceService:
 
     def update_live_scan_geometry(self, kind: str, geometry: dict, *, owner=None) -> None:
         """Update DAC geometry or a gray rule on the current continuous stream."""
+        live = getattr(self, "_active_live_request", None)
+        if getattr(live, "pattern", None) is VectorPattern.lattice:
+            # The lattice is its own geometry (shape, DAC pitch, dwell, passes). A ROI/Zoom update would
+            # leave the beam on the old lattice while the display moved, so the exposure takes precedence.
+            raise ValueError("live geometry updates (Zoom, regions, gray rule) are not allowed during a lattice exposure")
         if set(geometry) == {"gray_rule"}:
             self.update_live_gray_rule(kind, geometry["gray_rule"], owner=owner)
             return
@@ -2719,7 +2729,10 @@ class DeviceService:
                 max_frames=_session_frames(req, continuous),
             )
 
-        if req.pattern is VectorPattern.custom:
+        if req.pattern is VectorPattern.lattice:
+            # Physically spaced exposure: spots are generated lazily here, never as one list.
+            points_factory, pass_pixels = lattice_stream(req)
+        elif req.pattern is VectorPattern.custom:
             if req.points is None and not (
                 req.simulation_bitmap is not None
                 and req.roi is not None
@@ -2789,7 +2802,7 @@ class DeviceService:
             points_factory=points_factory if continuous else None,
             max_passes=session_passes,
         )
-        cmd.link_dwell = params.dwell
+        cmd.link_dwell = req.lattice.dwell if req.pattern is VectorPattern.lattice else params.dwell
         cmd.pass_pixels = pass_pixels
         return cmd
 
