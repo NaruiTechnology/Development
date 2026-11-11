@@ -150,6 +150,8 @@ REQUIRED_DIST_FILES = (
     'Development/ionbeam-web/frontend/src/components/ProcessingPatternsHelp.tsx',
     'Development/ionbeam-web/frontend/src/lib/lensLookup.ts',
     'Development/ionbeam-web/frontend/src/lib/patternExposure.ts',
+    'Development/ionbeam-web/frontend/src/lib/stairRecipe.ts',
+    'Development/ionbeam-web/frontend/src/components/StairStepsTable.tsx',
     'Development/ionbeam-web/frontend/src/lib/exposurePreview.ts',
     'Development/ionbeam-web/frontend/src/lib/exposureSequence.ts',
     'Development/ionbeam-web/frontend/src/hooks/useExposureRun.ts',

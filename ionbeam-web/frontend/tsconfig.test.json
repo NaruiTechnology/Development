@@ -48,6 +48,7 @@
     "src/lib/exposureSequence.ts",
     "src/store/exposureSlice.ts",
     "src/lib/patternExposure.ts",
+    "src/lib/stairRecipe.ts",
     "src/lib/latticeRequest.ts",
     "src/lib/idleWork.ts",
     "src/lib/processingScanRegions.ts",

@@ -68,7 +68,8 @@ line before advancing to the next. The saved Line spacing remains an explicit ov
 of the reference's overlap-derived line advance, and is reported separately from spot
 pitch. Up to 1000 cleaning lines are supported; an excessive or empty sequence fails
 before any request starts. Along-line pitch still comes from beam diameter and overlap.
-Production Run retains its existing single-lattice behavior; shape-specific production
+Production Run keeps a single lattice for every pattern except Stair cut, which now runs the
+same per-step sequence as simulation (see "Stair cut per-step recipe"); Cleaning line production
 milling semantics and calibrated depth remain open.
 
 The ROI preview and image canvas draw a separate SVG exposure layer. Cyan marks the
@@ -179,3 +180,18 @@ state and acquired pixels, tab switching, active card placement, and the cleanin
 interleaving, dependency order, and lazy high-pass recipes. Production build and deployment
 packaging are refreshed, with the app, Patterns panel, styles, controller, state, scheduler, and exposure controls explicitly
 required by the distribution builder.
+
+
+## Stair cut per-step recipe
+
+Review finding: Stair cut had one parameter set for all steps, and only simulation expanded it into steps; production Run exposed one lattice over the whole ROI. Each step removes a different layer (possibly a different material), so one shared set cannot describe it.
+
+- `lib/stairRecipe.ts` holds the per-step recipe: `enabled`, cumulative `depth` (um), `dwell`, `overlap`, `passes`, `material` (label) and `removalRate` Sr (um^3/nC). The card-level Steps/Depth/Dwell/Overlap stay the defaults; a step stores only the fields the operator overrode (`PatternInstance.stairSteps`, sparse, index = step - 1), so editing a card value still moves every step that was not overridden. With no overrides the sequence is identical to the previous simulation (even depth split).
+- Beam current is intentionally not per step: the app does not program the instrument current (it only feeds the spot-size lookup), so a per-step value would promise a change the hardware does not make. Set the instrument current before Start.
+- Depth is cumulative and must not decrease. Steps nest (step i exposes the box over strips i..n), so strip k receives k layers. A disabled step is skipped; its strip then gets one layer fewer.
+- Passes: explicit `passes`, unless the step has a calibrated Sr. Then `dose = (depth_i - depth_(i-1)) / Sr` for the layer that step adds and passes derive from dose (`planExposure`). Sr is never defaulted.
+- The exposure sequence (`prepareExposureSequence`) builds one lattice per enabled step in production and simulation and fails before any request starts if the recipe is invalid (message names the step). Serial execution keeps the step order; Parallel keeps step dependencies (existing scheduler tests).
+- UI: a "Step recipe" table in the Stair cut card (empty cell = card value, shown as placeholder), with CSV/JSON Import, CSV Export (a template that round-trips) and Reset. Import columns: `step,enabled,depth,dwell,overlap,passes,material,removalRate`. Importing sets the card's Steps to the row count.
+- Tests: `frontend/tests/stairRecipe.test.mjs`.
+
+Still open for this feature: (1) pause or auto View between steps so the operator can image each depth (View exists but is manual); (2) a per-step beam current needs an instrument-current command; (3) Sr in the material catalogue (today typed per step); (4) hardware validation of production Stair cut; (5) the native client does not yet have the step table (native does not execute exposure).

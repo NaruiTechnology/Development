@@ -1,4 +1,4 @@
-import { preparePatternExposure, simulationExposureSteps } from "./patternExposure.js";
+import { preparePatternExposure, simulationExposureSteps, stairExposureSteps } from "./patternExposure.js";
 import type { ProcessingState } from "../store/processingSlice";
 import type { ROIState } from "../store/scanSlice";
 import type { LatticeRequest, VectorRequest } from "../types/api";
@@ -11,16 +11,20 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
   for (const spec of patterns.specs) {
     const instance = patterns.instances[spec.key];
     if (!instance?.enabled || !instance.roi) continue;
-    const base = preparePatternExposure(spec, instance.roi, instance.parameters, patterns.lensLookup, field);
-    const steps = simulation ? simulationExposureSteps(spec, instance.roi, instance.parameters, base.plan.spacingUM)
+    const stair = spec.model === "StairCutModel";
+    const base = stair ? null : preparePatternExposure(spec, instance.roi, instance.parameters, patterns.lensLookup, field);
+    // Stair cut is a per-step sequence in production too; Cleaning line stays simulation-only.
+    const steps = stair ? stairExposureSteps(instance.roi, instance.parameters, instance.stairSteps)
+      : simulation ? simulationExposureSteps(spec, instance.roi, instance.parameters, base!.plan.spacingUM)
       : [{ shape: instance.roi, parameters: instance.parameters, caption: "Pattern exposure", requestedDepthUM: undefined, depthBand: undefined }];
     for (const [index, step] of steps.entries()) {
-      const p = simulation ? preparePatternExposure(spec, step.shape, step.parameters, patterns.lensLookup, field) : base;
+      const p = stair || simulation ? preparePatternExposure(spec, step.shape, step.parameters, patterns.lensLookup, field) : base!;
       entries.push({ key: spec.key, node: {
         id: `${spec.key}:${index}:exposure`, pattern: spec.caption, caption: step.caption, action: "Exposure lattice",
         status: "upcoming", threshold: null, spot: p.plan.count, total: p.plan.count,
         exposure: { shape: step.shape, model: spec.model, plan: p.plan, dwellUS: Number(step.parameters.dwell),
           beamCurrentPA: p.beamCurrentPA, requestedDepthUM: step.requestedDepthUM, depthBand: step.depthBand,
+          material: step.material, incrementUM: step.incrementUM, removalRate: step.removalRate,
           lineSpacingUM: simulation && spec.model === "CleaningLineModel" ? Number(instance.parameters.spacing) : undefined, simulation },
       }, request: {
         pattern: "lattice", lattice: p.lattice, points: null, continuous: false, pre_process: false,

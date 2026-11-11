@@ -25,6 +25,8 @@ export interface WorkflowProgress {
     dwellUS: number; beamCurrentPA: number;
     requestedDepthUM?: number;
     depthBand?: PatternRoi;
+    /** Stair cut step: layer material label, depth this step adds (um), calibrated Sr (um^3/nC). */
+    material?: string; incrementUM?: number; removalRate?: number;
     lineSpacingUM?: number;
     simulation: boolean;
     receivedSamples?: number;

@@ -5,6 +5,7 @@ import { stairRects, patternBounds, type RectRoi, type PatternParameters, type P
 import type { ROIState } from "../store/scanSlice";
 import type { LatticeRequest } from "../types/api";
 import { transform } from "./scanGeometry.js";
+import { resolveStairSteps, stairIncrementUM, stairStepParameters, stairStepsError, type StairStepOverride } from "./stairRecipe.js";
 
 export interface PreparedPatternExposure {
   plan: ExposurePlan;
@@ -21,8 +22,10 @@ export function preparePatternExposure(spec: PatternSpec, shape: PatternRoi, par
   const beamCurrentPA = Number(parameters.beamCurrent);
   const dwellUS = Number(parameters.dwell);
   const overlapPct = Number(parameters.overlap);
-  const passes = Number(parameters.passes ?? 1);
-  const dose = Number(parameters.dose ?? 1);
+  // `targetDose` (nC/um^2) is set only by Stair cut steps with a calibrated removal rate; passes then derive from it.
+  const targetDose = parameters.targetDose === undefined ? undefined : Number(parameters.targetDose);
+  const passes = targetDose === undefined ? Number(parameters.passes ?? 1) : undefined;
+  const dose = targetDose ?? Number(parameters.dose ?? 1);
   const axis = parameters.axis === "y" ? "y" : "x";
   const beamVoltageKV = lookup.rows[0]?.beamVoltageKV;
   if (!beamVoltageKV) throw new Error("Lens lookup has no beam-voltage reference.");
@@ -49,22 +52,40 @@ export interface PatternExposureStep {
   caption: string;
   requestedDepthUM?: number;
   depthBand?: RectRoi;
+  /** Stair cut only: layer material label, depth this step adds, calibrated Sr (um^3/nC). */
+  material?: string;
+  incrementUM?: number;
+  removalRate?: number;
 }
 
-/** Simulation choreography; never changes production exposure recipes or calibrated depth. */
+/** Stair cut: one nested exposure per enabled step, each with its own recipe (see stairRecipe.ts).
+ * Step i exposes the box covering strips i..n, so strip k receives k layers and depths accumulate.
+ * Used by simulation and production alike. */
+export function stairExposureSteps(shape: PatternRoi, parameters: PatternParameters,
+  overrides?: ReadonlyArray<StairStepOverride | null | undefined>): PatternExposureStep[] {
+  const strips = stairRects(shape as RectRoi, parameters);
+  const recipe = resolveStairSteps(parameters, overrides);
+  const error = stairStepsError(recipe);
+  if (error) throw new Error(error);
+  const out: PatternExposureStep[] = [];
+  strips.forEach((strip, i) => {
+    if (!recipe[i].enabled) return;
+    const remaining = strips.slice(i);
+    const box = { x_start: Math.min(...remaining.map(r => r.x_start)), x_end: Math.max(...remaining.map(r => r.x_end)),
+      y_start: Math.min(...remaining.map(r => r.y_start)), y_end: Math.max(...remaining.map(r => r.y_end)) };
+    out.push({ shape: box, depthBand: strip, parameters: stairStepParameters(parameters, recipe, i),
+      caption: `Step ${i + 1} / ${strips.length}`, requestedDepthUM: recipe[i].depth,
+      material: recipe[i].material || undefined, incrementUM: stairIncrementUM(recipe, i),
+      removalRate: recipe[i].removalRate > 0 ? recipe[i].removalRate : undefined });
+  });
+  return out;
+}
+
+/** Simulation choreography for Cleaning line; Stair cut delegates to `stairExposureSteps`.
+ * Never changes production exposure recipes or calibrated depth. */
 export function simulationExposureSteps(spec: PatternSpec, shape: PatternRoi, parameters: PatternParameters,
-  spacingUM: number): PatternExposureStep[] {
-  if (spec.model === "StairCutModel") {
-    const strips = stairRects(shape as RectRoi, parameters);
-    return strips.map((strip, i) => {
-      // Successively smaller overlapping boxes build one extra exposure layer per band.
-      const remaining = strips.slice(i);
-      const box = { x_start: Math.min(...remaining.map(r=>r.x_start)), x_end: Math.max(...remaining.map(r=>r.x_end)),
-        y_start: Math.min(...remaining.map(r=>r.y_start)), y_end: Math.max(...remaining.map(r=>r.y_end)) };
-      return { shape: box, depthBand: strip, parameters, caption: `Step ${i + 1} / ${strips.length}`,
-        requestedDepthUM: Number(parameters.depth) * (i + 1) / strips.length };
-    });
-  }
+  spacingUM: number, stairOverrides?: ReadonlyArray<StairStepOverride | null | undefined>): PatternExposureStep[] {
+  if (spec.model === "StairCutModel") return stairExposureSteps(shape, parameters, stairOverrides);
   if (spec.model === "CleaningLineModel") {
     const r = patternBounds(shape), vertical = parameters.orientation === "vertical";
     const spacing = Number(parameters.spacing);

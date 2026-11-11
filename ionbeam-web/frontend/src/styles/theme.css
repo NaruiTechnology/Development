@@ -8255,3 +8255,16 @@ body {
 .patterns-exposure__controls > * { flex-shrink: 0; white-space: nowrap; }
 .patterns-exposure__controls .checkbox { margin-right: auto; }
 .patterns-exposure .scan-inline-error { max-width: 360px; margin-bottom: 0; }
+
+.stair-steps { min-width: 0; margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--c-border); border-radius: var(--r-md); }
+.stair-steps legend { padding: 0 4px; color: var(--c-text-muted); font-size: 0.75rem; }
+.stair-steps__help { margin: 0 0 8px; color: var(--c-text-muted); font-size: 0.75rem; }
+.stair-steps__scroll { overflow-x: auto; max-width: 100%; }
+.stair-steps__table { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+.stair-steps__table th { padding: 2px 4px; text-align: left; font-weight: 500; color: var(--c-text-muted); white-space: nowrap; }
+.stair-steps__table td { padding: 2px 4px; }
+.stair-steps__input { width: 4.5rem; min-width: 0; }
+.stair-steps__material { width: 6.5rem; }
+.stair-steps__input[data-invalid] { border-color: var(--c-danger, #c0392b); }
+.stair-steps__message { margin: 8px 0 0; color: var(--c-danger, #c0392b); font-size: 0.75rem; }
+.stair-steps__actions { display: flex; gap: 8px; margin-top: 8px; }

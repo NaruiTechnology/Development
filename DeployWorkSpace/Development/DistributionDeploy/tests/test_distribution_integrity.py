@@ -62,10 +62,12 @@ def make_workspace(base):
         "components/ExposureControls.tsx",
         "components/ExposureLatticeOverlay.tsx",
         "components/ProcessingPatternsPanel.tsx",
+        "components/StairStepsTable.tsx",
         "hooks/useExposureRun.ts",
         "lib/exposurePreview.ts",
         "lib/exposureSequence.ts",
         "lib/patternExposure.ts",
+        "lib/stairRecipe.ts",
         "store/exposureSlice.ts",
         "styles/theme.css",
     ):

@@ -20,6 +20,7 @@ import {
   type PatternRoi,
   type PatternSpec,
 } from "../lib/processingPatterns";
+import { MAX_STAIR_STEPS, STAIR_STEP_FIELDS, type StairStepOverride } from "../lib/stairRecipe";
 
 /** One live instance per catalogue entry: the parameter values and the ROI the operator drew. */
 export interface PatternInstance {
@@ -31,6 +32,8 @@ export interface PatternInstance {
   enabled: boolean;
   parameters: PatternParameters;
   roi: PatternRoi | null;
+  /** Stair cut only: sparse per-step overrides of the card-level parameters (index = step - 1). */
+  stairSteps?: StairStepOverride[];
 }
 
 export interface ProcessingState {
@@ -136,6 +139,31 @@ const slice = createSlice({
         s.workflowProgress = [];
       } catch { /* keep the last valid parameter and geometry */ }
     },
+    /** Override one field of one Stair cut step; `value: undefined` returns that field to the card-level default. */
+    setStairStepField(s, a: PayloadAction<{ key: string; index: number; field: typeof STAIR_STEP_FIELDS[number]; value: number | string | boolean | undefined }>) {
+      const { key, index, field, value } = a.payload;
+      const inst = s.instances[key];
+      const spec = s.specs.find(p => p.key === key);
+      if (!inst || spec?.model !== "StairCutModel" || !Number.isInteger(index) || index < 0 || index >= MAX_STAIR_STEPS || !STAIR_STEP_FIELDS.includes(field)) return;
+      const rows = inst.stairSteps ?? [];
+      while (rows.length <= index) rows.push({});
+      const row: Record<string, unknown> = { ...rows[index] };
+      if (value === undefined) delete row[field]; else row[field] = value;
+      rows[index] = row as StairStepOverride;
+      inst.stairSteps = rows;
+      s.workflowProgress = [];
+    },
+    /** Replace all per-step overrides (file import) or clear them (`steps: null`). */
+    setStairSteps(s, a: PayloadAction<{ key: string; steps: StairStepOverride[] | null }>) {
+      const inst = s.instances[a.payload.key];
+      const spec = s.specs.find(p => p.key === a.payload.key);
+      if (!inst || spec?.model !== "StairCutModel") return;
+      const steps = a.payload.steps;
+      if (steps && steps.length > MAX_STAIR_STEPS) return;
+      if (steps) inst.parameters.steps = Math.max(2, steps.length);
+      if (steps) inst.stairSteps = steps; else delete inst.stairSteps;
+      s.workflowProgress = [];
+    },
     setPatternRoi(s, a: PayloadAction<{ key: string; roi: PatternRoi; preview?: boolean }>) {
       const spec = s.specs.find((p) => p.key === a.payload.key);
       const inst = s.instances[a.payload.key];
@@ -230,5 +258,5 @@ const slice = createSlice({
   },
 });
 
-export const { setPatternWorkflow, setPatternMaterial, setWorkflowProgress, updateWorkflowStep, undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setPatternRoi, clearPatternRoi } = slice.actions;
+export const { setPatternWorkflow, setPatternMaterial, setWorkflowProgress, updateWorkflowStep, undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setStairStepField, setStairSteps, setPatternRoi, clearPatternRoi } = slice.actions;
 export default slice.reducer;

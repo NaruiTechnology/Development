@@ -27,6 +27,7 @@ import { useAppDispatch, useAppSelector } from "../store";
 import { fetchProcessingPatterns, setPatternMaterial, setPatternWorkflow, selectPattern, setPatternEnabled, setPatternParameter, type PatternInstance } from "../store/processingSlice";
 import { Icon } from "./Icon";
 import { NumberStepperField } from "./NumberStepperField";
+import { StairStepsTable } from "./StairStepsTable";
 import { PatternIcon } from "./PatternIcon";
 import { PatternRuntimeReadouts } from "./PatternRuntimeReadouts";
 import { VectorScanPathPreview } from "./VectorScanPathPreview";
@@ -221,6 +222,7 @@ function PatternCard({ spec, instance, active, disabled, onExpansionChange }: {
           />
         ))}
         </div>
+        {spec.model === "StairCutModel" && <StairStepsTable patternKey={spec.key} caption={caption} instance={instance} disabled={disabled} />}
         <fieldset className="pattern-axis-field" disabled={disabled}>
           <legend>{t("processing.exposureAxis")}</legend>
           {(["x", "y"] as const).map((axis) => {
