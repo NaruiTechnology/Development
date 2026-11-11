@@ -128,7 +128,7 @@ export function ROIEditor({
     toWorld: (point: { x: number; y: number }) => { x: number; y: number };
     sampleGrayAtClient: (clientX: number, clientY: number) => { value: number; x: number; y: number } | null;
   }) => ReactNode;
-  onLoadLastScan?: () => void;
+  onLoadLastScan?: (imageUrl?: string | null) => void;
   onImageChange?: (imageUrl: string | null) => void;
 }) {
   const dispatch = useAppDispatch();
@@ -1545,10 +1545,21 @@ export function ROIEditor({
   }
 
   const imageActionRow = (
-    <div className="button-row" style={{ marginBottom: 10 }}>
+    <div className="button-row roi-image-action-row" style={{ marginBottom: 10 }}>
       <button className="btn" disabled={disabled} onClick={() => fileRef.current?.click()}>
         <Icon name="upload" tone="accent" />
         {t("roi.select")}
+      </button>
+      <button
+        className="btn btn--ghost"
+        disabled={disabled || !lastScanImageUrl || !onLoadLastScan}
+        onClick={() => {
+          if (fileRef.current) fileRef.current.value = "";
+          onLoadLastScan?.(lastScanImageUrl);
+        }}
+      >
+        <Icon name="download" tone="accent" />
+        {t("roi.loadLastScan")}
       </button>
       <button
         className="btn"
@@ -1561,21 +1572,6 @@ export function ROIEditor({
         <Icon name="x" tone="danger" />
         {t("roi.clearImage")}
       </button>
-      {(lastScanImageUrl || roi.calibration_enabled) && (
-        <button
-          className="btn btn--ghost"
-          disabled={disabled || !lastScanImageUrl || !onLoadLastScan || roi.imageKind === "lastScan"}
-          onClick={() => {
-            if (fileRef.current) {
-              fileRef.current.value = "";
-            }
-            onLoadLastScan?.();
-          }}
-        >
-          <Icon name="download" tone="accent" />
-          {t("roi.loadLastScan")}
-        </button>
-      )}
       <span className="muted" style={{ fontSize: 12 }}>{roi.imageName}</span>
       <input
         ref={fileRef}

@@ -21,8 +21,8 @@ interface HelpPopoverProps {
   iconName?: "help" | "alertTriangle";
   /** Also open when the pointer rests on the trigger (after a short delay, so passing over it does nothing). */
   openOnHover?: boolean;
-  /** "wide" for content such as full-width screenshots. */
-  size?: "default" | "wide";
+  /** "wide" for screenshots, "fit" for content-sized reference dialogs. */
+  size?: "default" | "wide" | "fit";
   /**
    * Close as soon as the left mouse button is pressed anywhere, or the pointer leaves the dialog (or the browser
    * window) - for quick-look help such as a screenshot. × and Escape still work.
@@ -138,7 +138,7 @@ function HelpModal({
   children,
 }: {
   title: string;
-  size?: "default" | "wide";
+  size?: "default" | "wide" | "fit";
   onClose: () => void;
   onPointerDismiss?: () => void;
   children: ReactNode;
@@ -199,7 +199,7 @@ function HelpModal({
       }}
     >
       <div
-        className={size === "wide" ? "modal modal--help modal--help-wide" : "modal modal--help"}
+        className={size === "wide" ? "modal modal--help modal--help-wide" : size === "fit" ? "modal modal--help modal--help-fit" : "modal modal--help"}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleIdRef.current}

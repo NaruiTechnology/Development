@@ -1519,6 +1519,8 @@ export const en = {
   "help.patterns.title": "Patterns and lens reference",
   "help.patterns.aria": "Pattern help and lens lookup table",
   "help.patterns.intro": "Use the reference table to look up spot size for a beam voltage and current. Values apply to the supplied Lens 1 Prelens reference.",
+  "help.patterns.latticeFit": "Lattice fit and pattern edges",
+  "help.patterns.latticeFitText": "Nominal pitch is spot diameter × (1 − overlap/100). Each axis rounds the pattern dimension ÷ nominal pitch to a whole number of cells (minimum one), then adjusts the actual pitch so the cells fill the bounds evenly. Spots sit at cell centres, and dose uses the adjusted pitch. For circles, rings, and polygons, spots whose centres fall outside the shape are skipped; the beam spot itself is not clipped, so an edge spot may expose beyond the selected shape. The service applies the same fit in DAC coordinates and combines dwell when spots map to the same DAC code.",
   "help.patterns.loading": "Loading lens reference…",
   "help.patterns.noData": "No valid lens reference is configured.",
   "help.patterns.retry": "Retry",

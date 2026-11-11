@@ -18,8 +18,10 @@ export function ProcessingPatternsHelp() {
   let result: ReturnType<typeof lookupSpotSize> | null=null;
   if(table && current.trim() !== "" && Number.isFinite(Number(current)) && Number(current)>0) result=lookupSpotSize(table,voltage,Number(current),interpolate);
   const selected=new Set(result?.sourceRows ?? []);
-  return <HelpPopover title={t("help.patterns.title")} ariaLabel={t("help.patterns.aria")} size="wide">
+  return <HelpPopover title={t("help.patterns.title")} ariaLabel={t("help.patterns.aria")} size="fit">
     <p>{t("help.patterns.intro")}</p>
+    <h3>{t("help.patterns.latticeFit")}</h3>
+    <p>{t("help.patterns.latticeFitText")}</p>
     {status === "loading" && <p role="status">{t("help.patterns.loading")}</p>}
     {status === "error" && <p role="alert">{error}</p>}
     {!table && status !== "loading" && <><p>{entryErrors.find(e=>e.startsWith("LensLookup:")) ?? t("help.patterns.noData")}</p>

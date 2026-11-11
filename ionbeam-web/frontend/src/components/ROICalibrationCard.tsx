@@ -27,7 +27,7 @@ export function ROICalibrationCard({
 }: {
   disabled: boolean;
   lastScanImageUrl?: string | null;
-  onLoadLastScan?: () => void;
+  onLoadLastScan?: (imageUrl?: string | null) => void;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -78,8 +78,8 @@ export function ROICalibrationCard({
           <button
             type="button"
             className="btn btn--ghost"
-            disabled={disabled || roi.imageKind === "lastScan"}
-            onClick={() => onLoadLastScan()}
+            disabled={disabled}
+            onClick={() => onLoadLastScan(lastScanImageUrl)}
           >
             <Icon name="download" tone="accent" />
             {t("roi.loadLastScan")}

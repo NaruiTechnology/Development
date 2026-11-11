@@ -276,6 +276,11 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(imageWorkspace, null);
+  const [mostRecentScanImage, setMostRecentScanImage] = useState<{ imageUrl: string } | null>(() => {
+    const result = getWorkspaceStore("scan").getState().scan.lastResult;
+    const imageUrl = result?.artifacts?.figureDataUrl;
+    return imageUrl ? { imageUrl } : null;
+  });
   const captureScanImageRef = useWorkspaceRef<(() => CapturedScanImage | null) | null>(imageWorkspace, null);
   // Raster and Vector share one pane layout so the Scan workspace behaves the
   // same after switching acquisition modes. Each mode retains its own images.
@@ -734,13 +739,16 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     roiState.scanImageDataUrl !== null;
   const roiCachedScanImageUrl =
     kind === "roi" && hasPartialROI ? roiState.scanImageDataUrl : null;
-  const serverScanImageUrl = lastResult?.artifacts?.figureDataUrl ?? null;
-  const roiScanImageUrl =
-    kind === "roi" && hasPriorScanImage
-      ? lastLiveScanImage?.kind === lastScanKind
-        ? lastLiveScanImage.imageUrl
-        : serverScanImageUrl
-      : null;
+  const serverScanImageUrl = lastResult?.kind === lastScanKind
+    ? lastResult.artifacts?.figureDataUrl ?? null
+    : null;
+  const workspaceLastScanImageUrl = hasPriorScanImage
+    ? lastLiveScanImage?.kind === lastScanKind
+      ? lastLiveScanImage.imageUrl
+      : serverScanImageUrl
+    : null;
+  const availableLastScanImageUrl = mostRecentScanImage?.imageUrl ?? workspaceLastScanImageUrl;
+  const roiScanImageUrl = kind === "roi" ? workspaceLastScanImageUrl : null;
   const activeROIScanImageUrl =
     roiCachedScanImageUrl && roiCachedScanImageUrl !== suppressedROIScanImageUrl
       ? roiCachedScanImageUrl
@@ -1047,6 +1055,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   const handleRenderedImageChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null, scanId: number) => {
       if (imageUrl) {
+        setMostRecentScanImage((current) => current?.imageUrl === imageUrl ? current : { imageUrl });
         // A later image of the same scan (final chunks, a re-render) replaces
         // that scan's entry; only a new scan pushes the previous result into
         // a "Previous scan" pane.
@@ -1407,15 +1416,16 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     setGrayScaleConfirmOpen(true);
   }, [vectorGrayLevelsEnabled, vectorGrayFilterApplied, vectorGrayRange, appliedVectorGrayRange, imageWorkspace]);
 
-  const handleLoadLastScan = useCallback(() => {
-    if (!roiScanImageUrl) return;
+  const handleLoadLastScan = useCallback((imageUrl?: string | null) => {
+    const scanImageUrl = imageUrl ?? roiScanImageUrl;
+    if (!scanImageUrl) return;
     suppressedROIScanImageUrlRef.current = null;
     setSuppressedROIScanImageUrl(null);
     resetROIContext({ clearSelection: true });
     dispatch(
       updateROI({
         imageName: t("roi.imageName.lastScan"),
-        imageDataUrl: roiScanImageUrl,
+        imageDataUrl: scanImageUrl,
         imageKind: "lastScan",
         imageBounds: null,
       })
@@ -1828,7 +1838,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                     <SimulationImageCard
                       defaultCollapsed
                       disabled={panelDisabled}
-                      lastScanImageUrl={roiScanImageUrl}
+                      lastScanImageUrl={availableLastScanImageUrl}
                       onLoadLastScan={handleLoadLastScan}
                       onImageChange={handleSimulationImageChange}
                     />
@@ -1845,7 +1855,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                     <SimulationImageCard
                       defaultCollapsed
                       disabled={panelDisabled}
-                      lastScanImageUrl={roiScanImageUrl}
+                      lastScanImageUrl={availableLastScanImageUrl}
                       onLoadLastScan={handleLoadLastScan}
                       onImageChange={handleSimulationImageChange}
                     />
@@ -1869,7 +1879,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                   <>
                     <SimulationImageCard
                       disabled={panelDisabled}
-                      lastScanImageUrl={roiScanImageUrl}
+                      lastScanImageUrl={availableLastScanImageUrl}
                       onLoadLastScan={handleLoadLastScan}
                       onImageChange={handleSimulationImageChange}
                       calibration
@@ -1877,13 +1887,13 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                     <ROIEditor
                       disabled={panelDisabled}
                       variant="controls"
-                      lastScanImageUrl={roiScanImageUrl}
+                      lastScanImageUrl={availableLastScanImageUrl}
                       onLoadLastScan={handleLoadLastScan}
                     />
                     {showROICalibrationInControls && (
                       <ROICalibrationCard
                         disabled={panelDisabled}
-                        lastScanImageUrl={roiScanImageUrl}
+                        lastScanImageUrl={availableLastScanImageUrl}
                         onLoadLastScan={handleLoadLastScan}
                       />
                     )}
@@ -1894,7 +1904,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                 <SimulationImageCard
                   defaultCollapsed
                   disabled={panelDisabled}
-                  lastScanImageUrl={roiScanImageUrl}
+                  lastScanImageUrl={availableLastScanImageUrl}
                   onLoadLastScan={handleLoadLastScan}
                   onImageChange={handleSimulationImageChange}
                 />

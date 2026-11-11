@@ -1372,6 +1372,8 @@ export const zhCN: Partial<TranslationTable> = {
   "help.patterns.title": "图形与透镜参考",
   "help.patterns.aria": "图形帮助与透镜查找表",
   "help.patterns.intro": "按束电压和束流查询束斑尺寸。数据来自提供的 Lens 1 Prelens 参考表。",
+  "help.patterns.latticeFit": "晶格贴合与图形边界",
+  "help.patterns.latticeFitText": "名义点距 = 束斑直径 × (1 − 重叠率/100)。每个轴的单元数按区域尺寸 ÷ 名义点距四舍五入为整数（至少 1），然后微调实际点距，使单元均匀铺满区域边界；束斑位于单元中心，剂量按微调后的点距计算。圆形、圆环和多边形会跳过中心落在图形外的束斑，但束斑本身不会裁切，因此边缘束斑可能超出所选区域。服务端会在 DAC 坐标中再次执行贴合；映射到同一 DAC 编码的束斑会合并照射时间。",
   "help.patterns.loading": "正在加载透镜参考…",
   "help.patterns.noData": "未配置有效的透镜参考数据。",
   "help.patterns.retry": "重试",

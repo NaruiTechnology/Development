@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useAppSelector } from "../store";
 import { useTranslation } from "../i18n";
 import { ROIEditor } from "./ROIEditor";
-import { useScansUseHardware } from "./TakeoverEstimate";
 import { Icon } from "./Icon";
 
 /**
@@ -24,11 +23,10 @@ export function SimulationImageCard({
   /** Override the initial state for tabs such as Processing. */
   defaultCollapsed?: boolean;
   lastScanImageUrl?: string | null;
-  onLoadLastScan?: () => void;
+  onLoadLastScan?: (imageUrl?: string | null) => void;
   onImageChange?: (imageUrl: string | null) => void;
 }) {
   const { t } = useTranslation();
-  const usesHardware = useScansUseHardware();
   // Same rule as ScanControls: anything but an explicit IsProduction=false
   // (including defaults not loaded yet) counts as production.
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production !== false);
@@ -58,9 +56,6 @@ export function SimulationImageCard({
           onLoadLastScan={onLoadLastScan}
           onImageChange={onImageChange}
         />
-        <p className="muted simulation-image-card__hint" hidden={calibration}>
-          {t(usesHardware ? "simulation.image.hintHardware" : "simulation.image.hintSimulation")}
-        </p>
       </div>
     </div>
   );

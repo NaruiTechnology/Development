@@ -2063,6 +2063,8 @@ body {
 }
 
 .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.roi-image-action-row { gap: 4px; }
+.roi-image-action-row > .btn { flex: 0 0 auto; gap: 4px; padding-inline: 8px; font-size: 11px; letter-spacing: 0.025em; white-space: nowrap; }
 .validation-download-controls {
   display: flex;
   align-items: center;
@@ -7709,6 +7711,13 @@ body {
 
 /* Wide help modal (screenshots) and the Calibration "how to save" help next to History */
 .modal--help-wide { max-width: min(1760px, calc(100vw - 32px)); }
+.modal--help-fit {
+  width: fit-content;
+  max-width: min(760px, calc(100vw - 32px));
+  height: fit-content;
+  max-height: min(680px, calc(100vh - 32px));
+}
+.modal--help-fit .lens-reference-table { max-height: 240px; }
 .calib__actions > .help-btn { align-self: center; width: 22px; height: 22px; font-size: 16px; margin-right: 2px; }
 .calib-save-help { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .calib-save-help img { display: block; width: 100%; height: auto; border: 1px solid var(--c-border-soft); border-radius: 6px; }
