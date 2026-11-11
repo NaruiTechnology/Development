@@ -111,24 +111,30 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
   );
 }
 
-export function ProcessingPatternCards({ disabled }: { disabled: boolean }) {
+export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: { disabled: boolean; enableDisabled?: boolean }) {
   const { specs, instances, activeKey } = useAppSelector((s) => s.processing);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const onExpansionChange = useCallback((key: string, expanded: boolean) => {
     setExpandedKey(current => expanded ? key : current === key ? null : current);
   }, []);
   // Only presentation order changes. Catalogue order still determines acquisition/execution order.
-  const promotedKey = disabled && activeKey && instances[activeKey]?.roi ? activeKey : expandedKey;
-  const promoted = specs.find(spec => spec.key === promotedKey);
-  const ordered = promoted ? [promoted, ...specs.filter(spec => spec.key !== promoted.key)] : specs;
+  const promotedKey = disabled && activeKey && instances[activeKey]?.enabled && instances[activeKey]?.roi ? activeKey : expandedKey;
+  const enabledSpecs = specs.filter(spec => instances[spec.key]?.enabled && instances[spec.key]?.roi);
+  const disabledSpecs = specs.filter(spec => !instances[spec.key]?.enabled || !instances[spec.key]?.roi);
+  const promoteWithinGroup = (group: typeof specs) => {
+    const index = group.findIndex(spec => spec.key === promotedKey);
+    return index > 0 ? [group[index], ...group.slice(0, index), ...group.slice(index + 1)] : group;
+  };
+  const ordered = [...promoteWithinGroup(enabledSpecs), ...promoteWithinGroup(disabledSpecs)];
   return <>{ordered.map((spec) => (
     <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key}
-      disabled={disabled || !instances[spec.key]?.roi} onExpansionChange={onExpansionChange} />
+      disabled={disabled || !instances[spec.key]?.roi} enableDisabled={enableDisabled || !instances[spec.key]?.roi}
+      onExpansionChange={onExpansionChange} />
   ))}</>;
 }
 
-function PatternCard({ spec, instance, active, disabled, onExpansionChange }: {
-  spec: PatternSpec; instance: PatternInstance | undefined; active: boolean; disabled: boolean;
+function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpansionChange }: {
+  spec: PatternSpec; instance: PatternInstance | undefined; active: boolean; disabled: boolean; enableDisabled: boolean;
   onExpansionChange: (key: string, expanded: boolean) => void;
 }) {
   const dispatch = useAppDispatch();
@@ -136,10 +142,13 @@ function PatternCard({ spec, instance, active, disabled, onExpansionChange }: {
   const unit = unitLabel(useAppSelector((s) => s.scan.roi.scale_unit));
   const workflows = useAppSelector(s => s.processing.workflows);
   const materials = useAppSelector(s => s.processing.materials);
+  const hasExposureData = useAppSelector(s => [...s.exposure.progress, ...s.exposure.retainedPreview]
+    .some(node => node.id.startsWith(`${spec.key}:`) && node.id.endsWith(":exposure")));
   const [collapsed, setCollapsed] = useState(true);
   useEffect(() => {
-    setCollapsed(!active || !instance?.roi);
-  }, [active, instance?.roi]);
+    if (active && instance?.roi && instance.enabled !== false) setCollapsed(false);
+    else if (!hasExposureData) setCollapsed(true);
+  }, [active, instance?.roi, instance?.enabled, hasExposureData]);
   useEffect(() => {
     onExpansionChange(spec.key, !collapsed);
   }, [spec.key, collapsed, onExpansionChange]);
@@ -157,9 +166,12 @@ function PatternCard({ spec, instance, active, disabled, onExpansionChange }: {
       <div className="card__header">
         <span className="card__title">{caption}</span>
         <label className="checkbox vacuum-switch app-switch pattern-card__enable">
-          <input type="checkbox" checked={Boolean(instance.roi) && instance.enabled !== false} disabled={disabled || !instance.roi}
+          <input type="checkbox" checked={Boolean(instance.roi) && instance.enabled !== false} disabled={enableDisabled}
             aria-label={`${caption}: ${t("processing.enable")}`}
-            onChange={(event) => dispatch(setPatternEnabled({ key: spec.key, enabled: event.target.checked }))} />
+            onChange={(event) => {
+              if (!event.target.checked) setCollapsed(true);
+              dispatch(setPatternEnabled({ key: spec.key, enabled: event.target.checked }));
+            }} />
           <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
           <span>{t("processing.enable")}</span>
         </label>

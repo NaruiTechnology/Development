@@ -63,9 +63,12 @@ export interface PatternExposureStep {
  * Step i exposes the box covering strips i..n, so strip k receives k layers and depths accumulate.
  * Used by simulation and production alike. */
 export function stairExposureSteps(shape: PatternRoi, parameters: PatternParameters,
-  overrides?: ReadonlyArray<StairStepOverride | null | undefined>): PatternExposureStep[] {
+  overrides?: ReadonlyArray<StairStepOverride | null | undefined>, defaultMaterial?: string): PatternExposureStep[] {
   const strips = stairRects(shape as RectRoi, parameters);
-  const recipe = resolveStairSteps(parameters, overrides);
+  const recipe = resolveStairSteps(parameters, overrides).map(step => ({
+    ...step,
+    material: step.material || defaultMaterial || "",
+  }));
   const error = stairStepsError(recipe);
   if (error) throw new Error(error);
   const out: PatternExposureStep[] = [];

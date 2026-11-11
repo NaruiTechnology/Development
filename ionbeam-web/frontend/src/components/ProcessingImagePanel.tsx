@@ -119,7 +119,7 @@ export function ProcessingImagePanel({ children, headerHost, capture = capturePr
     })().catch((cause) => { if (!cancelled) setError(String(cause)); });
     return () => { cancelled = true; };
   }, [phase, capture]);
-  const controls = <ImagePanelLayoutControls layout={layout} locked={locked} busy={busy}
+  const controls = <ImagePanelLayoutControls layout={layout} locked={locked} busy={busy} splitDisabled
     controlsId="processing-image-panel-grid" onSplit={() => void split()} onLockedChange={(value) => {
       setLocked(value);
       if (!value && layout > 1) {

@@ -21,7 +21,7 @@ import { MODEL_REGISTRY, lineRoi, patternBounds, cleaningLines, stairRects, type
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { useAppDispatch, useAppSelector, useWorkspaceActive } from "../store";
 import { useTranslation } from "../i18n";
-import { undoPatternRoi, commitPatternRoiEdit, clearPatternRoi, selectPattern, setPatternRoi } from "../store/processingSlice";
+import { undoPatternRoi, commitPatternRoiEdit, clearPatternRoi, selectPattern, setPatternEnabled, setPatternRoi } from "../store/processingSlice";
 
 const DRAG_THRESHOLD = 8;           // canvas px, same as the rectangle ROI tool
 const ACTIVE_COLOR = "#ffd400";
@@ -137,6 +137,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       edit.current = { key, start: api.toWorld(p), original, corner,
         inner: (e.target as Element | undefined)?.getAttribute("data-pattern-inner") === "true" };
       if (key !== activeKey) dispatch(selectPattern(key));
+      if (!instances[key]?.enabled) dispatch(setPatternEnabled({ key, enabled: true }));
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
       return;
     }
@@ -314,6 +315,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         const key = (e.target as Element | undefined)?.closest("[data-pattern-key]")?.getAttribute("data-pattern-key");
         if (key) {
           dispatch(selectPattern(key));
+          if (!instances[key]?.enabled) dispatch(setPatternEnabled({ key, enabled: true }));
           const p = api.pointFromClient(e.clientX, e.clientY);
           setMenu({ ...p, key });
         }

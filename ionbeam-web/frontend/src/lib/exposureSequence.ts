@@ -14,7 +14,7 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
     const stair = spec.model === "StairCutModel";
     const base = stair ? null : preparePatternExposure(spec, instance.roi, instance.parameters, patterns.lensLookup, field);
     // Stair cut is a per-step sequence in production too; Cleaning line stays simulation-only.
-    const steps = stair ? stairExposureSteps(instance.roi, instance.parameters, instance.stairSteps)
+    const steps = stair ? stairExposureSteps(instance.roi, instance.parameters, instance.stairSteps, patterns.materials[0]?.name)
       : simulation ? simulationExposureSteps(spec, instance.roi, instance.parameters, base!.plan.spacingUM)
       : [{ shape: instance.roi, parameters: instance.parameters, caption: "Pattern exposure", requestedDepthUM: undefined, depthBand: undefined }];
     for (const [index, step] of steps.entries()) {

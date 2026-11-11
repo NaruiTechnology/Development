@@ -115,6 +115,7 @@ export function ExposureLatticeMessage() {
     <div className="exposure-lattice-message" role="status" aria-live="polite">
     <strong>{t("canvas.scanParams.exposureLattice")} · {node.pattern} · {node.caption} · {t(`processing.exposure.status.${node.status}` as TranslationKey)}</strong>
     <span>{e.beamCurrentPA} pA · Ø {(p.spotDiameterUM*1000).toFixed(1)} nm · {t("processing.exposure.pitch")} {(p.spacingUM*1000).toFixed(2)} nm · OL {p.overlapPct}% · {e.dwellUS} µs · {p.lattice.axis.toUpperCase()} · {p.countExact ? "" : "≈"}{p.count.toLocaleString()} {t("processing.exposure.spots")} · {p.passes} {t("processing.exposure.passes")}</span>
+    {e.requestedDepthUM !== undefined && <span>Material {e.material ?? "—"} · Depth {e.requestedDepthUM.toFixed(3)} µm · Layer {e.incrementUM?.toFixed(3) ?? "—"} µm · Sr {e.removalRate ? `${e.removalRate.toPrecision(4)} µm³/nC` : "not calibrated"}</span>}
     {e.lineSpacingUM !== undefined && <span>{t("processing.exposure.lineSpacing")} {e.lineSpacingUM.toFixed(4)} µm</span>}
     {e.simulation && <span className="exposure-lattice-message__legend">
       <span style={{color:"#22d3ee"}}>○ {t("processing.exposure.path")}</span>

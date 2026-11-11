@@ -6,8 +6,9 @@ import { apiUrl } from "../lib/backendUrl";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { ExposureStream, exposureJson } from "../lib/exposureStream";
 import { prepareExposureSequence, exposureRounds, exposureSegments } from "../lib/exposureSequence";
+import { selectPattern } from "../store/processingSlice";
 import { exposurePreparing, exposurePrepared, exposureStepStarted, exposureStepCompleted,
-  exposureSamplesReceived, exposureStopping, exposureFinished, exposureViewChanged, exposurePaused, exposureResumed } from "../store/exposureSlice";
+  exposureSamplesReceived, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposurePaused, exposureResumed } from "../store/exposureSlice";
 import type { RasterRequest, VectorRequest } from "../types/api";
 import { decodeScanSamples } from "../lib/scanSamples";
 import { rasterRequestWithBitmapSelection } from "../lib/bitmapVector";
@@ -191,15 +192,23 @@ export function useExposureRun() {
           const segments = cellRanges ? exposureSegments(lattice) : [lattice];
           return {run, segments: segments[Symbol.iterator]()};
         });
+        const skipped = new Set<string>();
         // Parallel alternates bounded segments across patterns on the single
         // beam, so both ROIs make progress during the same exposure round.
         let remaining = true;
         while (remaining && !cancelled.current) {
           remaining = false;
           for (const queue of queues) {
+            if (!store.getState().processing.instances[queue.run.entry.key]?.enabled) {
+              skipped.add(queue.run.entry.node.id);
+              dispatch(exposureStepSkipped(queue.run.entry.node.id));
+              continue;
+            }
             const next = queue.segments.next();
             if (next.done) continue;
             remaining = true;
+            if (!snapshot.exposure.parallel && store.getState().processing.activeKey !== queue.run.entry.key)
+              dispatch(selectPattern(queue.run.entry.key));
             dispatch(exposureStepStarted(queue.run.entry.node.id));
             await runRequest({...queue.run.request, lattice: next.value, preview: true,
               ...(snapshot.status.sessionSimulation ? {simulation: snapshot.status.sessionSimulation} : {})},
@@ -208,7 +217,7 @@ export function useExposureRun() {
           }
         }
         if (cancelled.current) break;
-        const finished = queues.filter(({run}) => run.final).map(({run}) => run.entry.node);
+        const finished = queues.filter(({run}) => run.final && !skipped.has(run.entry.node.id)).map(({run}) => run.entry.node);
         for (const node of finished) dispatch(exposureStepCompleted(node.id));
         // Per-step "after" actions (Stair cut recipe): View, or View then wait for Resume.
         const wantsView = finished.some(n => n.exposure?.after === "view" || n.exposure?.after === "viewPause");

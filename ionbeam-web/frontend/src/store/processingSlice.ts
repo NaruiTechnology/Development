@@ -115,6 +115,12 @@ const slice = createSlice({
     setPatternEnabled(s, a: PayloadAction<{ key: string; enabled: boolean }>) {
       const inst = s.instances[a.payload.key];
       if (inst) inst.enabled = a.payload.enabled && inst.roi !== null;
+      if (!a.payload.enabled && s.activeKey === a.payload.key) {
+        const currentIndex = s.specs.findIndex(spec => spec.key === a.payload.key);
+        const remaining = s.specs.slice(currentIndex + 1).concat(s.specs.slice(0, currentIndex))
+          .find(spec => spec.key !== a.payload.key && s.instances[spec.key]?.enabled && s.instances[spec.key]?.roi);
+        s.activeKey = remaining?.key ?? null;
+      }
       s.workflowProgress = [];
     },
     setPatternParameter(s, a: PayloadAction<{ key: string; name: string; value: ParameterValue | string }>) {

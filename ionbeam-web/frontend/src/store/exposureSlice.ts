@@ -1,6 +1,6 @@
 import { createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { WorkflowProgress } from "../lib/processingWorkflows";
-import { clearPatternRoi, type ProcessingState } from "./processingSlice";
+import { clearPatternRoi, setPatternEnabled, type ProcessingState } from "./processingSlice";
 
 export type ExposurePhase = "idle" | "preparing" | "running" | "paused" | "stopping" | "completed" | "stopped" | "error";
 /** "paused" still owns the beam session and keeps the recipe locked. */
@@ -66,6 +66,14 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
       s.activeStepIds = s.activeStepIds.filter(id => id !== a.payload.id);
     },
   },
+  exposureStepSkipped: {
+    prepare(id: string) { return { payload: {id, at: Date.now()} }; },
+    reducer(s, a: PayloadAction<{id: string; at: number}>) {
+      const n = s.progress.find(n => n.id === a.payload.id);
+      if (n && n.status !== "completed") { n.status = "stopped"; n.finishedAt = a.payload.at; }
+      s.activeStepIds = s.activeStepIds.filter(id => id !== a.payload.id);
+    },
+  },
   exposurePaused(s, a: PayloadAction<string>) { if (s.phase === "running") { s.phase = "paused"; s.pausedAfterId = a.payload; } },
   exposureResumed(s) { if (s.phase === "paused") { s.phase = "running"; s.pausedAfterId = null; } },
   exposureStopping(s) { s.phase = "stopping"; s.pausedAfterId = null; },
@@ -90,6 +98,13 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
     s.retainedPreview = s.retainedPreview.filter(keep);
     s.activeStepIds = s.activeStepIds.filter(id => id.replace(/:\d+:exposure$/, "") !== action.payload);
   });
+  builder.addCase(setPatternEnabled, (s, action) => {
+    if (action.payload.enabled) return;
+    const belongsToPattern = (node: WorkflowProgress) => node.id.startsWith(`${action.payload.key}:`);
+    s.progress = s.progress.filter(node => !belongsToPattern(node));
+    s.retainedPreview = s.retainedPreview.filter(node => !belongsToPattern(node));
+    s.activeStepIds = s.activeStepIds.filter(id => !id.startsWith(`${action.payload.key}:`));
+  });
   builder.addMatcher(action => /^processing\/(setPatternParameter|setPatternRoi|undoPatternRoi|setPatternEnabled)$/.test(action.type), s => {
     if (!exposureBusy(s.phase) && s.progress.length) {
       // Recipe edits invalidate its readouts. Keep the executed geometry in world coordinates.
@@ -100,5 +115,5 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
   });
 } });
 export const { setExposureParallel, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
-  exposureStepCompleted, exposureStopping, exposureFinished, exposureViewChanged, exposurePaused, exposureResumed } = slice.actions;
+  exposureStepCompleted, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposurePaused, exposureResumed } = slice.actions;
 export default slice.reducer;

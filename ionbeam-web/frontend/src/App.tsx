@@ -1967,7 +1967,9 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                       </div>
                     </div>
                     </div>
-                  {activeTopTab === "processing" && <ProcessingPatternCards disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} />}
+                  {activeTopTab === "processing" && <ProcessingPatternCards
+                    disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning}
+                    enableDisabled={scanControlsSafetyDisabled || phase === "stopping" || pixelWorkflowRunning} />}
                   {activeTopTab === "scan" && <div className="card save-results-card">
                     <div className="card__header">
                       <span className="card__title">{t("card.runReport")}</span>
@@ -2066,7 +2068,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
 
         {/* right column */}
         <section>
-            <div className="card image-panel-card">
+            <div className={`card image-panel-card${activeTopTab === "processing" ? " image-panel-card--processing" : ""}`}>
               <div className={`card__header image-panel-card__header${scanPathToggle ? " image-panel-card__header--scan-path" : ""}${kind === "roi" ? " image-panel-card__header--roi" : ""}${headerSecondRow ? " image-panel-card__header--two-row" : ""}`}>
                 <div className="image-panel-card__header-main">
                   <span className="card__title">{t(

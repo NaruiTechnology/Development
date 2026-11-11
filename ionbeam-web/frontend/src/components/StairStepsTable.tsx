@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useAppDispatch } from "../store";
+import { useAppDispatch, useAppSelector } from "../store";
 import { setStairStepField, setStairSteps, type PatternInstance } from "../store/processingSlice";
 import { useTranslation, type TranslationKey } from "../i18n";
 import {
@@ -34,12 +34,17 @@ export function StairStepsTable({ patternKey, caption, instance, disabled }: {
   patternKey: string; caption: string; instance: PatternInstance; disabled: boolean;
 }) {
   const dispatch = useAppDispatch();
+  const materials = useAppSelector(state => state.processing.materials);
   const { t } = useTranslation();
   const tr = (key: string, fallback: string) => { const x = t(key as TranslationKey); return x === key ? fallback : x; };
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
   const overrides: ReadonlyArray<StairStepOverride | undefined> = instance.stairSteps ?? [];
-  const resolved = resolveStairSteps(instance.parameters, overrides);
+  const defaultMaterial = materials[0]?.name ?? "";
+  const resolved = resolveStairSteps(instance.parameters, overrides).map(step => ({
+    ...step,
+    material: step.material || defaultMaterial,
+  }));
   const problem = stairStepsError(resolved);
   const set = (index: number, field: keyof StairStep, value: number | string | boolean | undefined) =>
     dispatch(setStairStepField({ key: patternKey, index, field, value }));
@@ -71,9 +76,11 @@ export function StairStepsTable({ patternKey, caption, instance, disabled }: {
                   aria-label={`${caption} ${tr("processing.stair.step", "Step")} ${i + 1}: ${tr("processing.stair.on", "On")}`}
                   onChange={e => set(i, "enabled", e.target.checked ? undefined : false)} /></td>
                 <td>{num(i, "depth", tr("processing.stair.depth", "Depth (µm)"))}</td>
-                <td><input className="input stair-steps__input stair-steps__material" type="text" value={overrides[i]?.material ?? ""} disabled={disabled}
+                <td><select className="select stair-steps__input stair-steps__material" value={resolved[i].material} disabled={disabled}
                   aria-label={`${caption} ${tr("processing.stair.step", "Step")} ${i + 1}: ${tr("processing.stair.material", "Material")}`}
-                  onChange={e => set(i, "material", e.target.value === "" ? undefined : e.target.value)} /></td>
+                  onChange={e => set(i, "material", e.target.value === "" ? undefined : e.target.value)}>
+                  {materials.map(material => <option key={material.name} value={material.name}>{material.caption ?? material.name}</option>)}
+                </select></td>
                 <td>{num(i, "removalRate", tr("processing.stair.sr", "Sr (µm³/nC)"))}</td>
                 <td>{num(i, "dwell", tr("processing.stair.dwell", "Dwell (µs)"))}</td>
                 <td>{num(i, "overlap", tr("processing.stair.overlap", "Overlap (%)"))}</td>
