@@ -102,10 +102,10 @@ running, completed, and stopped states without requiring sign-in or issuing hard
 
 ## Dedicated exposure controls in the Patterns header
 
-The **Patterns** card header contains three exposure controls: Parallel (default off),
-Stop, and Start. There is no separate Exposure card. A retained controller portals these
-controls into the header and continues running when the header is hidden or unmounted
-by a tab change.
+The **Patterns** card header contains Parallel (default off), Stop, and Start.
+The panel stays mounted when hidden so an exposure continues across tab changes.
+The selected pattern card stays at the top of the stack while its inputs are locked
+during a run. Execution still follows the recipe order.
 
 `ExposureControls.tsx`, `useExposureRun.ts`, and `exposureSlice.ts` own the exposure lifetime,
 progress, errors, abort acknowledgement, and socket. Regular Processing controls now
@@ -119,7 +119,8 @@ exposure preview; ordinary scanning does not rewrite the exposure recipe or resu
 new run keeps the prior preview visible while authentication and planning are in progress,
 replacing it only when the new step queue is ready. Authentication failures therefore do
 not erase the last trace. Expired sessions and insufficient exposure permissions have
-distinct errors.
+distinct errors. The canvas message area displays exposure errors even if planning
+fails before the first step. Trace updates are batched while samples stream in.
 
 Parallel off finishes each step and all its passes before advancing. Parallel on lazily
 interleaves one pass of each enabled pattern on the single beam, preserving dependencies
@@ -138,9 +139,9 @@ only its scan controller; exposure Stop handles only its exposure controller.
 Replacing the scan image buffer also leaves the separate exposure overlay intact.
 
 Validation for this iteration: real component/hook integration with a mocked transport
-checks the three standalone exposure controls and Parallel off, serial five-step execution, repeated-click exclusion,
+checks header placement, Parallel off, serial five-step execution, repeated-click exclusion,
 Stop/abort acknowledgement, scan-versus-exposure ownership, error isolation, unchanged scan
-state and acquired pixels, and the cleaning-line restriction. Scheduler tests verify pass
+state and acquired pixels, tab switching, active card placement, and the cleaning-line restriction. Scheduler tests verify pass
 interleaving, dependency order, and lazy high-pass recipes. Production build and deployment
-packaging are refreshed, with the new controller, state, scheduler, and standalone exposure controls explicitly
+packaging are refreshed, with the app, Patterns panel, styles, controller, state, scheduler, and exposure controls explicitly
 required by the distribution builder.

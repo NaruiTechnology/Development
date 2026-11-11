@@ -49,7 +49,6 @@ import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { PatternOverlay } from "./components/PatternOverlay";
 import { ProcessingScanStatus } from "./components/ProcessingScanStatus";
-import { ExposureControls } from "./components/ExposureControls";
 import { exposureBusy } from "./store/exposureSlice";
 import { ProcessingPatternCards, ProcessingPatternsPanel } from "./components/ProcessingPatternsPanel";
 import { ROIScanPreview } from "./components/ROIScanPreview";
@@ -1806,7 +1805,6 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                   />
                   {processingImageError && <p className="scan-inline-error" role="alert">{t("processing.imageError", { error: processingImageError })}</p>}
                   </>}
-                  {processingSubTab === "patterns" && <ProcessingPatternsPanel disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} />}
                 </>
               ) : activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
@@ -1875,9 +1873,11 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                 )
               )}
               <WorkspaceProvider workspace="processing" active={activeTopTab === "processing"}>
-                {activeTopTab === "processing" && processingSubTab === "patterns" && (
-                  <ExposureControls disabled={scanControlsSafetyDisabled} />
-                )}
+                <ProcessingPatternsPanel
+                  visible={activeTopTab === "processing" && processingSubTab === "patterns"}
+                  disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning}
+                  exposureDisabled={scanControlsSafetyDisabled}
+                />
               </WorkspaceProvider>
               <div hidden={activeTopTab !== "scan" && activeTopTab !== "processing"}>
                 <>

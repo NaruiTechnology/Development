@@ -15,10 +15,7 @@ export function ExposureControls({disabled = false}: {disabled?: boolean}) {
   const enabled = patterns.specs.filter(spec => patterns.instances[spec.key]?.enabled && patterns.instances[spec.key]?.roi);
   const serialRequired = state.parallel && enabled.some(spec => spec.model === "CleaningLineModel");
   const startDisabled = disabled || !defaultsReady || busy || scanBusy || otherBusy || patterns.status !== "ready" || !patterns.lensLookup || !enabled.length || serialRequired;
-  return <div className="card patterns-exposure-card">
-    <div className="card__header"><span className="card__title">{t("processing.exposure.card")}</span></div>
-    <div className="card__body">
-      <div className="patterns-exposure" role="group" aria-label={t("processing.exposure.card")}>
+  return <div className="patterns-exposure" role="group" aria-label={t("processing.exposure.card")}>
         <div className="patterns-exposure__controls">
           <label className="checkbox vacuum-switch app-switch" title={t("processing.exposure.parallelHelp")}>
             <input type="checkbox" role="switch" aria-label={t("processing.exposure.parallelLabel")}
@@ -33,8 +30,5 @@ export function ExposureControls({disabled = false}: {disabled?: boolean}) {
             onClick={() => void start()}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>
         </div>
         {serialRequired && <p className="scan-inline-error">{t("processing.exposure.serialRequired")}</p>}
-        {state.error && <p className="scan-inline-error" role="alert">{state.error}</p>}
-      </div>
-    </div>
   </div>;
 }

@@ -32,7 +32,8 @@ test("Exposure controls default to serial and leave scan state and pixels intact
   let renderer;
   try {
     const {store}=await vite.ssrLoadModule("/src/store/index.ts");
-    const {ExposureControls}=await vite.ssrLoadModule("/src/components/ExposureControls.tsx");
+    const {ProcessingPatternsPanel, ProcessingPatternCards}=await vite.ssrLoadModule("/src/components/ProcessingPatternsPanel.tsx");
+    const {ExposureLatticeMessage}=await vite.ssrLoadModule("/src/components/ExposureLatticeOverlay.tsx");
     const processing=await vite.ssrLoadModule("/src/store/processingSlice.ts");
     const scan=await vite.ssrLoadModule("/src/store/scanSlice.ts");
     const image=await vite.ssrLoadModule("/src/store/imageSlice.ts");
@@ -46,12 +47,19 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     store.dispatch(scan.updateVector({dwell:99,vector_resolution:64}));
     store.dispatch(image.setupVector({pattern:"default",edge:4,initialImage:new Uint16Array(16).fill(1234)}));
     const beforeScan=store.getState().scan, beforeImage=store.getState().image;
-    await act(async()=>{renderer=create(React.createElement(Provider,{store},React.createElement(ExposureControls)));});
+    const layout = visible => React.createElement(Provider, {store},
+      React.createElement(ProcessingPatternsPanel, {visible, disabled: false}),
+      React.createElement(ExposureLatticeMessage));
+    await act(async()=>{renderer=create(layout(true));});
+    const header=renderer.root.findByProps({className:"card__header patterns-card__header"});
+    assert.equal(header.findAllByType("button").length,2);
+    assert.equal(renderer.root.findAllByProps({className:"card patterns-exposure-card"}).length,0);
     const start=()=>renderer.root.findAllByType("button").find(b=>b.children.some(x=>x==="Start"));
     const stop=()=>renderer.root.findAllByType("button").find(b=>b.children.some(x=>x==="Stop"));
     const toggle=()=>renderer.root.findByProps({role:"switch"});
     const settle=()=>act(async()=>{await new Promise(r=>setTimeout(r,15));});
-    assert.equal(renderer.root.findAllByType("button").length,2,"header contains only Stop and Start buttons plus the Parallel switch");
+    await act(async()=>store.dispatch({type:"exposure/exposureFinished",payload:{phase:"error",error:"preflight timeout"}}));
+    assert.match(renderer.root.findByProps({role:"alert"}).findByType("span").children.join(""), /preflight timeout/);
     assert.equal(toggle().props.checked,false); assert.equal(stop().props.disabled,true);
     assert.equal(start().props.disabled,false);
     await act(async()=>{start().props.onClick();start().props.onClick();}); await settle();
@@ -60,12 +68,16 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     assert.equal(toggle().props.disabled,true);
     assert.equal(claimWorkspaceRun("scan"),null,"regular scan cannot enter during exposure");
     assert.equal(otherWorkspaceBusy("processing"),true,"other workspace sees exposure ownership");
+    await act(async()=>renderer.update(layout(false)));
+    assert.equal(renderer.root.findByProps({hidden:true}).props.hidden,true);
+    assert.equal(aborts,0,"hiding Patterns leaves the running exposure connected");
     for(let i=0;i<5;i++) {
       const ws=sockets[i]; assert.ok(ws);
       assert.equal(ws.requests[0].pattern,"lattice");assert.equal(ws.requests[0].lattice.passes,2);
       assert.equal(ws.requests[0].lattice.dwell,7,"pattern dwell ignores scan dwell 99");
       await act(async()=>{ws.samples(12);ws.done();}); await settle();
     }
+    await act(async()=>renderer.update(layout(true)));
     assert.equal(sockets.length,5);assert.equal(store.getState().exposure.phase,"completed");
     assert.equal(store.getState().exposure.progress.length,5);
     assert.ok(store.getState().exposure.progress.every(n=>n.status==="completed"));
@@ -108,9 +120,10 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     await act(async()=>abortResolve());await settle();
     // An exposure transport error never becomes a scan error.
     await act(async()=>start().props.onClick());await settle();
-    await act(async()=>sockets.at(-1).onmessage({data:JSON.stringify({event:"error",detail:"test exposure fault"})}));await settle();
+    await act(async()=>sockets.at(-1).onmessage({data:JSON.stringify({event:"error",detail:"Exposure stream timed out"})}));await settle();
     assert.equal(store.getState().exposure.phase,"error");
-    assert.equal(store.getState().exposure.error,"test exposure fault");
+    assert.equal(store.getState().exposure.error,"Exposure stream timed out");
+    assert.equal(renderer.root.findByProps({role:"alert"}).findByType("span").children.join(""),"Exposure stream timed out");
     assert.equal(store.getState().scan.phase,"idle");
     const afterError=claimWorkspaceRun("scan");assert.ok(afterError);afterError();
     // The cleaning-line restriction is visible before opening a stream.
@@ -121,6 +134,16 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     assert.equal(toggle().props.checked,true);assert.equal(start().props.disabled,true);
     await act(async()=>toggle().props.onChange({target:{checked:false}}));
     assert.equal(start().props.disabled,false);
+    await act(async()=>{
+      const clean=store.getState().processing.specs[0];
+      store.dispatch(processing.fetchProcessingPatterns.fulfilled({patterns:[
+        {...clean,key:"box",caption:"Solid box",model:"SolidBoxModel"},clean
+      ],lensLookup},"card-order"));
+      store.dispatch(processing.setPatternRoi({key:"clean",roi:{x_start:0.1,x_end:0.9,y_start:0.1,y_end:0.9}}));
+      store.dispatch(processing.selectPattern("clean"));
+      renderer.update(React.createElement(Provider,{store},React.createElement(ProcessingPatternCards,{disabled:true})));
+    });
+    assert.deepEqual(renderer.root.findAllByProps({role:"region"}).map(card=>card.props["data-pattern"]),["clean","box"]);
   } finally {
     if(renderer)await act(async()=>renderer.unmount());await vite.close();Object.assign(globalThis,old);
   }

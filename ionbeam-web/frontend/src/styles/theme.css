@@ -8241,9 +8241,12 @@ body {
 
 .exposure-lattice-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; overflow: hidden; }
 .exposure-lattice-message { display: grid; gap: 5px; margin-top: 8px; padding: 9px 12px; border: 1px solid var(--c-border); border-radius: 6px; background: var(--c-panel); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.exposure-lattice-message--error { color: var(--c-danger); border-color: var(--c-danger); }
 .exposure-lattice-message__legend { display: flex; flex-wrap: wrap; gap: 12px; }
 
+.patterns-card__header { flex-wrap: wrap; justify-content: space-between; }
 .patterns-exposure__controls .btn { min-width: 76px; }
+.patterns-card__header .btn .icon { width: 1em; height: 1em; }
 .patterns-exposure__controls .checkbox { min-width: 0; }
 
 .patterns-exposure__controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }

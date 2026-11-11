@@ -88,8 +88,7 @@ test("Processing tab is wired into the app: tab, panel, canvas overlay, launch-t
   const app = read("App.tsx");
   assert.match(app, /type LeftTopTab = "scan" \| "processing" \| "calibrate";/);
   assert.match(app, /onClick=\{activateProcessingTopTab\}/);
-  assert.match(app, /<ProcessingPatternsPanel disabled=\{scanControlsSafetyDisabled \|\| phase === "stopping" \|\| workflowRunning\} \/>/);
-  assert.match(app, /processingSubTab === "patterns" && \(\s*<ExposureControls disabled=\{scanControlsSafetyDisabled\} \/>/);
+  assert.match(app, /<ProcessingPatternsPanel\s+visible=\{activeTopTab === "processing" && processingSubTab === "patterns"\}\s+disabled=\{scanControlsSafetyDisabled \|\| phase === "stopping" \|\| workflowRunning\}\s+exposureDisabled=\{scanControlsSafetyDisabled\}/);
   assert.match(app, /<PatternOverlay disabled=\{scanControlsSafetyDisabled \|\| phase === "stopping" \|\| workflowRunning\} api=\{api\} \/>/);
   assert.match(app, /void dispatch\(fetchProcessingPatterns\(\)\)/);
   // the tab sits right after Scan, before Calibrate

@@ -2,7 +2,6 @@ import React from "react";
 import {createRoot} from "react-dom/client";
 import {Provider} from "react-redux";
 import {store} from "./src/store";
-import {ExposureControls} from "./src/components/ExposureControls";
 import {ProcessingPatternsPanel} from "./src/components/ProcessingPatternsPanel";
 import {ExposureLatticeGeometry,ExposureLatticeMessage} from "./src/components/ExposureLatticeOverlay";
 import {fetchProcessingPatterns,setPatternRoi} from "./src/store/processingSlice";
@@ -25,6 +24,6 @@ const patterns=[{key:"stairCut",caption:"Stair cut",model:"StairCutModel",roi:"r
 store.dispatch(fetchProcessingPatterns.fulfilled({patterns,lensLookup:lookup} as any,"check"));
 store.dispatch(updateROI({x_origin:0,x_end:1,y_origin:0,y_end:1}));
 store.dispatch(setPatternRoi({key:"stairCut",roi:{x_start:0.1,x_end:0.9,y_start:0.1,y_end:0.9}}));
-function Layout(){ return <main style={{display:"grid",gridTemplateColumns:"390px 1fr",gap:24,maxWidth:1020,margin:"24px auto",fontFamily:"sans-serif",color:"#e2e8f0"}}><div><h2>Processing · Patterns</h2><ProcessingPatternsPanel disabled={false}/><ExposureControls/><p style={{fontSize:12,color:"#94a3b8"}}>Exposure uses the pattern recipe. Regular scan controls remain separate.</p></div><div><div style={{position:"relative",aspectRatio:"1",background:"radial-gradient(ellipse at 30% 40%,#555,#151515)"}}><svg viewBox="0 0 640 640" style={{position:"absolute",inset:0,width:"100%",height:"100%"}}><ExposureLatticeGeometry project={(x,y)=>({x:x*640,y:y*640})}/></svg></div><ExposureLatticeMessage/></div></main>; }
+function Layout(){ return <main style={{display:"grid",gridTemplateColumns:"390px 1fr",gap:24,maxWidth:1020,margin:"24px auto",fontFamily:"sans-serif",color:"#e2e8f0"}}><div><h2>Processing · Patterns</h2><ProcessingPatternsPanel disabled={false}/><p style={{fontSize:12,color:"#94a3b8"}}>Exposure uses the pattern recipe. Regular scan controls remain separate.</p></div><div><div style={{position:"relative",aspectRatio:"1",background:"radial-gradient(ellipse at 30% 40%,#555,#151515)"}}><svg viewBox="0 0 640 640" style={{position:"absolute",inset:0,width:"100%",height:"100%"}}><ExposureLatticeGeometry project={(x,y)=>({x:x*640,y:y*640})}/></svg></div><ExposureLatticeMessage/></div></main>; }
 createRoot(document.getElementById("root")!).render(<Provider store={store}><Layout/></Provider>);
 document.body.style.background="#0b1727";

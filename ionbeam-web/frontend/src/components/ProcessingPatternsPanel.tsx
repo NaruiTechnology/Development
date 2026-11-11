@@ -33,6 +33,8 @@ import { VectorScanPathPreview } from "./VectorScanPathPreview";
 import { ProcessingWorkflowPanel } from "./ProcessingWorkflowPanel";
 import { unitLabel } from "./ROIEditor";
 
+import { ExposureControls } from "./ExposureControls";
+
 const MATERIAL_WORKFLOW = "MaterialLinelCut";
 
 /** Translation with the JSON's English text as fallback for keys the locale tables do not know. */
@@ -45,14 +47,18 @@ function useTr() {
   return { t, fmt, tr };
 }
 
-export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
+export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled, visible = true }: {
+  disabled: boolean;
+  exposureDisabled?: boolean;
+  visible?: boolean;
+}) {
   const dispatch = useAppDispatch();
   const { t, tr } = useTr();
   const { status, error, entryErrors, specs, activeKey } = useAppSelector((s) => s.processing);
 
   useEffect(() => {
-    if (status === "idle") void dispatch(fetchProcessingPatterns());
-  }, [status, dispatch]);
+    if (visible && status === "idle") void dispatch(fetchProcessingPatterns());
+  }, [visible, status, dispatch]);
 
   const messages: string[] = [];
   if (status === "error") messages.push(t("processing.configError").replace("{error}", error ?? ""));
@@ -60,10 +66,11 @@ export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
   if (entryErrors.length) messages.push(t("processing.entryErrors").replace("{errors}", entryErrors.join("; ")));
 
   return (
-    <>
+    <div hidden={!visible}>
       <div className="card patterns-card">
-        <div className="card__header">
+        <div className="card__header patterns-card__header">
           <span className="card__title">{t("processing.patterns")}</span>
+          <ExposureControls disabled={exposureDisabled} />
         </div>
         <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
           {specs.map((spec) => {
@@ -92,7 +99,7 @@ export function ProcessingPatternsPanel({ disabled }: { disabled: boolean }) {
           <p className={`patterns-card__status${status === "error" ? " patterns-card__status--error" : ""}`}>{messages.join("\n")}</p>
         )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -103,7 +110,8 @@ export function ProcessingPatternCards({ disabled }: { disabled: boolean }) {
     setExpandedKey(current => expanded ? key : current === key ? null : current);
   }, []);
   // Only presentation order changes. Catalogue order still determines acquisition/execution order.
-  const promoted = !disabled ? specs.find(spec => spec.key === expandedKey) : undefined;
+  const promotedKey = disabled && activeKey && instances[activeKey]?.roi ? activeKey : expandedKey;
+  const promoted = specs.find(spec => spec.key === promotedKey);
   const ordered = promoted ? [promoted, ...specs.filter(spec => spec.key !== promoted.key)] : specs;
   return <>{ordered.map((spec) => (
     <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key}

@@ -87,13 +87,21 @@ export function ExposureLatticeOverlay({ transforms: displayTransforms }: {
 
 export function ExposureLatticeMessage() {
   const { t } = useTranslation();
-  const nodes = useAppSelector(s => s.exposure.progress);
-  const steps = nodes.filter(n => n.exposure);
+  const { progress, error } = useAppSelector(s => s.exposure);
+  const steps = progress.filter(n => n.exposure);
   const node = steps.find(n => n.status === "current") ?? [...steps].reverse().find(n => n.status !== "upcoming") ?? steps[0];
-  if (!node?.exposure) return null;
+  const errorMessage = error && (
+    <div className="exposure-lattice-message exposure-lattice-message--error" role="alert">
+      <strong>{t("canvas.scanParams.exposureLattice")} · {t("processing.exposure.status.error")}</strong>
+      <span>{error}</span>
+    </div>
+  );
+  if (!node?.exposure) return errorMessage;
   const e = node.exposure, p = e.plan;
   const index = steps.indexOf(node)+1;
-  return <div className="exposure-lattice-message" role="status" aria-live="polite">
+  return <>
+    {errorMessage}
+    <div className="exposure-lattice-message" role="status" aria-live="polite">
     <strong>{t("canvas.scanParams.exposureLattice")} · {node.pattern} · {node.caption} · {t(`processing.exposure.status.${node.status}` as TranslationKey)}</strong>
     <span>{e.beamCurrentPA} pA · Ø {(p.spotDiameterUM*1000).toFixed(1)} nm · {t("processing.exposure.pitch")} {(p.spacingUM*1000).toFixed(2)} nm · OL {p.overlapPct}% · {e.dwellUS} µs · {p.lattice.axis.toUpperCase()} · {p.countExact ? "" : "≈"}{p.count.toLocaleString()} {t("processing.exposure.spots")} · {p.passes} {t("processing.exposure.passes")}</span>
     {e.lineSpacingUM !== undefined && <span>{t("processing.exposure.lineSpacing")} {e.lineSpacingUM.toFixed(4)} µm</span>}
@@ -104,5 +112,6 @@ export function ExposureLatticeMessage() {
       <span>{t("processing.exposure.schematic")}</span>
       {steps.some(n=>n.exposure?.requestedDepthUM !== undefined) && <span>{t("processing.exposure.depth")}</span>}
     </span>}
-  </div>;
+    </div>
+  </>;
 }

@@ -24,11 +24,23 @@ export function useExposureRun() {
       const ws = new WebSocket(wsUrl(withScanAuthQuery("/ws/scan/vector/stream")));
       socket.current = ws; ws.binaryType = "arraybuffer";
       let done = false, error: string | null = null;
+      let pendingSamples = 0;
+      let sampleTimer: ReturnType<typeof setTimeout> | undefined;
+      const flushSamples = () => {
+        clearTimeout(sampleTimer);
+        sampleTimer = undefined;
+        if (pendingSamples > 0) {
+          dispatch(exposureSamplesReceived(pendingSamples));
+          pendingSamples = 0;
+        }
+      };
       ws.onopen = () => { if (!cancelled.current) ws.send(JSON.stringify(request)); else ws.close(1000, "exposure-stop"); };
       ws.onmessage = event => {
         if (cancelled.current) return;
         if (typeof event.data !== "string") {
-          dispatch(exposureSamplesReceived(Math.floor((event.data as ArrayBuffer).byteLength / 2)));
+          pendingSamples += Math.floor((event.data as ArrayBuffer).byteLength / 2);
+          // Redraw the trace at most 20 times per second, even when samples arrive in bursts.
+          sampleTimer ??= setTimeout(flushSamples, 50);
           return;
         }
         try {
@@ -42,6 +54,7 @@ export function useExposureRun() {
       };
       ws.onerror = () => { error ??= "Exposure connection failed"; };
       ws.onclose = () => {
+        flushSamples();
         if (socket.current === ws) socket.current = null;
         if (!cancelled.current && done && !error) resolve();
         else reject(new Error(error ?? (cancelled.current ? "Exposure stopped" : "Exposure stream ended before completion")));

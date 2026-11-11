@@ -36,7 +36,7 @@ test("expanded editing card moves first without changing catalogue/execution ord
   assert.deepEqual(state.specs.map(s=>s.key),baseline);
   assert.deepEqual(processingScanRegions(state.specs,state.instances,{x_origin:0,x_end:100,y_origin:0,y_end:100}).keys,baseline);
   await act(async()=>renderer.update(render(true)));
-  assert.deepEqual(order(),baseline,"execution retains the catalogue presentation order");
+  assert.deepEqual(order(),["circle","box","polygon"],"the highlighted card stays first when inputs lock");
   await act(async()=>renderer.update(render(false)));
   assert.deepEqual(order(),["circle","box","polygon"]);
   assert.equal(card("circle").findByProps({className:"pattern-card__body"}).props.hidden,false,"reordering preserves expanded card state");

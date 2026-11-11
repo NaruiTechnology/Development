@@ -56,6 +56,21 @@ def make_workspace(base):
         "secretstore/__init__.py": DEVELOPMENT / "secretstore/__init__.py",
         "secretstore/__main__.py": DEVELOPMENT / "secretstore/__main__.py",
     }
+    frontend = Path("ionbeam-web/frontend/src")
+    for rel in (
+        "App.tsx",
+        "components/ExposureControls.tsx",
+        "components/ExposureLatticeOverlay.tsx",
+        "components/ProcessingPatternsPanel.tsx",
+        "hooks/useExposureRun.ts",
+        "lib/exposurePreview.ts",
+        "lib/exposureSequence.ts",
+        "lib/patternExposure.ts",
+        "store/exposureSlice.ts",
+        "styles/theme.css",
+    ):
+        source = frontend / rel
+        real[str(source)] = DEVELOPMENT / source
     for rel, src in real.items():
         (dev / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dev / rel)
