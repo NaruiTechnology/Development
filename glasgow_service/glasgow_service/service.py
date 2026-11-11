@@ -973,7 +973,7 @@ async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
         iter_points = _roi_vector_iter(
             req.vector_resolution, req.roi, dwell=req.dwell, scan_path=req.scan_path)
 
-    limit = max(1, req.latency_bytes)
+    limit = 65536 * (req.lattice.dwell + 1) if req.pattern is VectorPattern.lattice else max(1, req.latency_bytes)
     xs: List[int] = []
     ys: List[int] = []
     blanks: List[bool] = []
@@ -1516,7 +1516,8 @@ class DeviceService:
         command._max_pipeline = pipeline
         command._link_stats = stats = LinkStats("simulation-" + kind)
         capacity = pipeline + 1
-        interval = _simulation_chunk_interval(self._simulation_settings(req))
+        lattice_exposure = kind == "vector" and req.pattern is VectorPattern.lattice
+        interval = 0.0 if lattice_exposure else _simulation_chunk_interval(self._simulation_settings(req))
         pending = deque()
         source = self._simulated_source_chunks(kind, req, command, pace=True, queued=True)
         exhausted = False
@@ -1545,6 +1546,8 @@ class DeviceService:
                         pass
                 if command.abort.is_set():
                     break
+                if lattice_exposure:
+                    await asyncio.sleep(0)
                 stats.received(time.perf_counter() - t_read, len(chunk))
                 if revision != delivered_revision:
                     delivered_revision = revision
@@ -1674,6 +1677,7 @@ class DeviceService:
     async def _simulated_scan(self, kind: str, req, *, native_samples: bool = False):
         """A streamed scan with no device: same lock, abort and bookkeeping as a real one."""
         captured: List = []
+        capture_image = kind != "vector" or req.pattern is not VectorPattern.lattice
         if getattr(req, "continuous", False):
             captured = _FrameRing(_simulated_pass_samples(kind, req))
         async with self._acquire(kind):
@@ -1685,7 +1689,8 @@ class DeviceService:
             try:
                 async for chunk in source:
                     self._status.chunks_in_flight += 1
-                    captured.append(chunk)
+                    if capture_image:
+                        captured.append(chunk)
                     yield chunk if native_samples else _sample_chunk_to_wire_bytes(chunk)
             finally:
                 await source.aclose()
@@ -1694,7 +1699,8 @@ class DeviceService:
                 # Like a real scan: keep whatever was captured, even if stopped.
                 if isinstance(captured, _FrameRing):
                     captured = captured.frame()
-                self._set_last_scan(req, self._simulated_last_scan(kind, req, captured, "stream"))
+                if capture_image:
+                    self._set_last_scan(req, self._simulated_last_scan(kind, req, captured, "stream"))
 
     async def _simulated_run_chunks(self, kind: str, req) -> List:
         """All chunks of a blocking simulated scan (caller holds the device lock)."""
@@ -1724,6 +1730,7 @@ class DeviceService:
             client-side translation needed.
         """
         return {
+            "exposure_cell_ranges": True,
             "raster": dict(self._raster_defaults),
             "vector": dict(self._vector_defaults),
             "simulation": dict(self._simulation_defaults),
@@ -2041,7 +2048,8 @@ class DeviceService:
                         first_sample_logged = True
                         logger.info("scan first-sample kind=vector transport=%s elapsed=%.3fs",
                                     transport, time.monotonic() - scan_started)
-                    captured.append(chunk)
+                    if req.pattern is not VectorPattern.lattice:
+                        captured.append(chunk)
                     fault = adc_monitor.observe(chunk)
                     if fault is not None:
                         logger.warning("production ADC presence warning: %s", fault)
@@ -2073,7 +2081,7 @@ class DeviceService:
                     # Preserve the previous known-good scan when this frame
                     # is the disconnected/full-scale signature. Partial
                     # operator-stopped captures remain downloadable.
-                    if not adc_presence_fault:
+                    if not adc_presence_fault and req.pattern is not VectorPattern.lattice:
                         self._set_last_scan(req, {
                             "kind": "vector",
                             "chunks": (captured.frame() if isinstance(captured, _FrameRing)

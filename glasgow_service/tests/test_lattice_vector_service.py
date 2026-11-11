@@ -2,6 +2,7 @@
 import itertools
 import time
 import unittest
+import pytest
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -93,3 +94,35 @@ class LatticeVectorTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_lattice_simulation_batches_samples_and_preserves_the_last_image():
+    import asyncio
+    from unittest.mock import patch
+    from glasgow_service.models import RasterRequest
+    svc = DeviceService(str(CONFIG_PATH))
+    svc._config.IsProduction = False
+    previous = {"kind": "raster", "chunks": []}
+    svc._last = previous
+    req = _lattice_req(shape={"kind": "rect", "x0": 0, "x1": 512, "y0": 0, "y1": 512},
+                       pitch_x=1, cell_start=0, cell_end=100000)
+
+    async def acquire():
+        chunks = [chunk async for chunk in svc.vector_scan(req)]
+        assert sum(len(chunk) for chunk in chunks) == 100000 * 2
+        assert len(chunks) <= 2
+        assert svc._last is previous
+        assert svc.status().state.value == "idle"
+        view = RasterRequest(resolution=16, dwell=1, latency_bytes=65536, preview=True)
+        image = [chunk async for chunk in svc.raster_scan(view)]
+        assert sum(len(chunk) for chunk in image) == 16 * 16 * 2
+        assert svc._last["kind"] == "raster"
+
+    with patch.object(svc, "_maybe_dump_last_outputs"):
+        asyncio.run(acquire())
+
+
+def test_lattice_cell_ranges_are_validated_before_hardware_work():
+    for start, end in [(10, 5), (0, 999999), (200, 201)]:
+        with pytest.raises(ValidationError):
+            _lattice_req(cell_start=start, cell_end=end)

@@ -373,6 +373,8 @@ class LatticeRequest(BaseModel):
     axis: Literal["long", "x", "y"] = "long"
     dwell: int = Field(..., ge=0, le=65535)
     passes: int = Field(1, ge=1, le=100000)
+    cell_start: int = Field(0, ge=0, description="First serpentine lattice cell, inclusive.")
+    cell_end: Optional[int] = Field(None, ge=1, description="Last serpentine lattice cell, exclusive.")
 
     @model_validator(mode="after")
     def _check_geometry(self):
@@ -381,6 +383,9 @@ class LatticeRequest(BaseModel):
         from .exposure_lattice_adapter import shape_from_request
         shape = shape_from_request(self.shape)
         lattice = build_lattice(shape, self.pitch_x, self.pitch_y, self.axis)
+        end = self.cell_end if self.cell_end is not None else lattice.nx * lattice.ny
+        if not 0 <= self.cell_start < end <= lattice.nx * lattice.ny:
+            raise ValueError("invalid lattice cell range")
         if total_points(shape, lattice, self.passes) > MAX_LATTICE_POINTS:
             raise ValueError(f"lattice exceeds {MAX_LATTICE_POINTS:,} points; increase the pitch or reduce passes")
         return self

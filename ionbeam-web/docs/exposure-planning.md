@@ -103,6 +103,10 @@ running, completed, and stopped states without requiring sign-in or issuing hard
 ## Dedicated exposure controls in the Patterns header
 
 The **Patterns** card header contains Parallel (default off), Stop, and Start.
+When Patterns is visible, the split fits the left column to the measured controls
+and icon row. Window, font, catalogue, and language changes update the fit.
+Dragging the divider respects that measured minimum. On narrow stacked layouts,
+the card can scroll horizontally to retain a single row.
 The panel stays mounted when hidden so an exposure continues across tab changes.
 The selected pattern card stays at the top of the stack while its inputs are locked
 during a run. Execution still follows the recipe order.
@@ -111,13 +115,15 @@ during a run. Execution still follows the recipe order.
 progress, errors, abort acknowledgement, and socket. Regular Processing controls now
 provide Scan / Stop / Infinite exclusively for image acquisition. Exposure does not read
 scan resolution, dwell, scan path, Zoom, ROI-scan selection, Preview, or scan Parallel;
-it uses the saved pattern recipes and the field-to-DAC mapping. It never dispatches scan
-phase/counter/parameter capture or image-buffer actions. Overlays, bottom messages and
+it uses the saved pattern recipes and the field-to-DAC mapping. Exposure lattice samples
+update exposure progress. View frames update the Processing image buffers. Overlays, bottom messages and
 pattern exposure readouts use `exposure.progress`. Image workflows keep their own
 `processing.workflowProgress`. The canvas draws hollow circles for planned and traced
 spots. A finished preview stays in world coordinates when the recipe is edited or
 the image changes. Editing the recipe clears its exposure readouts while preserving
-the canvas preview. A
+the canvas preview. Removing a pattern also removes its active and retained exposure
+steps, including stopped traces and depth bands. Undoing a drawing hides exposure
+geometry whose pattern has no ROI. Other patterns retain their previews. A
 new run keeps the prior preview visible while authentication and planning are in progress,
 replacing it only when the new step queue is ready. Authentication failures therefore do
 not erase the last trace. Expired sessions and insufficient exposure permissions have
@@ -125,12 +131,38 @@ distinct errors. The canvas message area displays exposure errors even if planni
 fails before the first step. Trace updates are batched while samples stream in.
 
 Parallel off finishes each step and all its passes before advancing. Parallel on lazily
-interleaves one pass of each enabled pattern on the single beam, preserving dependencies
-between steps of a Stair cut. Patterns with fewer passes finish earlier; each recipe keeps
-its requested pass count. The implementation uses a finite stream per visit, rather than
-simultaneous hardware commands. Cleaning lines require serial execution: enabling Parallel
-with a cleaning-line pattern disables Start and displays an explanation. Parallel cannot
-be changed during an exposure.
+interleaves bounded cell segments from each enabled pattern on the single beam, so both
+patterns make progress during the same round. Each pattern's pass and Stair cut step order
+is preserved, and patterns with fewer passes finish earlier. The hardware still exposes
+one segment at a time. Cleaning lines require serial execution: enabling Parallel with a
+cleaning-line pattern disables Start and displays an explanation. Parallel cannot be
+changed during an exposure.
+
+View requests one full-field raster frame immediately while idle or at the next
+exposure pass boundary while exposing. It uses a raster WebSocket, updates both
+Processing image modes, and continues with the next unexposed pass. The Glasgow
+service owns one physical scan path at a time, so the raster cannot run concurrently
+with an active lattice command; finishing the current pass first preserves its
+traversal and avoids aborting or replaying any cells.
+Cell ranges use the original serpentine traversal, with direct offsets and preserved
+row parity. Segments contain at most 131072 cells and target at most 100 ms of programmed
+dwell. Existing services advertise support through `exposure_cell_ranges`; an older
+service receives complete passes until upgraded.
+
+The beam session retains ownership through View and resume. Repeated clicks coalesce
+into one pending frame. View uses the raster resolution and dwell and the full DAC field.
+Simulation uses larger image packets. Exposure simulation batches up to 65536 samples
+without per-packet playback sleeps. Shape counts are cached, and exposure streams do
+not retain image buffers or schedule CSV/PNG dumps. View and lattice completion is
+relayed immediately by the proxy, independently of database and image bookkeeping.
+Requested cell traversal, clipping, dwell, passes, and delivered charge remain covered
+by the lattice tests.
+
+View ignores pattern ROIs, scan Zoom, gray filters, and scan Parallel. The completed
+frame appears beneath the retained lattice. Scan parameters and scan phase remain
+unchanged. Failed or incomplete View frames preserve the last image and report their
+own error. Stop cancels a queued View or aborts its active stream and cancels remaining
+exposure segments.
 
 The shared instrument ownership guard excludes scans in both workspaces while an exposure
 is preparing, running, or stopping, and excludes exposure while a scan owns the instrument.

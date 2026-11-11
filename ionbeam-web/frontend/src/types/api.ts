@@ -67,6 +67,7 @@ export interface RasterRequest {
   frame_blank: boolean;
   cookie: number;         // 0..65535
   preview?: boolean;
+  exposure_view?: boolean;
   /** Output bit-depth for the SynchronizeCommand. Backend defaults to
    *  "SixteenBit" when omitted, so this field is optional for frontends
    *  that don't expose a control for it. */
@@ -102,6 +103,8 @@ export type LatticeShapeRequest =
   | { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number; inner_rx?: number; inner_ry?: number }
   | { kind: "polygon"; points: [number, number][] };
 export interface LatticeRequest {
+  cell_start?: number;
+  cell_end?: number;
   shape: LatticeShapeRequest;
   pitch_x: number;
   pitch_y?: number | null;
@@ -331,6 +334,7 @@ export interface LastScanMeta {
  * fields, no client-side translation needed.
  */
 export interface ServerDefaults {
+  exposure_cell_ranges?: boolean;
   raster: Record<string, unknown>;
   vector: Record<string, unknown>;
   simulation?: Record<string, unknown>;

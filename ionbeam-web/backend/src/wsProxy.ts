@@ -226,7 +226,7 @@ function handleProxy(
       upstream.readyState === WebSocket.OPEN ||
       upstream.readyState === WebSocket.CONNECTING
     ) {
-      upstream.close(code === 1006 ? 1000 : code, reason);
+      upstream.close((code === 1005 || code === 1006) ? 1000 : code, reason);
     }
   });
 
@@ -246,7 +246,8 @@ function handleProxy(
       if (parsed?.event === "done") {
         completionHandled = true;
         queueStep("completed");
-        if (isDiagnostic(kind)) {
+        if (isDiagnostic(kind) || scanRequest?.exposure_view === true || scanRequest?.pattern === "lattice") {
+          // Transient previews and exposure segments finish independently of image bookkeeping.
           // Diagnostic streams: relay "done" as-is, no activity/FTP
           // enrichment (same treatment as "adc" — see the ScanKind note
           // above StreamKind).
@@ -287,7 +288,7 @@ function handleProxy(
       client.readyState === WebSocket.OPEN ||
       client.readyState === WebSocket.CONNECTING
     ) {
-      client.close(code === 1006 ? 1011 : code, reason);
+      client.close((code === 1005 || code === 1006) ? 1011 : code, reason);
     }
   });
 

@@ -5,13 +5,14 @@ import { useOtherWorkspaceBusy } from "../hooks/useScanWorkspace";
 import { exposureBusy, setExposureParallel } from "../store/exposureSlice";
 import { Icon } from "./Icon";
 
-export function ExposureControls({disabled = false}: {disabled?: boolean}) {
+export function ExposureControls({disabled = false, showView = true}: {disabled?: boolean; showView?: boolean}) {
   const {t} = useTranslation(), dispatch = useAppDispatch();
-  const {state, start, stop} = useExposureRun();
+  const {state, start, stop, view} = useExposureRun();
   const defaultsReady = useAppSelector(s => Boolean(s.status.defaults));
   const patterns = useAppSelector(s => s.processing);
   const scanBusy = useAppSelector(s => ["running", "stopping"].includes(s.scan.phase) || s.scan.streamRestarting || s.scan.infiniteActive || s.scan.roiTargetGrayRun.status === "running");
-  const otherBusy = useOtherWorkspaceBusy(), busy = exposureBusy(state.phase);
+  const viewBusy = state.viewPhase === "queued" || state.viewPhase === "scanning";
+  const otherBusy = useOtherWorkspaceBusy(), busy = exposureBusy(state.phase) || viewBusy;
   const enabled = patterns.specs.filter(spec => patterns.instances[spec.key]?.enabled && patterns.instances[spec.key]?.roi);
   const serialRequired = state.parallel && enabled.some(spec => spec.model === "CleaningLineModel");
   const startDisabled = disabled || !defaultsReady || busy || scanBusy || otherBusy || patterns.status !== "ready" || !patterns.lensLookup || !enabled.length || serialRequired;
@@ -23,6 +24,10 @@ export function ExposureControls({disabled = false}: {disabled?: boolean}) {
             <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
             <span>{t("scan.parallel")}</span>
           </label>
+          {showView && <button type="button" className="btn btn--primary"
+            disabled={disabled || !defaultsReady || scanBusy || otherBusy || state.phase === "preparing" || state.phase === "stopping" || viewBusy}
+            aria-busy={state.viewPhase === "queued" || state.viewPhase === "scanning"}
+            title={t("processing.exposure.viewHelp")} onClick={view}><Icon name="eye" />{t("processing.exposure.view")}</button>}
           <button type="button" className="btn btn--stop" disabled={!busy || state.phase === "stopping"}
             onClick={() => void stop()}><Icon name="hand" />{t("scan.stop")}</button>
           <button type="button" className="btn btn--primary" disabled={startDisabled}

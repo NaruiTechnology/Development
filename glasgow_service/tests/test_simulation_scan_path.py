@@ -57,6 +57,7 @@ class FakeConnection:
 def make_service(*, simulation=None, production=False, connection=None):
     svc = DeviceService(CONFIG_PATH)
     svc._config.IsProduction = production
+    svc._config.DumpData = False
     svc._simulation_defaults.clear()
     svc._simulation_defaults.update(simulation or RANDOM_SOURCE)
 
@@ -99,7 +100,8 @@ def test_simulated_raster_scan_never_opens_the_device():
 
     frames = collect(svc, "raster", req)
 
-    per_chunk = math.ceil(req.latency_bytes / req.dwell)
+    effective = svc._prepare_simulated_stream_request(req, pace=True)
+    per_chunk = math.ceil(effective.latency_bytes / effective.dwell)
     assert len(frames) == math.ceil(128 * 128 / per_chunk)
     assert sum(len(f) for f in frames) == 128 * 128 * 2
 
@@ -111,7 +113,7 @@ def test_simulated_chunks_are_delivered_one_at_a_time():
     the ticker advancing if the whole frame were produced in one burst.
     """
     svc = make_service()
-    req = RasterRequest(resolution=128, dwell=2, latency_bytes=4096)
+    req = RasterRequest(resolution=256, dwell=2, latency_bytes=4096)
 
     async def run():
         ticks = 0
@@ -208,7 +210,7 @@ def test_dac_codes_are_the_ones_the_fpga_counter_visits(resolution, bounds):
 
 def test_stop_ends_a_simulated_scan_and_keeps_the_partial_frame():
     svc = make_service()
-    req = RasterRequest(resolution=128, dwell=2, latency_bytes=512)   # many chunks
+    req = RasterRequest(resolution=256, dwell=2, latency_bytes=512)   # many chunks
 
     async def run():
         seen = 0
@@ -219,7 +221,8 @@ def test_stop_ends_a_simulated_scan_and_keeps_the_partial_frame():
         return seen
 
     seen = asyncio.run(run())
-    total = math.ceil(128 * 128 / math.ceil(req.latency_bytes / req.dwell))
+    effective = svc._prepare_simulated_stream_request(req, pace=True)
+    total = math.ceil(256 * 256 / math.ceil(effective.latency_bytes / effective.dwell))
     assert 2 <= seen < total
     assert len(svc._last["chunks"]) == seen
 
@@ -237,7 +240,7 @@ def test_simulated_scan_records_the_last_scan_for_the_download_endpoints():
 
 def test_simulated_vector_scan_is_hardware_free_and_streams():
     svc = make_service()
-    req = VectorRequest(vector_resolution=128, dwell=1, latency_bytes=4096)
+    req = VectorRequest(vector_resolution=256, dwell=1, latency_bytes=4096)
 
     async def run():
         ticks = 0
@@ -257,7 +260,7 @@ def test_simulated_vector_scan_is_hardware_free_and_streams():
         return seen, frames
 
     seen, frames = asyncio.run(run())
-    assert sum(len(f) for f in frames) == 128 * 128 * 2
+    assert sum(len(f) for f in frames) == 256 * 256 * 2
     assert len(frames) > 1 and all(b > a for a, b in zip(seen, seen[1:]))
 
 
@@ -346,12 +349,12 @@ def test_request_can_disable_simulation_without_changing_defaults():
 def test_browser_bitmap_scan_is_hardware_free_and_streams():
     svc = make_service()
     bitmap = SimulationBitmap(width=2, height=2, pixels=[0, 85, 170, 255])
-    req = RasterRequest(resolution=128, dwell=2, latency_bytes=4096,
+    req = RasterRequest(resolution=256, dwell=2, latency_bytes=4096,
                         simulation_bitmap=bitmap)
 
     frames = collect(svc, "raster", req)
 
-    assert sum(len(f) for f in frames) == 128 * 128 * 2
+    assert sum(len(f) for f in frames) == 256 * 256 * 2
     assert len(frames) > 1
 
 

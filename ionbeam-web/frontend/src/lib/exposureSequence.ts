@@ -1,7 +1,7 @@
 import { preparePatternExposure, simulationExposureSteps } from "./patternExposure.js";
 import type { ProcessingState } from "../store/processingSlice";
 import type { ROIState } from "../store/scanSlice";
-import type { VectorRequest } from "../types/api";
+import type { LatticeRequest, VectorRequest } from "../types/api";
 import type { WorkflowProgress } from "./processingWorkflows.js";
 
 export interface ExposureEntry { key: string; node: WorkflowProgress; request: VectorRequest }
@@ -36,20 +36,56 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
 
 /** Parallel is pass interleaving on the single beam; dependencies within each pattern stay ordered.
  * The generator is lazy even for recipes with thousands of passes. */
-export function* exposureRuns(entries: ExposureEntry[], parallel: boolean): Generator<{entry: ExposureEntry; request: VectorRequest; final: boolean}> {
+export interface ExposureRun { entry: ExposureEntry; request: VectorRequest; final: boolean }
+
+/** Yield one exposure pass per pattern in each round when Parallel is on.
+ * The beam remains serial; the caller can interleave bounded cell segments. */
+export function* exposureRounds(entries: ExposureEntry[], parallel: boolean): Generator<ExposureRun[]> {
   if (!parallel) {
-    for (const entry of entries) yield {entry, request: entry.request, final: true};
+    for (const entry of entries) {
+      const passes = entry.request.lattice?.passes ?? 1;
+      for (let pass = 0; pass < passes; pass++)
+        yield [{entry, request: {...entry.request, lattice: {...entry.request.lattice!, passes: 1}}, final: pass === passes - 1}];
+    }
     return;
   }
   if (entries.some(e => e.node.exposure?.model === "CleaningLineModel")) throw new Error("Cleaning lines require serial exposure (Parallel off).");
   const groups = new Map<string, ExposureEntry[]>();
   for (const e of entries) groups.set(e.key, [...(groups.get(e.key) ?? []), e]);
   const positions = [...groups.values()].map(steps => ({steps, index: 0, pass: 0}));
-  while (positions.some(g => g.index < g.steps.length)) for (const g of positions) {
-    const entry = g.steps[g.index];
-    if (!entry) continue;
-    const final = ++g.pass >= entry.request.lattice!.passes;
-    yield {entry, request: {...entry.request, lattice: {...entry.request.lattice!, passes: 1}}, final};
-    if (final) { g.index++; g.pass = 0; }
+  while (positions.some(g => g.index < g.steps.length)) {
+    const round: ExposureRun[] = [];
+    for (const g of positions) {
+      const entry = g.steps[g.index];
+      if (!entry) continue;
+      const final = ++g.pass >= entry.request.lattice!.passes;
+      round.push({entry, request: {...entry.request, lattice: {...entry.request.lattice!, passes: 1}}, final});
+      if (final) { g.index++; g.pass = 0; }
+    }
+    if (round.length) yield round;
   }
+}
+
+export function* exposureRuns(entries: ExposureEntry[], parallel: boolean): Generator<ExposureRun> {
+  for (const round of exposureRounds(entries, parallel)) yield* round;
+}
+
+/** Direct cell ranges retain the original serpentine row parity and never replay earlier spots. */
+export function* exposureSegments(lattice: LatticeRequest): Generator<LatticeRequest> {
+  const shape = lattice.shape;
+  let width: number, height: number;
+  if (shape.kind === "rect") {
+    width = Math.abs(shape.x1 - shape.x0); height = Math.abs(shape.y1 - shape.y0);
+  } else if (shape.kind === "ellipse") {
+    width = shape.rx * 2; height = shape.ry * 2;
+  } else {
+    const xs = shape.points.map(point => point[0]), ys = shape.points.map(point => point[1]);
+    width = Math.max(...xs) - Math.min(...xs); height = Math.max(...ys) - Math.min(...ys);
+  }
+  const cells = Math.max(1, Math.round(width / lattice.pitch_x))
+    * Math.max(1, Math.round(height / (lattice.pitch_y ?? lattice.pitch_x)));
+  // At most 100 ms of programmed dwell, with a bounded host encoding workload.
+  const size = Math.max(1, Math.min(131072, Math.floor(800000 / (lattice.dwell + 1))));
+  for (let start = 0; start < cells; start += size)
+    yield {...lattice, cell_start: start, cell_end: Math.min(cells, start + size)};
 }

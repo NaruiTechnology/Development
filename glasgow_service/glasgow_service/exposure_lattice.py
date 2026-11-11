@@ -9,6 +9,7 @@ spots cost O(1) memory. No pydantic or hardware imports: pure Python.
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 from dataclasses import dataclass
 from typing import Iterator, Optional, Sequence, Tuple
 
@@ -112,11 +113,12 @@ class Lattice:
     def centre(self, i: int, j: int) -> Tuple[float, float]:
         return (self.x0 + (i + 0.5) * self.pitch_x, self.y0 + (j + 0.5) * self.pitch_y)
 
-    def cells(self) -> Iterator[Tuple[int, int]]:
+    def cells(self, start: int = 0, end: Optional[int] = None) -> Iterator[Tuple[int, int]]:
         """Serpentine order: the fast axis reverses on every row."""
         fast, slow = (self.nx, self.ny) if self.axis == "x" else (self.ny, self.nx)
-        for s in range(slow):
-            for f in range(fast):
+        end = fast * slow if end is None else min(end, fast * slow)
+        for s in range(start // fast, (end + fast - 1) // fast):
+            for f in range(max(0, start - s * fast), min(fast, end - s * fast)):
                 k = fast - 1 - f if s % 2 else f
                 yield (k, s) if self.axis == "x" else (s, k)
 
@@ -141,10 +143,13 @@ def build_lattice(shape, pitch_x: float, pitch_y: Optional[float] = None, axis: 
     return Lattice(nx, ny, w / nx, h / ny, x0, y0, fast)
 
 
+@lru_cache(maxsize=64)
 def count_spots(shape, lattice: Lattice) -> Tuple[int, bool]:
     """(spots inside the shape, exact). Large lattices fall back to area / cell area."""
     if lattice.nx * lattice.ny > MAX_COUNT_CELLS:
         return max(1, _round_half_up(shape.area() / (lattice.pitch_x * lattice.pitch_y))), False
+    if isinstance(shape, Rect):
+        return lattice.nx * lattice.ny, True
     n = 0
     for j in range(lattice.ny):
         for i in range(lattice.nx):
@@ -153,15 +158,17 @@ def count_spots(shape, lattice: Lattice) -> Tuple[int, bool]:
     return n, True
 
 
-def spot_centres(shape, lattice: Lattice) -> Iterator[Tuple[float, float]]:
+def spot_centres(shape, lattice: Lattice, start: int = 0, end: Optional[int] = None) -> Iterator[Tuple[float, float]]:
     """Float spot centres inside the shape, in serpentine scan order."""
-    for i, j in lattice.cells():
+    rectangular = isinstance(shape, Rect)
+    for i, j in lattice.cells(start, end):
         c = lattice.centre(i, j)
-        if shape.contains(*c):
+        if rectangular or shape.contains(*c):
             yield c
 
 
-def lattice_points(shape, lattice: Lattice, dwell_ticks: int, passes: int = 1
+def lattice_points(shape, lattice: Lattice, dwell_ticks: int, passes: int = 1,
+                   cell_start: int = 0, cell_end: Optional[int] = None
                    ) -> Iterator[Tuple[int, int, int, bool, int]]:
     """Lazy (x, y, dwell, blank, pass_index) stream, repeated `passes` times.
 
@@ -176,7 +183,7 @@ def lattice_points(shape, lattice: Lattice, dwell_ticks: int, passes: int = 1
         raise ValueError("passes must be >= 1")
     for _ in range(passes):
         pending: Optional[list] = None
-        for cx, cy in spot_centres(shape, lattice):
+        for cx, cy in spot_centres(shape, lattice, cell_start, cell_end):
             x = min(DAC_MAX, max(0, _round_half_up(cx)))
             y = min(DAC_MAX, max(0, _round_half_up(cy)))
             if pending is not None and pending[0] == x and pending[1] == y:

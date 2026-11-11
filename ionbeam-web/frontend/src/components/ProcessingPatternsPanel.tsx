@@ -70,7 +70,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
       <div className="card patterns-card">
         <div className="card__header patterns-card__header">
           <span className="card__title">{t("processing.patterns")}</span>
-          <ExposureControls disabled={exposureDisabled} />
+          <ExposureControls disabled={exposureDisabled} showView={false} />
         </div>
         <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
           {specs.map((spec) => {

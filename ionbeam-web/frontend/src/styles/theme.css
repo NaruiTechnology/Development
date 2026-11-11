@@ -275,7 +275,7 @@ body {
 
 .app-main {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) 10px minmax(380px, var(--right-panel-width, 720px));
+  grid-template-columns: minmax(var(--left-panel-min-width, 320px), 1fr) 10px minmax(380px, var(--right-panel-width, 720px));
   column-gap: 12px;
   row-gap: 16px;
   padding: 16px 24px;
@@ -286,7 +286,7 @@ body {
 
 .app-main--with-roi-preview {
   grid-template-columns:
-    minmax(320px, 1fr)
+    minmax(var(--left-panel-min-width, 320px), 1fr)
     10px
     minmax(380px, var(--right-panel-width, 720px))
     minmax(180px, 220px);
@@ -8014,7 +8014,7 @@ body {
 /* ===== Processing tab: pattern strip, pattern cards, canvas drawing layer ===== */
 .pattern-strip {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: space-evenly;
   gap: 4px;
   padding: 8px 10px;
@@ -8244,11 +8244,14 @@ body {
 .exposure-lattice-message--error { color: var(--c-danger); border-color: var(--c-danger); }
 .exposure-lattice-message__legend { display: flex; flex-wrap: wrap; gap: 12px; }
 
+.patterns-card { overflow-x: auto; }
 .patterns-card__header { flex-wrap: wrap; justify-content: space-between; }
+.patterns-card__header .patterns-exposure { flex: 1 0 100%; min-width: 0; }
 .patterns-exposure__controls .btn { min-width: 76px; }
 .patterns-card__header .btn .icon { width: 1em; height: 1em; }
 .patterns-exposure__controls .checkbox { min-width: 0; }
 
-.patterns-exposure__controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
-.patterns-exposure__controls .checkbox { margin-right: 4px; }
+.patterns-exposure__controls { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.patterns-exposure__controls > * { flex-shrink: 0; white-space: nowrap; }
+.patterns-exposure__controls .checkbox { margin-right: auto; }
 .patterns-exposure .scan-inline-error { max-width: 360px; margin-bottom: 0; }

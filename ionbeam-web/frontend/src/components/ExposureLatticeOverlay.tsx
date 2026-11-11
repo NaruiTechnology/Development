@@ -90,7 +90,7 @@ export function ExposureLatticeOverlay({ transforms: displayTransforms }: {
 export function ExposureLatticeMessage() {
   const { t } = useTranslation();
   const progress = useAppSelector(selectExposurePreview);
-  const error = useAppSelector(s => s.exposure.error);
+  const { error, viewPhase, viewError } = useAppSelector(s => s.exposure);
   const steps = progress.filter(n => n.exposure);
   const node = steps.find(n => n.status === "current") ?? [...steps].reverse().find(n => n.status !== "upcoming") ?? steps[0];
   const errorMessage = error && (
@@ -99,11 +99,19 @@ export function ExposureLatticeMessage() {
       <span>{error}</span>
     </div>
   );
-  if (!node?.exposure) return errorMessage;
+  const viewMessage = viewPhase !== "idle" && (
+    <div className={`exposure-lattice-message${viewPhase === "error" ? " exposure-lattice-message--error" : ""}`}
+      role={viewPhase === "error" ? "alert" : "status"}>
+      <span>{t(`processing.exposure.viewStatus.${viewPhase}` as TranslationKey)}</span>
+      {viewError && <span>{viewError}</span>}
+    </div>
+  );
+  if (!node?.exposure) return <>{errorMessage}{viewMessage}</>;
   const e = node.exposure, p = e.plan;
   const index = steps.indexOf(node)+1;
   return <>
     {errorMessage}
+    {viewMessage}
     <div className="exposure-lattice-message" role="status" aria-live="polite">
     <strong>{t("canvas.scanParams.exposureLattice")} · {node.pattern} · {node.caption} · {t(`processing.exposure.status.${node.status}` as TranslationKey)}</strong>
     <span>{e.beamCurrentPA} pA · Ø {(p.spotDiameterUM*1000).toFixed(1)} nm · {t("processing.exposure.pitch")} {(p.spacingUM*1000).toFixed(2)} nm · OL {p.overlapPct}% · {e.dwellUS} µs · {p.lattice.axis.toUpperCase()} · {p.countExact ? "" : "≈"}{p.count.toLocaleString()} {t("processing.exposure.spots")} · {p.passes} {t("processing.exposure.passes")}</span>

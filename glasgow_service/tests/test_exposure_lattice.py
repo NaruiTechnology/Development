@@ -107,3 +107,28 @@ def test_unequal_xy_pitch_for_anisotropic_dac_scale():
     shape = Rect(0, 100, 0, 100)
     lat = build_lattice(shape, 10, 20)
     assert (lat.nx, lat.ny) == (10, 5)
+
+@pytest.mark.parametrize("shape", [
+    Rect(0, 8, 0, 6),
+    Ellipse(5, 5, 4, 3, 2, 1),
+    Polygon(((0, 0), (8, 0), (3, 6))),
+])
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_cell_segments_resume_without_replaying_or_omitting_points(shape, axis):
+    lattice = build_lattice(shape, 1, axis=axis)
+    expected = list(lattice_points(shape, lattice, 7))
+    actual = []
+    for start in range(0, lattice.nx * lattice.ny, 7):
+        actual.extend(lattice_points(shape, lattice, 7, cell_start=start,
+                                     cell_end=min(start + 7, lattice.nx * lattice.ny)))
+    assert actual == expected
+
+
+def test_sub_dac_segments_preserve_delivered_charge_at_boundaries():
+    shape = Rect(10, 12, 10, 11)
+    lattice = build_lattice(shape, 0.25)
+    actual = []
+    for start in range(0, lattice.nx * lattice.ny, 3):
+        actual.extend(lattice_points(shape, lattice, 7, cell_start=start,
+                                     cell_end=min(start + 3, lattice.nx * lattice.ny)))
+    assert sum(p[2] + 1 for p in actual) == len(list(spot_centres(shape, lattice))) * 8

@@ -13,6 +13,7 @@ import {
   Component,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -23,6 +24,7 @@ import {
 import { Header } from "./components/Header";
 import { ImagePanelLayoutControls } from "./components/ImagePanelLayoutControls";
 import { ProcessingImagePanel } from "./components/ProcessingImagePanel";
+import { ExposureLatticeMessage } from "./components/ExposureLatticeOverlay";
 import { controlCanvasKind } from "./lib/controlCanvasKind";
 import { HelpPopover } from "./components/HelpPopover";
 import type { SignedInUser } from "./components/AuthDialog";
@@ -115,7 +117,16 @@ const RIGHT_PANEL_STORAGE_KEY = "ionbeam:rightPanelWidth";
 const DEFAULT_RIGHT_PANEL_WIDTH = 400;
 const MIN_LEFT_PANEL_WIDTH = 320;
 const MIN_RIGHT_PANEL_WIDTH = 380;
-const SPLITTER_SPACE = 32;
+function maximumRightPanelWidth(main: HTMLElement, minimumLeft: number): number {
+  const style = getComputedStyle(main);
+  const columns = Array.from(main.children);
+  const spacing = (parseFloat(style.columnGap) || 0) * (columns.length - 1);
+  const otherColumns = columns.filter((_, index) => index !== 0 && index !== 2)
+    .reduce((total, column) => total + column.getBoundingClientRect().width, 0);
+  return Math.max(MIN_RIGHT_PANEL_WIDTH, main.clientWidth - minimumLeft - spacing - otherColumns
+    - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0));
+}
+
 const LAST_ADMIN_LOGIN_STORAGE_KEY = "ionbeam:lastAdminLogin";
 type AppRoute = "control" | "report" | "vacuum";
 type LeftTopTab = "scan" | "processing" | "calibrate";
@@ -346,6 +357,9 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     const parsed = raw ? Number(raw) : DEFAULT_RIGHT_PANEL_WIDTH;
     return Number.isFinite(parsed) ? parsed : DEFAULT_RIGHT_PANEL_WIDTH;
   });
+  const [patternsMinimumWidth, setPatternsMinimumWidth] = useState(MIN_LEFT_PANEL_WIDTH);
+  const patternsLayout = activeTopTab === "processing" && processingSubTab === "patterns";
+  const minimumLeftPanelWidth = patternsLayout ? patternsMinimumWidth : MIN_LEFT_PANEL_WIDTH;
   const [isResizing, setIsResizing] = useState(false);
   const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(() => {
     const raw = window.localStorage.getItem("ionbeam:adminUser");
@@ -608,6 +622,52 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     }
   }, [kind]);
 
+  useLayoutEffect(() => {
+    const main = mainRef.current;
+    if (!patternsLayout || !main) return;
+    const left = main.children[0] as HTMLElement;
+    const card = left.querySelector<HTMLElement>(".patterns-card");
+    if (!card) return;
+
+    const fitPatterns = () => {
+      const rows = card.querySelectorAll<HTMLElement>(".patterns-exposure__controls, .pattern-strip");
+      const widths = Array.from(rows, row => {
+        const children = Array.from(row.children);
+        let width = children.reduce((sum, child) => sum + child.getBoundingClientRect().width, 0);
+        width += Math.max(0, children.length - 1) * (parseFloat(getComputedStyle(row).columnGap) || 0);
+        for (let ancestor: HTMLElement | null = row; ancestor; ancestor = ancestor.parentElement) {
+          const style = getComputedStyle(ancestor);
+          width += (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
+            + (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.borderRightWidth) || 0);
+          if (ancestor === left) break;
+        }
+        return Math.ceil(width);
+      });
+      const minimum = Math.max(MIN_LEFT_PANEL_WIDTH, ...widths);
+      setPatternsMinimumWidth(minimum);
+      if (window.matchMedia("(min-width: 1025px)").matches)
+        setRightPanelWidth(maximumRightPanelWidth(main, minimum));
+    };
+
+    const resize = new ResizeObserver(fitPatterns);
+    const observeRows = () => {
+      resize.disconnect();
+      resize.observe(main);
+      card.querySelectorAll(".patterns-exposure__controls > *, .pattern-strip > *")
+        .forEach(child => resize.observe(child));
+      fitPatterns();
+    };
+    const changes = new MutationObserver(observeRows);
+    changes.observe(card, {childList: true, characterData: true, subtree: true});
+    observeRows();
+    document.fonts.addEventListener("loadingdone", fitPatterns);
+    return () => {
+      resize.disconnect();
+      changes.disconnect();
+      document.fonts.removeEventListener("loadingdone", fitPatterns);
+    };
+  }, [patternsLayout, showROIThirdColumn, route]);
+
   useEffect(() => {
     if (!isResizing) return;
 
@@ -615,10 +675,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
       const main = mainRef.current;
       if (!main) return;
       const rect = main.getBoundingClientRect();
-      const maxRight = Math.max(
-        MIN_RIGHT_PANEL_WIDTH,
-        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIThirdColumn ? 236 : 0)
-      );
+      const maxRight = maximumRightPanelWidth(main, minimumLeftPanelWidth);
       const next = Math.min(
         maxRight,
         Math.max(MIN_RIGHT_PANEL_WIDTH, rect.right - clientX)
@@ -642,7 +699,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
     };
-  }, [isResizing, showROIThirdColumn]);
+  }, [isResizing, minimumLeftPanelWidth, showROIThirdColumn]);
 
   // A live-scan handover (for example switching Parallel/Sequential) briefly
   // stops one stream and starts the next. Keep the panel in its live-scan state
@@ -1499,11 +1556,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   function resizeRightPanel(delta: number) {
     const main = mainRef.current;
     if (!main) return;
-    const rect = main.getBoundingClientRect();
-    const maxRight = Math.max(
-      MIN_RIGHT_PANEL_WIDTH,
-      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIThirdColumn ? 236 : 0)
-    );
+    const maxRight = maximumRightPanelWidth(main, minimumLeftPanelWidth);
     const next = Math.min(maxRight, Math.max(MIN_RIGHT_PANEL_WIDTH, rightPanelWidth + delta));
     setRightPanelWidth(next);
     window.localStorage.setItem(RIGHT_PANEL_STORAGE_KEY, String(Math.round(next)));
@@ -1511,6 +1564,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
 
   const layoutStyle = {
     "--right-panel-width": `${Math.round(rightPanelWidth)}px`,
+    "--left-panel-min-width": `${minimumLeftPanelWidth}px`,
   } as CSSProperties;
   const activeScanColor = activeScanType ? SCAN_TYPE_COLORS[activeScanType] : null;
   const scanPanelStyle = activeScanColor
@@ -2080,6 +2134,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                 <ProcessingImagePanel headerHost={processingHeaderHost}>
                   {roiCanvas}
                 </ProcessingImagePanel>
+                <ExposureLatticeMessage />
                 <ProcessingScanStatus kind={scanSubTab} />
               </WorkspaceView>
               <WorkspaceView workspace="scan" active={activeTopTab !== "processing"}>
