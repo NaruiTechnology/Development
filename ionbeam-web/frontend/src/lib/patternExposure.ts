@@ -56,6 +56,7 @@ export interface PatternExposureStep {
   material?: string;
   incrementUM?: number;
   removalRate?: number;
+  after?: "view" | "viewPause";
 }
 
 /** Stair cut: one nested exposure per enabled step, each with its own recipe (see stairRecipe.ts).
@@ -76,7 +77,8 @@ export function stairExposureSteps(shape: PatternRoi, parameters: PatternParamet
     out.push({ shape: box, depthBand: strip, parameters: stairStepParameters(parameters, recipe, i),
       caption: `Step ${i + 1} / ${strips.length}`, requestedDepthUM: recipe[i].depth,
       material: recipe[i].material || undefined, incrementUM: stairIncrementUM(recipe, i),
-      removalRate: recipe[i].removalRate > 0 ? recipe[i].removalRate : undefined });
+      removalRate: recipe[i].removalRate > 0 ? recipe[i].removalRate : undefined,
+      after: recipe[i].after === "none" ? undefined : recipe[i].after });
   });
   return out;
 }

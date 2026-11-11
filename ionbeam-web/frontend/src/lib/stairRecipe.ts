@@ -25,11 +25,15 @@ export interface StairStep {
   material: string;
   /** Calibrated removal rate Sr of this layer, um^3/nC. 0 = not calibrated. */
   removalRate: number;
+  /** What happens once this step is finished: nothing, a full-field View, or a View then wait for Resume. */
+  after: StairAfter;
 }
+export type StairAfter = "none" | "view" | "viewPause";
+export const STAIR_AFTER_VALUES: ReadonlyArray<StairAfter> = ["none", "view", "viewPause"];
 
 export type StairStepOverride = Partial<StairStep>;
 
-export const STAIR_STEP_FIELDS = ["enabled", "depth", "dwell", "overlap", "passes", "material", "removalRate"] as const;
+export const STAIR_STEP_FIELDS = ["enabled", "depth", "dwell", "overlap", "passes", "material", "removalRate", "after"] as const;
 export const MAX_STAIR_STEPS = 50;
 
 export function stairStepCount(params: PatternParameters): number {
@@ -47,6 +51,7 @@ export function defaultStairStep(params: PatternParameters, index: number): Stai
     passes: Math.max(1, Math.round(Number(params.passes ?? 1))),
     material: "",
     removalRate: 0,
+    after: "none",
   };
 }
 
@@ -70,6 +75,7 @@ export function stairStepsError(steps: ReadonlyArray<StairStep>): string | null 
     if (!(Number.isFinite(s.overlap) && s.overlap >= 0 && s.overlap < 100)) return `${where}: overlap must be 0 to below 100 %.`;
     if (!(Number.isInteger(s.passes) && s.passes >= 1 && s.passes <= 10000)) return `${where}: passes must be a whole number from 1 to 10000.`;
     if (!(Number.isFinite(s.removalRate) && s.removalRate >= 0)) return `${where}: removal rate must be 0 (not calibrated) or positive.`;
+    if (!STAIR_AFTER_VALUES.includes(s.after)) return `${where}: after must be one of ${STAIR_AFTER_VALUES.join(", ")}.`;
     if (i > 0 && s.depth < steps[i - 1].depth) return `${where}: depth ${s.depth} µm is shallower than step ${i} (${steps[i - 1].depth} µm); depths accumulate.`;
   }
   if (!steps.some(s => s.enabled)) return "Stair cut: enable at least one step.";
@@ -92,7 +98,7 @@ export function stairStepParameters(params: PatternParameters, steps: ReadonlyAr
 const HEADER_ALIASES: Record<string, keyof StairStep | "step"> = {
   step: "step", enabled: "enabled", enable: "enabled", depth: "depth", "depth_um": "depth", dwell: "dwell", "dwell_us": "dwell",
   overlap: "overlap", "overlap_pct": "overlap", passes: "passes", material: "material",
-  removalrate: "removalRate", "removal_rate": "removalRate", sr: "removalRate",
+  removalrate: "removalRate", "removal_rate": "removalRate", sr: "removalRate", after: "after",
 };
 
 function numberField(value: unknown, label: string, row: number): number {
@@ -112,6 +118,12 @@ function toOverride(raw: Record<string, unknown>, row: number): StairStepOverrid
     if (key === "step" || value === undefined || value === null || String(value).trim() === "") continue;
     if (key === "enabled") out.enabled = boolField(value);
     else if (key === "material") out.material = String(value).trim();
+    else if (key === "after") {
+      const v = String(value).trim().toLowerCase().replace(/[\s_+-]/g, "");
+      const found = STAIR_AFTER_VALUES.find(a => a.toLowerCase() === v);
+      if (!found) throw new Error(`Row ${row}: after "${String(value)}" must be one of ${STAIR_AFTER_VALUES.join(", ")}.`);
+      out.after = found;
+    }
     else if (key === "passes") {
       const n = numberField(value, key, row);
       if (!Number.isInteger(n)) throw new Error(`Row ${row}: passes "${String(value)}" must be a whole number.`);

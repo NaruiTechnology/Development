@@ -39,7 +39,7 @@ The service rejects live Zoom/ROI/gray-rule updates during lattice exposure. Lat
 
 ## Still open
 
-1. Pattern card workflow/material selectors still describe image-gray workflows and are not inputs to Run's exposure lattice.
+1. Pattern card workflow/material selectors describe image-gray workflows and are not inputs to Run's exposure lattice; they are now grouped under a Scan-only section.
 2. Actual milling depth still needs a calibrated material removal rate; the LENS table has no removal-rate data.
 3. `ionbeam-web/backend/src/mockHardware.ts` does not know `lattice`.
 4. Hardware validation of a multi-million-point stream (host-link pacing, `VECTOR_MAX_CHUNK_POINTS`, abort latency) has not been run.
@@ -194,4 +194,14 @@ Review finding: Stair cut had one parameter set for all steps, and only simulati
 - UI: a "Step recipe" table in the Stair cut card (empty cell = card value, shown as placeholder), with CSV/JSON Import, CSV Export (a template that round-trips) and Reset. Import columns: `step,enabled,depth,dwell,overlap,passes,material,removalRate`. Importing sets the card's Steps to the row count.
 - Tests: `frontend/tests/stairRecipe.test.mjs`.
 
-Still open for this feature: (1) pause or auto View between steps so the operator can image each depth (View exists but is manual); (2) a per-step beam current needs an instrument-current command; (3) Sr in the material catalogue (today typed per step); (4) hardware validation of production Stair cut; (5) the native client does not yet have the step table (native does not execute exposure).
+### Observing each depth: After step, Pause and Resume
+
+Each step has an **After step** setting: *Continue* (default), *View* (one full-field frame once the step has finished, using the existing View path and raster settings) or *View + pause* (the same frame, then the run waits). While paused the exposure phase is `paused`: the recipe stays locked, the instrument stays owned by the exposure (scans cannot start), Start becomes **Resume**, Stop ends the run as stopped, and the header View button can still take another frame. No pause is inserted after the last step. In Parallel mode the setting applies when a step's final pass completes. Import/export carries it as the `after` column (`none`, `view`, `viewPause`; spellings such as "View + pause" are accepted).
+
+### Image-guided workflows are Scan-only
+
+The Workflow / Material / "Use workflow" controls (Area removal, MaterialLinelCut, EvenLinelCut) select pixels from an acquired image by gray level and run on the Scan path. Exposure Start never reads them. They now sit in a collapsed "Image-guided removal (Scan only)" section of the pattern card, which opens by itself when a non-default workflow is selected, with a note that exposure uses the step recipe. Behaviour is unchanged; only the presentation was separated.
+
+Tests: `frontend/tests/stairPause.test.mjs` (pause after View, Resume, Stop while paused, no pause after the last step, straight-through default).
+
+Still open for this feature: (1) automatic image-based end-point decision after View (the operator decides today); (2) a per-step beam current needs an instrument-current command; (3) Sr in the material catalogue (today typed per step); (4) hardware validation of production Stair cut; (5) the native client does not yet have the step table (native does not execute exposure).

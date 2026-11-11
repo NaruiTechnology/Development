@@ -35,6 +35,7 @@ import { ProcessingWorkflowPanel } from "./ProcessingWorkflowPanel";
 import { unitLabel } from "./ROIEditor";
 
 import { ExposureControls } from "./ExposureControls";
+import { LoadingSpinner } from "./LoadingSpinner";
 
 const MATERIAL_WORKFLOW = "MaterialLinelCut";
 
@@ -56,6 +57,8 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
   const dispatch = useAppDispatch();
   const { t, tr } = useTr();
   const { status, error, entryErrors, specs, activeKey } = useAppSelector((s) => s.processing);
+  const exposurePhase = useAppSelector(s => s.exposure.phase);
+  const exposureActive = ["preparing", "running", "stopping"].includes(exposurePhase);
 
   useEffect(() => {
     if (visible && status === "idle") void dispatch(fetchProcessingPatterns());
@@ -68,9 +71,13 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
 
   return (
     <div hidden={!visible}>
-      <div className="card patterns-card">
+      <div className="card patterns-card" aria-busy={exposureActive}>
         <div className="card__header patterns-card__header">
-          <span className="card__title">{t("processing.patterns")}</span>
+          <span className="patterns-card__heading">
+            <span className="card__title">{t("processing.patterns")}</span>
+            {exposureActive && <LoadingSpinner inline size={18} className="patterns-card__spinner"
+              ariaLabel={t("processing.exposure.status.current")} />}
+          </span>
           <ExposureControls disabled={exposureDisabled} showView={false} />
         </div>
         <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
@@ -173,6 +180,9 @@ function PatternCard({ spec, instance, active, disabled, onExpansionChange }: {
         </button>
       </div>
       <div className="pattern-card__body" hidden={collapsed}>
+        <details className="pattern-image-guided" open={instance.workflowEnabled && instance.workflow !== "default"}>
+          <summary>{tr("processing.imageGuided.title", "Image-guided removal (Scan only)")}</summary>
+          <p className="pattern-image-guided__note">{tr("processing.imageGuided.note", "These gray-level workflow settings act on the Scan image path. Exposure Start uses the step recipe and ignores them.")}</p>
         <div className="pattern-workflow-controls">
           <label className="field">Workflow
             <select className="select" aria-label={`${caption}: Workflow`} value={instance.workflow} disabled={disabled}
@@ -206,6 +216,7 @@ function PatternCard({ spec, instance, active, disabled, onExpansionChange }: {
             <small>AvgGray × {materials.find(material => material.name === instance.material)?.caption ?? instance.material}</small>
           </div>
         )}
+        </details>
         <ProcessingWorkflowPanel patternKey={spec.key} />
         <div className="pattern-card__parameters">
         {spec.parameters.filter((p) => p.name !== "axis").map((p) => (

@@ -24,7 +24,7 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
         status: "upcoming", threshold: null, spot: p.plan.count, total: p.plan.count,
         exposure: { shape: step.shape, model: spec.model, plan: p.plan, dwellUS: Number(step.parameters.dwell),
           beamCurrentPA: p.beamCurrentPA, requestedDepthUM: step.requestedDepthUM, depthBand: step.depthBand,
-          material: step.material, incrementUM: step.incrementUM, removalRate: step.removalRate,
+          material: step.material, incrementUM: step.incrementUM, removalRate: step.removalRate, after: step.after,
           lineSpacingUM: simulation && spec.model === "CleaningLineModel" ? Number(instance.parameters.spacing) : undefined, simulation },
       }, request: {
         pattern: "lattice", lattice: p.lattice, points: null, continuous: false, pre_process: false,

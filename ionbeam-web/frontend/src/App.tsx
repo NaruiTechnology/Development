@@ -280,20 +280,14 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     imageUrl: string;
   } | null>(imageWorkspace, null);
   const captureScanImageRef = useWorkspaceRef<(() => CapturedScanImage | null) | null>(imageWorkspace, null);
-  // Each scan kind keeps its own pane layout: splitting the vector view must not
-  // open empty panes on the raster view (and vice versa). Once any view has
-  // been split, the other one splits itself after its first completed scan.
-  const [imagePanelLayoutByKind, setImagePanelLayoutByKind] = useWorkspaceState<
-    Record<"raster" | "vector", ImagePanelLayout>
-  >(imageWorkspace, { raster: 1, vector: 1 });
-  const imagePanelLayout: ImagePanelLayout =
-    kind === "raster" || kind === "vector" ? imagePanelLayoutByKind[kind] : 1;
-  const imagePanelSplitActive =
-    imagePanelLayoutByKind.raster > 1 || imagePanelLayoutByKind.vector > 1;
+  // Raster and Vector share one pane layout so the Scan workspace behaves the
+  // same after switching acquisition modes. Each mode retains its own images.
+  const [imagePanelLayout, setImagePanelLayout] = useWorkspaceState<ImagePanelLayout>(imageWorkspace, 1);
+  const imagePanelSplitActive = imagePanelLayout > 1;
   const [imagePanelLocked, setImagePanelLocked] = useWorkspaceState(imageWorkspace, true);
   const [singlePaneImages, setSinglePaneImages] = useWorkspaceState<Record<"raster" | "vector", string | null>>(imageWorkspace, { raster: null, vector: null });
   const savedSplitRef = useWorkspaceRef<{
-    layouts: Record<"raster" | "vector", ImagePanelLayout>;
+    layout: ImagePanelLayout;
     selected: Record<"raster" | "vector", number>;
     targets: Record<"raster" | "vector", number>;
     completed: Record<"raster" | "vector", number>;
@@ -1069,7 +1063,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
             [scanKind]: [imageUrl, ...earlier.filter((item) => item !== imageUrl)].slice(0, 4),
           };
         });
-        const scanKindLayout = imagePanelLayoutByKind[scanKind];
+        const scanKindLayout = imagePanelLayout;
         if (scanKindLayout > 1 && sameScan) {
           // Address the scan by pane identity, never by identical PNG pixels.
           const recordedPane = completedImagePaneRef.current[scanKind];
@@ -1079,15 +1073,6 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
               ? current[scanKind]
               : replaceCompletedScanPane(current[scanKind], recordedPane, imageUrl),
           }));
-        } else if (scanKindLayout === 1 && imagePanelSplitActive) {
-          // Split mode is on (another view was split) but this view has not
-          // been split yet: its first completed scan fills pane 1 and opens
-          // pane 2 as the empty target for the next scan.
-          completedImagePaneRef.current[scanKind] = 0;
-          setImagePanelSlots((current) => ({ ...current, [scanKind]: [imageUrl, null] }));
-          setImagePanelLayoutByKind((current) => ({ ...current, [scanKind]: 2 }));
-          setSelectedImagePane((current) => ({ ...current, [scanKind]: 1 }));
-          setScanTargetImagePane((current) => ({ ...current, [scanKind]: 1 }));
         } else if (scanKindLayout > 1) {
           // After the split, each completed scan opens the next empty pane
           // automatically unless the operator locked the current layout.
@@ -1105,7 +1090,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
             ...current,
             [scanKind]: placement.slots,
           }));
-          setImagePanelLayoutByKind((current) => ({ ...current, [scanKind]: placement.layout }));
+          setImagePanelLayout(placement.layout);
           setSelectedImagePane((current) => ({
             ...current,
             [scanKind]: placement.selectedPane,
@@ -1127,10 +1112,10 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     [
       dispatch,
       kind,
-      imagePanelLayoutByKind,
+      imagePanelLayout,
+      setImagePanelLayout,
       imagePanelLocked,
       imagePanelSlots,
-      imagePanelSplitActive,
       scanTargetImagePane,
       selectedImagePane,
       t,
@@ -1159,7 +1144,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     setImagePanelLocked(true);
     const saved = savedSplitRef.current;
     if (saved) {
-      setImagePanelLayoutByKind(saved.layouts);
+      setImagePanelLayout(saved.layout);
       setSelectedImagePane(saved.selected);
       setScanTargetImagePane(saved.targets);
       completedImagePaneRef.current = saved.completed;
@@ -1191,10 +1176,10 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     // Preserve an existing image when available; otherwise open two empty panes.
     const targetPane = imageUrl === null ? 0 : 1;
     setImagePanelSlots((current) => ({ ...current, [kind]: [imageUrl, null] }));
-    setImagePanelLayoutByKind((current) => ({ ...current, [kind]: 2 }));
+    setImagePanelLayout(2);
     setSelectedImagePane((current) => ({ ...current, [kind]: targetPane }));
     setScanTargetImagePane((current) => ({ ...current, [kind]: targetPane }));
-  }, [canSplitImagePanel, currentTargetImage, kind, scanActive, imageWorkspace]);
+  }, [canSplitImagePanel, currentTargetImage, kind, scanActive, imageWorkspace, setImagePanelLayout]);
 
   const handleMergedFigureChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
@@ -1252,7 +1237,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
       // never sends the operator to the ROI view to see what they just chose.
       setSinglePaneImages((current) => ({ ...current, [scanKind]: imageUrl }));
       setLastLiveScanImage((current) => current?.kind === scanKind ? null : current);
-      if (imagePanelLayoutByKind[scanKind] > 1) {
+      if (imagePanelLayout > 1) {
         setImagePanelSlots((current) => {
           const slots = [...current[scanKind]];
           slots[pane] = imageUrl;
@@ -1261,7 +1246,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
         setScanTargetImagePane((current) => ({ ...current, [scanKind]: pane }));
       }
     },
-    [imagePanelLayoutByKind, kind, selectedImagePane, activeTopTab, imageWorkspace],
+    [imagePanelLayout, kind, selectedImagePane, activeTopTab, imageWorkspace],
   );
 
   useEffect(() => {
@@ -1498,7 +1483,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     setImagePanelLocked(locked);
     if (locked) return;
     savedSplitRef.current = {
-      layouts: imagePanelLayoutByKind,
+      layout: imagePanelLayout,
       selected: selectedImagePane,
       targets: scanTargetImagePane,
       completed: { ...completedImagePaneRef.current },
@@ -1506,7 +1491,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     // Keep the live scan pane as the single-pane source. The selected pane
     // may be an archived image, which has no live scan target for controls.
     setSinglePaneImages({ raster: null, vector: null });
-    setImagePanelLayoutByKind({ raster: 1, vector: 1 });
+    setImagePanelLayout(1);
     setSelectedImagePane({ raster: 0, vector: 0 });
     setScanTargetImagePane({ raster: 0, vector: 0 });
   }
@@ -1515,7 +1500,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   // remains available while the operator visits another tab or route.
   function closeImagePanelSplit() {
     if (imagePanelLocked || savedSplitRef.current) return;
-    setImagePanelLayoutByKind({ raster: 1, vector: 1 });
+    setImagePanelLayout(1);
     completedImagePaneRef.current = { raster: 0, vector: 0 };
     setImagePanelSlots({ raster: [], vector: [] });
     setSelectedImagePane({ raster: 0, vector: 0 });

@@ -127,6 +127,11 @@ test("Stair cut card renders a per-step table and edits only the chosen step", a
     store.dispatch(processing.selectPattern("stairs"));
     await act(async () => { renderer = create(React.createElement(Provider, { store }, React.createElement(ProcessingPatternCards, { disabled: false }))); });
     assert.equal(renderer.root.findAll(n => n.type === "tr" && n.props["data-step"]).length, 5);
+    const guided = renderer.root.findByProps({ className: "pattern-image-guided" });
+    assert.match(guided.findByType("summary").children.join(""), /Scan only/, "gray workflows are labelled as Scan-only");
+    assert.ok(guided.findAllByProps({ "aria-label": "Stair cut: Workflow" }).length > 0, "workflow selector lives inside the Scan-only section");
+    assert.equal(guided.props.open, false, "closed while the default workflow is selected");
+    assert.equal(renderer.root.findAllByProps({ "aria-label": "Stair cut Step 2: After step" }).length > 0, true);
     const dwell3 = () => renderer.root.findByProps({ "aria-label": "Stair cut Step 3: Dwell (µs)" });
     await act(async () => { dwell3().props.onChange({ target: { value: "4" } }); });
     assert.deepEqual(store.getState().processing.instances.stairs.stairSteps[2], { dwell: 4 });
@@ -138,4 +143,16 @@ test("Stair cut card renders a per-step table and edits only the chosen step", a
     await vite.close();
     Object.assign(globalThis, old);
   }
+});
+
+test("'after' defaults to none, imports with friendly spellings, validates, and reaches the sequence", () => {
+  assert.ok(resolveStairSteps(params).every(s => s.after === "none"));
+  const o = parseStairStepsImport("depth,after\n1,view\n2,View + pause\n3,view_pause\n4,none");
+  assert.deepEqual(o.map(r => r.after), ["view", "viewPause", "viewPause", "none"]);
+  assert.throws(() => parseStairStepsImport("depth,after\n1,sometimes"), /Row 1.*after/);
+  assert.match(stairStepsError(resolveStairSteps(params, [{ after: "bogus" }])), /step 1.*after/);
+  const entries = prepareExposureSequence(state({ stairSteps: [{ after: "view" }, { after: "viewPause" }] }), field, false);
+  assert.deepEqual(entries.map(e => e.node.exposure.after), ["view", "viewPause", undefined, undefined, undefined]);
+  const back = resolveStairSteps(params, parseStairStepsImport(stairStepsToCsv(resolveStairSteps(params, [{ after: "viewPause" }]))));
+  assert.equal(back[0].after, "viewPause");
 });

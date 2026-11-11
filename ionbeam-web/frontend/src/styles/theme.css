@@ -8246,6 +8246,8 @@ body {
 
 .patterns-card { overflow-x: auto; }
 .patterns-card__header { flex-wrap: wrap; justify-content: space-between; }
+.patterns-card__heading { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.patterns-card__spinner { color: var(--c-accent); }
 .patterns-card__header .patterns-exposure { flex: 1 0 100%; min-width: 0; }
 .patterns-exposure__controls .btn { min-width: 76px; }
 .patterns-card__header .btn .icon { width: 1em; height: 1em; }
@@ -8268,3 +8270,8 @@ body {
 .stair-steps__input[data-invalid] { border-color: var(--c-danger, #c0392b); }
 .stair-steps__message { margin: 8px 0 0; color: var(--c-danger, #c0392b); font-size: 0.75rem; }
 .stair-steps__actions { display: flex; gap: 8px; margin-top: 8px; }
+.stair-steps__after { min-width: 6.5rem; }
+.scan-inline-note { margin: 6px 0 0; color: var(--c-text-muted); font-size: 0.75rem; }
+.pattern-image-guided { margin: 0 0 12px; border: 1px solid var(--c-border); border-radius: var(--r-md); padding: 6px 10px; }
+.pattern-image-guided > summary { cursor: pointer; color: var(--c-text-muted); font-size: 0.75rem; }
+.pattern-image-guided__note { margin: 6px 0; color: var(--c-text-muted); font-size: 0.75rem; }

@@ -7,7 +7,7 @@ import { Icon } from "./Icon";
 
 export function ExposureControls({disabled = false, showView = true}: {disabled?: boolean; showView?: boolean}) {
   const {t} = useTranslation(), dispatch = useAppDispatch();
-  const {state, start, stop, view} = useExposureRun();
+  const {state, start, stop, view, resume} = useExposureRun();
   const defaultsReady = useAppSelector(s => Boolean(s.status.defaults));
   const patterns = useAppSelector(s => s.processing);
   const scanBusy = useAppSelector(s => ["running", "stopping"].includes(s.scan.phase) || s.scan.streamRestarting || s.scan.infiniteActive || s.scan.roiTargetGrayRun.status === "running");
@@ -30,10 +30,14 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
             title={t("processing.exposure.viewHelp")} onClick={view}><Icon name="eye" />{t("processing.exposure.view")}</button>}
           <button type="button" className="btn btn--stop" disabled={!busy || state.phase === "stopping"}
             onClick={() => void stop()}><Icon name="hand" />{t("scan.stop")}</button>
-          <button type="button" className="btn btn--primary" disabled={startDisabled}
-            title={serialRequired ? t("processing.exposure.serialRequired") : t("processing.exposure.startHelp")}
-            onClick={() => void start()}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>
+          {state.phase === "paused"
+            ? <button type="button" className="btn btn--primary" disabled={viewBusy} title={t("processing.exposure.resumeHelp")}
+                onClick={resume}><Icon name="play" tone="success" />{t("processing.exposure.resume")}</button>
+            : <button type="button" className="btn btn--primary" disabled={startDisabled}
+                title={serialRequired ? t("processing.exposure.serialRequired") : t("processing.exposure.startHelp")}
+                onClick={() => void start()}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>}
         </div>
+        {state.phase === "paused" && <p className="scan-inline-note" role="status">{t("processing.exposure.paused").replace("{step}", state.progress.find(n => n.id === state.pausedAfterId)?.caption ?? "")}</p>}
         {serialRequired && <p className="scan-inline-error">{t("processing.exposure.serialRequired")}</p>}
   </div>;
 }

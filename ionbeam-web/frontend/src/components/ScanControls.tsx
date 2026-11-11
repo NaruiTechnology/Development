@@ -258,7 +258,7 @@ export function ScanControls({
   const dispatch = useAppDispatch();
   const workspace = useAppWorkspace();
   const otherWorkspaceActive = useOtherWorkspaceBusy();
-  const exposureActive = useAppSelector(s => ["preparing", "running", "stopping"].includes(s.exposure.phase));
+  const exposureActive = useAppSelector(s => ["preparing", "running", "paused", "stopping"].includes(s.exposure.phase));
   const { t } = useTranslation();
   const phase = useAppSelector((s) => s.scan.phase);
   const streamRestarting = useAppSelector((s) => s.scan.streamRestarting);

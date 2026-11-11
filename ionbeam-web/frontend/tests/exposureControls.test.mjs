@@ -66,6 +66,9 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     assert.equal(start().props.disabled,false);
     await act(async()=>{start().props.onClick();start().props.onClick();}); await settle();
     assert.equal(sockets.length,1,"double-click starts only one exposure");
+    const patternsCard=()=>renderer.root.findByProps({className:"card patterns-card"});
+    assert.equal(patternsCard().props["aria-busy"],true);
+    assert.equal(patternsCard().findByProps({className:"loading-spinner loading-spinner--inline patterns-card__spinner"}).props.role,"status");
     assert.equal(start().props.disabled,true);assert.equal(stop().props.disabled,false);
     assert.equal(toggle().props.disabled,true);
     assert.equal(claimWorkspaceRun("scan"),null,"regular scan cannot enter during exposure");
@@ -84,6 +87,7 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     }
     await act(async()=>renderer.update(layout(true)));
     assert.equal(sockets.length,5);assert.equal(store.getState().exposure.phase,"completed");
+    assert.equal(patternsCard().props["aria-busy"],false);
     assert.equal(store.getState().exposure.progress.length,5);
     assert.ok(store.getState().exposure.progress.every(n=>n.status==="completed"));
     assert.equal(store.getState().scan,beforeScan,"exposure never modifies scan phase, parameters or counters");

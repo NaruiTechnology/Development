@@ -4,7 +4,7 @@ import { setStairStepField, setStairSteps, type PatternInstance } from "../store
 import { useTranslation, type TranslationKey } from "../i18n";
 import {
   defaultStairStep, parseStairStepsImport, resolveStairSteps, stairStepsError, stairStepsToCsv,
-  type StairStep, type StairStepOverride,
+  STAIR_AFTER_VALUES, type StairAfter, type StairStep, type StairStepOverride,
 } from "../lib/stairRecipe";
 
 type NumericField = "depth" | "dwell" | "overlap" | "passes" | "removalRate";
@@ -61,6 +61,7 @@ export function StairStepsTable({ patternKey, caption, instance, disabled }: {
             <th>{tr("processing.stair.material", "Material")}</th><th>{tr("processing.stair.sr", "Sr (µm³/nC)")}</th>
             <th>{tr("processing.stair.dwell", "Dwell (µs)")}</th><th>{tr("processing.stair.overlap", "Overlap (%)")}</th>
             <th>{tr("processing.stair.passes", "Passes")}</th>
+            <th>{tr("processing.stair.after", "After step")}</th>
           </tr></thead>
           <tbody>
             {resolved.map((step, i) => (
@@ -77,6 +78,12 @@ export function StairStepsTable({ patternKey, caption, instance, disabled }: {
                 <td>{num(i, "dwell", tr("processing.stair.dwell", "Dwell (µs)"))}</td>
                 <td>{num(i, "overlap", tr("processing.stair.overlap", "Overlap (%)"))}</td>
                 <td>{num(i, "passes", tr("processing.stair.passes", "Passes"), true)}</td>
+                <td><select className="select stair-steps__after" value={step.after} disabled={disabled}
+                  aria-label={`${caption} ${tr("processing.stair.step", "Step")} ${i + 1}: ${tr("processing.stair.after", "After step")}`}
+                  title={tr("processing.stair.afterHelp", "View takes one full-field frame after the step. View + pause then waits for Resume. Nothing is paused after the last step.")}
+                  onChange={e => set(i, "after", e.target.value === "none" ? undefined : (e.target.value as StairAfter))}>
+                  {STAIR_AFTER_VALUES.map(v => <option key={v} value={v}>{tr(`processing.stair.after.${v}`, v === "none" ? "Continue" : v === "view" ? "View" : "View + pause")}</option>)}
+                </select></td>
               </tr>
             ))}
           </tbody>

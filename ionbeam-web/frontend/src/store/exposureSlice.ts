@@ -2,8 +2,9 @@ import { createSelector, createSlice, type PayloadAction } from "@reduxjs/toolki
 import type { WorkflowProgress } from "../lib/processingWorkflows";
 import { clearPatternRoi, type ProcessingState } from "./processingSlice";
 
-export type ExposurePhase = "idle" | "preparing" | "running" | "stopping" | "completed" | "stopped" | "error";
-export const exposureBusy = (phase: ExposurePhase) => ["preparing", "running", "stopping"].includes(phase);
+export type ExposurePhase = "idle" | "preparing" | "running" | "paused" | "stopping" | "completed" | "stopped" | "error";
+/** "paused" still owns the beam session and keeps the recipe locked. */
+export const exposureBusy = (phase: ExposurePhase) => ["preparing", "running", "paused", "stopping"].includes(phase);
 export type ExposureViewPhase = "idle" | "queued" | "scanning" | "completed" | "stopped" | "error";
 export interface ExposureState {
   parallel: boolean;
@@ -12,11 +13,13 @@ export interface ExposureState {
   retainedPreview: WorkflowProgress[];
   activeStepIds: string[];
   error: string | null;
+  /** Id of the step after which the run is waiting for Resume. */
+  pausedAfterId: string | null;
   viewPhase: ExposureViewPhase;
   viewError: string | null;
 }
 const initialState: ExposureState = {
-  parallel: false, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null,
+  parallel: false, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
   viewPhase: "idle", viewError: null,
 };
 
@@ -29,7 +32,7 @@ export const selectExposurePreview = createSelector(
 const slice = createSlice({ name: "exposure", initialState, reducers: {
   setExposureParallel(s, a: PayloadAction<boolean>) { if (!exposureBusy(s.phase)) s.parallel = a.payload; },
   exposurePreparing(s) {
-    s.phase = "preparing"; s.error = null; s.activeStepIds = [];
+    s.phase = "preparing"; s.error = null; s.activeStepIds = []; s.pausedAfterId = null;
     s.viewPhase = "idle"; s.viewError = null;
   },
   exposureViewChanged(s, a: PayloadAction<{phase: ExposureViewPhase; error?: string}>) {
@@ -63,7 +66,9 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
       s.activeStepIds = s.activeStepIds.filter(id => id !== a.payload.id);
     },
   },
-  exposureStopping(s) { s.phase = "stopping"; },
+  exposurePaused(s, a: PayloadAction<string>) { if (s.phase === "running") { s.phase = "paused"; s.pausedAfterId = a.payload; } },
+  exposureResumed(s) { if (s.phase === "paused") { s.phase = "running"; s.pausedAfterId = null; } },
+  exposureStopping(s) { s.phase = "stopping"; s.pausedAfterId = null; },
   exposureFinished: {
     prepare(result: {phase: "completed" | "stopped" | "error"; error?: string}) {
       return {payload: {...result, at: Date.now()}};
@@ -75,7 +80,7 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
         n.status = a.payload.phase === "completed" ? "completed" : a.payload.phase;
         n.finishedAt ??= a.payload.at;
       }
-      s.activeStepIds = [];
+      s.activeStepIds = []; s.pausedAfterId = null;
     },
   },
 }, extraReducers: builder => {
@@ -95,5 +100,5 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
   });
 } });
 export const { setExposureParallel, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
-  exposureStepCompleted, exposureStopping, exposureFinished, exposureViewChanged } = slice.actions;
+  exposureStepCompleted, exposureStopping, exposureFinished, exposureViewChanged, exposurePaused, exposureResumed } = slice.actions;
 export default slice.reducer;

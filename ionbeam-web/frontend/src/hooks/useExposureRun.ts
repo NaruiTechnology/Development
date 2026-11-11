@@ -6,7 +6,7 @@ import { apiUrl, wsUrl } from "../lib/backendUrl";
 import { scanAuthHeaders, withScanAuthQuery } from "../lib/authIdentity";
 import { prepareExposureSequence, exposureRounds, exposureSegments } from "../lib/exposureSequence";
 import { exposurePreparing, exposurePrepared, exposureStepStarted, exposureStepCompleted,
-  exposureSamplesReceived, exposureStopping, exposureFinished, exposureViewChanged } from "../store/exposureSlice";
+  exposureSamplesReceived, exposureStopping, exposureFinished, exposureViewChanged, exposurePaused, exposureResumed } from "../store/exposureSlice";
 import type { RasterRequest, VectorRequest } from "../types/api";
 import { decodeScanSamples } from "../lib/scanSamples";
 import { rasterRequestWithBitmapSelection } from "../lib/bitmapVector";
@@ -24,6 +24,21 @@ export function useExposureRun() {
   const pendingStop = useRef<Promise<void> | null>(null), stopError = useRef<string | null>(null);
 
   const viewPending = useRef(false);
+  const resumeWaiter = useRef<(() => void) | null>(null);
+
+  /** Hold the beam session between steps until Resume (or Stop) is pressed. */
+  function waitForResume(stepId: string): Promise<void> {
+    return new Promise(resolve => {
+      if (cancelled.current) { resolve(); return; }
+      resumeWaiter.current = () => { resumeWaiter.current = null; resolve(); };
+      dispatch(exposurePaused(stepId));
+    });
+  }
+  function resume() {
+    if (store.getState().exposure.phase !== "paused") return;
+    dispatch(exposureResumed());
+    resumeWaiter.current?.();
+  }
 
   function runRequest(request: VectorRequest | RasterRequest, viewFrame?: {pixels: Uint16Array; cursor: number}, exposureStepId?: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -103,6 +118,13 @@ export function useExposureRun() {
     const current = store.getState().exposure;
     if ((cancelled.current && running.current) || viewPending.current || current.viewPhase === "scanning") return;
     if (running.current) {
+      if (current.phase === "paused") {
+        // The loop is waiting for Resume, so the beam is free for one frame.
+        viewPending.current = true;
+        dispatch(exposureViewChanged({phase: "queued"}));
+        await runQueuedView();
+        return;
+      }
       if (current.phase !== "running") return;
       viewPending.current = true;
       dispatch(exposureViewChanged({phase: "queued"}));
@@ -187,7 +209,11 @@ export function useExposureRun() {
       if (snapshot.exposure.parallel && entries.some(e => e.node.exposure?.model === "CleaningLineModel"))
         throw new Error("Cleaning lines require serial exposure (Parallel off).");
       dispatch(exposurePrepared(entries.map(e => e.node)));
-      for (const round of exposureRounds(entries, snapshot.exposure.parallel)) {
+      const rounds = exposureRounds(entries, snapshot.exposure.parallel);
+      let upcoming = rounds.next();
+      while (!upcoming.done) {
+        const round = upcoming.value;
+        upcoming = rounds.next();
         if (cancelled.current) break;
         const queues = round.map(run => {
           const lattice = {...run.request.lattice!, passes: 1};
@@ -211,9 +237,16 @@ export function useExposureRun() {
           }
         }
         if (cancelled.current) break;
-        for (const {run} of queues) if (run.final) dispatch(exposureStepCompleted(run.entry.node.id));
+        const finished = queues.filter(({run}) => run.final).map(({run}) => run.entry.node);
+        for (const node of finished) dispatch(exposureStepCompleted(node.id));
+        // Per-step "after" actions (Stair cut recipe): View, or View then wait for Resume.
+        const wantsView = finished.some(n => n.exposure?.after === "view" || n.exposure?.after === "viewPause");
+        if (wantsView && !viewPending.current) { viewPending.current = true; dispatch(exposureViewChanged({phase: "queued"})); }
         // A requested raster can use the instrument only between rounds.
         await runQueuedView();
+        const pauseNode = finished.find(n => n.exposure?.after === "viewPause");
+        // Nothing left to expose: pausing after the last step would only delay completion.
+        if (pauseNode && !upcoming.done && !cancelled.current) await waitForResume(pauseNode.id);
       }
     } catch (e) { if (!cancelled.current) failure = e instanceof Error ? e.message : String(e); }
     finally {
@@ -228,7 +261,8 @@ export function useExposureRun() {
     if (!running.current) return Promise.resolve();
     if (pendingStop.current) return pendingStop.current;
     cancelled.current = true; viewPending.current = false; auth.current?.abort();
-    if (["preparing", "running", "stopping"].includes(store.getState().exposure.phase)) dispatch(exposureStopping());
+    resumeWaiter.current?.();
+    if (["preparing", "running", "paused", "stopping"].includes(store.getState().exposure.phase)) dispatch(exposureStopping());
     const ws = socket.current;
     pendingStop.current = (async () => {
       try {
@@ -244,5 +278,5 @@ export function useExposureRun() {
   }
   const stopRef = useRef(stop); stopRef.current = stop;
   useEffect(() => () => { void stopRef.current(); }, []);
-  return {state, start, stop, view};
+  return {state, start, stop, view, resume};
 }
