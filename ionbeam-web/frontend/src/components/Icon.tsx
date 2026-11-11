@@ -43,6 +43,7 @@ type IconName =
   | "quad"
   | "refresh"
   | "rectangleTool"
+  | "roi"
   | "route"
   | "ruler"
   | "scan"
@@ -75,7 +76,7 @@ export function Icon({
   const className = `${tone ? `icon icon--${tone}` : "icon"} icon--${name}`;
   if (imageSource) {
     const intrinsicClass =
-      name === "target"
+      name === "target" || name === "roi"
         ? " icon--intrinsic icon--intrinsic-roi"
         : name === "grid" ||
           name === "route" ||
@@ -108,6 +109,7 @@ const imageSources: Partial<Record<IconName, string>> = {
   calibrate: calibrateIcon,
   ruler: rulerIcon,
   magCal: magCalIcon,
+  roi: roiIcon,
   adcTest: adcTestIcon,
   dashboard: dashboardIcon,
   target: roiIcon,

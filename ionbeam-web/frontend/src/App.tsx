@@ -132,7 +132,6 @@ type AppRoute = "control" | "report" | "vacuum";
 type LeftTopTab = "scan" | "processing" | "calibrate";
 type ScanSubTab = "raster" | "vector";
 type CalibrateSubTab = "dimension" | "mag";
-type ProcessingSubTab = "control" | "patterns";
 
 function CollapsibleScanParameters({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(true);
@@ -197,8 +196,6 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   const [adcTestCollapsed, setAdcTestCollapsed] = useWorkspaceState(imageWorkspace, true);
   // Controls card (nested in the scan panel card) starts expanded.
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
-  const [processingControlsCollapsed, setProcessingControlsCollapsed] = useState(false);
-  const [processingSubTab, setProcessingSubTab] = useState<ProcessingSubTab>("control");
   const [processingEntryRequest, setProcessingEntryRequest] = useState(0);
   const [processingImageError, setProcessingImageError] = useState<string | null>(null);
 
@@ -352,7 +349,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     return Number.isFinite(parsed) ? parsed : DEFAULT_RIGHT_PANEL_WIDTH;
   });
   const [patternsMinimumWidth, setPatternsMinimumWidth] = useState(MIN_LEFT_PANEL_WIDTH);
-  const patternsLayout = activeTopTab === "processing" && processingSubTab === "patterns";
+  const patternsLayout = activeTopTab === "processing";
   const minimumLeftPanelWidth = patternsLayout ? patternsMinimumWidth : MIN_LEFT_PANEL_WIDTH;
   const [isResizing, setIsResizing] = useState(false);
   const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(() => {
@@ -1514,7 +1511,6 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   // Processing: pattern ROIs are drawn on the ROI canvas, so it runs on the "roi" kind like the dimension view.
   function activateProcessingTopTab() {
     setActiveTopTab("processing");
-    setProcessingControlsCollapsed(false);
     setProcessingEntryRequest((value) => value + 1);
   }
 
@@ -1744,18 +1740,21 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                 </button>
                 <ScanModeHelp />
               </div>
-              <button
-                role="tab"
-                className="tab tab--top"
-                aria-selected={activeTopTab === "processing"}
-                title={t("tabs.processing")}
-                aria-label={t("tabs.processing")}
-                disabled={scanControlsSafetyDisabled}
-                onClick={activateProcessingTopTab}
-              >
-                <Icon name="target" tone="tab" />
-                {t("tabs.processing.short")}
-              </button>
+              <div className="tab-group tab-group--scan">
+                <button
+                  role="tab"
+                  className="tab tab--top"
+                  aria-selected={activeTopTab === "processing"}
+                  title={t("processing.patterns")}
+                  aria-label={t("processing.patterns")}
+                  disabled={scanControlsSafetyDisabled}
+                  onClick={activateProcessingTopTab}
+                >
+                  <Icon name="roi" tone="tab" />
+                  {t("processing.patterns")}
+                </button>
+                <span className="processing-patterns-tab-help"><ProcessingPatternsHelp /></span>
+              </div>
               <button
                 role="tab"
                 className="tab tab--top"
@@ -1823,32 +1822,11 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
               </div>
             ) : null}
             <div className="card__body">
-              {activeTopTab === "processing" && (
-                <div className="tabs tabs--sub" role="tablist" aria-label="Processing sections">
-                  <button type="button" role="tab" className="tab tab--sub" aria-selected={processingSubTab === "control"}
-                    onClick={() => setProcessingSubTab("control")}>{t("card.controls")}</button>
-                  <button type="button" role="tab" className="tab tab--sub" aria-selected={processingSubTab === "patterns"}
-                    onClick={() => setProcessingSubTab("patterns")}>{t("processing.patterns")}</button>
-                  <span className="processing-patterns-tab-help"><ProcessingPatternsHelp /></span>
-                </div>
-              )}
-              {activeTopTab === "processing" ? (
-                <>
-                  {processingSubTab === "control" && <>
-                  <SimulationImageCard
-                    defaultCollapsed
-                    disabled={panelDisabled}
-                    lastScanImageUrl={roiScanImageUrl}
-                    onLoadLastScan={handleLoadLastScan}
-                    onImageChange={handleSimulationImageChange}
-                  />
-                  {processingImageError && <p className="scan-inline-error" role="alert">{t("processing.imageError", { error: processingImageError })}</p>}
-                  </>}
-                </>
-              ) : activeTopTab === "scan" ? (
+              {activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
                   <>
                     <SimulationImageCard
+                      defaultCollapsed
                       disabled={panelDisabled}
                       lastScanImageUrl={roiScanImageUrl}
                       onLoadLastScan={handleLoadLastScan}
@@ -1865,6 +1843,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                 ) : (
                   <>
                     <SimulationImageCard
+                      defaultCollapsed
                       disabled={panelDisabled}
                       lastScanImageUrl={roiScanImageUrl}
                       onLoadLastScan={handleLoadLastScan}
@@ -1883,7 +1862,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                     </CollapsibleScanParameters>
                   </>
                 )
-              ) : (
+              ) : activeTopTab === "calibrate" ? (
                 calibrateSubTab === "mag" ? (
                   <MagCalibrationControls disabled={panelDisabled} />
                 ) : (
@@ -1910,33 +1889,43 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                     )}
                   </>
                 )
-              )}
+              ) : null}
+              {activeTopTab === "processing" && <>
+                <SimulationImageCard
+                  defaultCollapsed
+                  disabled={panelDisabled}
+                  lastScanImageUrl={roiScanImageUrl}
+                  onLoadLastScan={handleLoadLastScan}
+                  onImageChange={handleSimulationImageChange}
+                />
+                {processingImageError && <p className="scan-inline-error" role="alert">{t("processing.imageError", { error: processingImageError })}</p>}
+              </>}
               <WorkspaceProvider workspace="processing" active={activeTopTab === "processing"}>
                 <ProcessingPatternsPanel
-                  visible={activeTopTab === "processing" && processingSubTab === "patterns"}
+                  visible={activeTopTab === "processing"}
                   disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning}
                   exposureDisabled={scanControlsSafetyDisabled}
                 />
               </WorkspaceProvider>
               <div hidden={activeTopTab !== "scan" && activeTopTab !== "processing"}>
                 <>
-                  <div hidden={activeTopTab === "processing" && processingSubTab !== "control"}>
+                  <div hidden={activeTopTab !== "scan"}>
                   <div className={`card scan-controls-card${activeScanColor ? " scan-controls-card--active" : ""}`}>
                       <div className="card__header">
                         <span className="card__title">{t("card.controls")}</span>
                         <button
                           type="button"
                           className="card__collapse-btn"
-                          aria-expanded={!(activeTopTab === "processing" ? processingControlsCollapsed : controlsCollapsed)}
-                          aria-label={(activeTopTab === "processing" ? processingControlsCollapsed : controlsCollapsed) ? t("controls.expand") : t("controls.collapse")}
-                          title={(activeTopTab === "processing" ? processingControlsCollapsed : controlsCollapsed) ? t("controls.expand") : t("controls.collapse")}
-                          onClick={() => activeTopTab === "processing" ? setProcessingControlsCollapsed((value) => !value) : setControlsCollapsed((value) => !value)}
+                          aria-expanded={!controlsCollapsed}
+                          aria-label={controlsCollapsed ? t("controls.expand") : t("controls.collapse")}
+                          title={controlsCollapsed ? t("controls.expand") : t("controls.collapse")}
+                          onClick={() => setControlsCollapsed((value) => !value)}
                         >
                           <Icon name="chevronDown" />
                         </button>
                       </div>
                       {/* hidden, not unmounted: ScanControls owns the live scan stream */}
-                      <div className="card__body" hidden={activeTopTab === "processing" ? processingControlsCollapsed : controlsCollapsed}>
+                      <div className="card__body" hidden={controlsCollapsed}>
                         {(["scan", "processing"] as const).map(workspace => (
                           <div key={workspace} hidden={activeTopTab !== workspace}>
                         <WorkspaceScanControls
@@ -1968,7 +1957,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                       </div>
                     </div>
                     </div>
-                  {activeTopTab === "processing" && <div hidden={processingSubTab !== "patterns"}><ProcessingPatternCards disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} /></div>}
+                  {activeTopTab === "processing" && <ProcessingPatternCards disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} />}
                   {activeTopTab === "scan" && <div className="card save-results-card">
                     <div className="card__header">
                       <span className="card__title">{t("card.runReport")}</span>
