@@ -33,8 +33,9 @@ test("Exposure controls default to serial and leave scan state and pixels intact
   try {
     const {store}=await vite.ssrLoadModule("/src/store/index.ts");
     const {ProcessingPatternsPanel, ProcessingPatternCards}=await vite.ssrLoadModule("/src/components/ProcessingPatternsPanel.tsx");
-    const {ExposureLatticeMessage}=await vite.ssrLoadModule("/src/components/ExposureLatticeOverlay.tsx");
+    const {ExposureLatticeMessage,ExposureLatticeGeometry}=await vite.ssrLoadModule("/src/components/ExposureLatticeOverlay.tsx");
     const processing=await vite.ssrLoadModule("/src/store/processingSlice.ts");
+    const {selectExposurePreview}=await vite.ssrLoadModule("/src/store/exposureSlice.ts");
     const scan=await vite.ssrLoadModule("/src/store/scanSlice.ts");
     const image=await vite.ssrLoadModule("/src/store/imageSlice.ts");
     const {claimWorkspaceRun,otherWorkspaceBusy}=await vite.ssrLoadModule("/src/hooks/useScanWorkspace.ts");
@@ -49,7 +50,8 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     const beforeScan=store.getState().scan, beforeImage=store.getState().image;
     const layout = visible => React.createElement(Provider, {store},
       React.createElement(ProcessingPatternsPanel, {visible, disabled: false}),
-      React.createElement(ExposureLatticeMessage));
+      React.createElement(ExposureLatticeMessage),
+      React.createElement("svg",null,React.createElement(ExposureLatticeGeometry,{project:(x,y)=>({x:x*640,y:y*640})})));
     await act(async()=>{renderer=create(layout(true));});
     const header=renderer.root.findByProps({className:"card__header patterns-card__header"});
     assert.equal(header.findAllByType("button").length,2);
@@ -68,6 +70,9 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     assert.equal(toggle().props.disabled,true);
     assert.equal(claimWorkspaceRun("scan"),null,"regular scan cannot enter during exposure");
     assert.equal(otherWorkspaceBusy("processing"),true,"other workspace sees exposure ownership");
+    const spotCircles=()=>renderer.root.findAllByType("circle");
+    assert.ok(spotCircles().length>0,"the lattice is rendered on the canvas");
+    assert.ok(spotCircles().every(circle=>circle.props.fill==="none" && circle.props.stroke),"planned spots and the running marker are hollow circles");
     await act(async()=>renderer.update(layout(false)));
     assert.equal(renderer.root.findByProps({hidden:true}).props.hidden,true);
     assert.equal(aborts,0,"hiding Patterns leaves the running exposure connected");
@@ -83,6 +88,7 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     assert.ok(store.getState().exposure.progress.every(n=>n.status==="completed"));
     assert.equal(store.getState().scan,beforeScan,"exposure never modifies scan phase, parameters or counters");
     assert.equal(store.getState().image,beforeImage,"exposure never modifies acquired pixels");
+    assert.ok(spotCircles().every(circle=>circle.props.fill==="none"),"completed spots remain hollow");
     const savedTrace=structuredClone(store.getState().exposure.progress);
     await act(async()=>store.dispatch(scan.streamStarted()));
     await act(async()=>store.dispatch(image.resetVector()));
@@ -95,9 +101,23 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     assert.match(store.getState().exposure.error,/Session expired/);
     assert.deepEqual(store.getState().exposure.progress,savedTrace,"failed authentication preserves the last completed trace");
     assert.equal(sockets.length,5,"expired auth is rejected before opening a stream");
+    await act(async()=>{
+      store.dispatch(processing.setPatternParameter({key:"stairs",name:"overlap",value:40}));
+      store.dispatch(processing.setPatternRoi({key:"stairs",roi:{x_start:0.2,x_end:0.8,y_start:0.2,y_end:0.8}}));
+      store.dispatch(processing.setPatternEnabled({key:"stairs",enabled:false}));
+    });
+    assert.deepEqual(selectExposurePreview(store.getState()),savedTrace,"recipe edits and disabling a pattern preserve the executed lattice");
+    assert.equal(store.getState().exposure.progress.length,0,"edited recipes have fresh readouts");
+    assert.ok(spotCircles().length>0,"retained spots stay on the canvas");
+    await act(async()=>renderer.update(layout(false)));
+    await act(async()=>renderer.update(layout(true)));
+    assert.deepEqual(selectExposurePreview(store.getState()),savedTrace,"the retained preview survives tab changes");
+    await act(async()=>store.dispatch(processing.setPatternEnabled({key:"stairs",enabled:true})));
     account={ok:true,registered:true,user:{is_active:true,role:5}};
     // Stop remains exposure-owned and holds the instrument until the abort acknowledgement.
     await act(async()=>{start().props.onClick();}); await settle();
+    assert.equal(store.getState().exposure.retainedPreview.length,0,"a new prepared run replaces the retained preview");
+    assert.notDeepEqual(selectExposurePreview(store.getState()),savedTrace,"the new run uses the edited recipe");
     const pending=sockets.at(-1);
     await act(async()=>{pending.samples(4);stop().props.onClick();});await settle();
     assert.equal(aborts,1);assert.equal(store.getState().exposure.phase,"stopping");
@@ -105,6 +125,9 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     await act(async()=>{abortResolve();});await settle();
     assert.equal(store.getState().exposure.phase,"stopped");assert.equal(sockets.length,6,"Stop discards all future steps");
     assert.equal(store.getState().exposure.progress[0].exposure.receivedSamples,4);
+    const stoppedTrace=structuredClone(selectExposurePreview(store.getState()));
+    await act(async()=>store.dispatch(processing.setPatternParameter({key:"stairs",name:"overlap",value:50})));
+    assert.deepEqual(selectExposurePreview(store.getState()),stoppedTrace,"stopped exposure spots remain after editing");
     assert.equal(store.getState().scan,scanAfterTraceTest);assert.equal(store.getState().image,imageAfterTraceTest);
     const release=claimWorkspaceRun("scan");assert.ok(release);release();
     // Scan ownership disables the card and also guards direct invocation of Start.

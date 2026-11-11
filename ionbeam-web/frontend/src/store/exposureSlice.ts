@@ -7,15 +7,22 @@ export interface ExposureState {
   parallel: boolean;
   phase: ExposurePhase;
   progress: WorkflowProgress[];
+  retainedPreview: WorkflowProgress[];
   activeStepId: string | null;
   error: string | null;
 }
-const initialState: ExposureState = { parallel: false, phase: "idle", progress: [], activeStepId: null, error: null };
+const initialState: ExposureState = {
+  parallel: false, phase: "idle", progress: [], retainedPreview: [], activeStepId: null, error: null,
+};
+
+export function selectExposurePreview({ exposure }: { exposure: ExposureState }): WorkflowProgress[] {
+  return exposure.progress.length ? exposure.progress : exposure.retainedPreview;
+}
 const slice = createSlice({ name: "exposure", initialState, reducers: {
   setExposureParallel(s, a: PayloadAction<boolean>) { if (!exposureBusy(s.phase)) s.parallel = a.payload; },
   exposurePreparing(s) { s.phase = "preparing"; s.error = null; s.activeStepId = null; },
   exposurePrepared(s, a: PayloadAction<WorkflowProgress[]>) {
-    s.progress = a.payload; s.phase = "running"; s.activeStepId = null;
+    s.progress = a.payload; s.retainedPreview = []; s.phase = "running"; s.activeStepId = null;
   },
   exposureStepStarted: {
     prepare(id: string) { return { payload: { id, at: Date.now() } }; },
@@ -54,7 +61,12 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
   },
 }, extraReducers: builder => {
   builder.addMatcher(action => /^processing\/(setPatternParameter|setPatternRoi|clearPatternRoi|undoPatternRoi|setPatternEnabled)$/.test(action.type), s => {
-    if (!exposureBusy(s.phase)) { s.progress = []; s.activeStepId = null; }
+    if (!exposureBusy(s.phase) && s.progress.length) {
+      // Recipe edits invalidate its readouts. Keep the executed geometry in world coordinates.
+      s.retainedPreview = s.progress;
+      s.progress = [];
+      s.activeStepId = null;
+    }
   });
 } });
 export const { setExposureParallel, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,

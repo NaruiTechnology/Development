@@ -113,9 +113,11 @@ provide Scan / Stop / Infinite exclusively for image acquisition. Exposure does 
 scan resolution, dwell, scan path, Zoom, ROI-scan selection, Preview, or scan Parallel;
 it uses the saved pattern recipes and the field-to-DAC mapping. It never dispatches scan
 phase/counter/parameter capture or image-buffer actions. Overlays, bottom messages and
-pattern exposure readouts use `exposure.progress`; image workflows keep their own
-`processing.workflowProgress`. Editing pattern geometry/parameters clears a finished
-exposure preview; ordinary scanning does not rewrite the exposure recipe or results. A
+pattern exposure readouts use `exposure.progress`. Image workflows keep their own
+`processing.workflowProgress`. The canvas draws hollow circles for planned and traced
+spots. A finished preview stays in world coordinates when the recipe is edited or
+the image changes. Editing the recipe clears its exposure readouts while preserving
+the canvas preview. A
 new run keeps the prior preview visible while authentication and planning are in progress,
 replacing it only when the new step queue is ready. Authentication failures therefore do
 not erase the last trace. Expired sessions and insufficient exposure permissions have
