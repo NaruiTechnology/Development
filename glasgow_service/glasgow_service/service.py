@@ -2809,6 +2809,7 @@ class DeviceService:
             continuous=continuous,
             points_factory=points_factory if continuous else None,
             max_passes=session_passes,
+            require_sender_completion=req.pattern is VectorPattern.lattice,
         )
         cmd.link_dwell = req.lattice.dwell if req.pattern is VectorPattern.lattice else params.dwell
         cmd.pass_pixels = pass_pixels

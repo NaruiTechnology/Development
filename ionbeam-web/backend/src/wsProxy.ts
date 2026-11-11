@@ -34,6 +34,7 @@ import { recordActivityInDb } from "./adminDbRepository";
 import type { AdminUser } from "./adminDbRepository";
 import { recordInputSetupInDb, recordOutputDataInDb } from "./operationDataRepository";
 import { uploadScanArtifactsToConfiguredFtp } from "./ftpUpload";
+import { handleExposureSession } from "./exposureSession";
 
 type ScanKind = "raster" | "vector";
 // "dac_ramp" is deliberately NOT part of ScanKind: it's a hardware
@@ -76,7 +77,8 @@ export function attachWsProxy(
     }
     const url = new URL(req.url, "http://localhost");
     const kind = STREAM_PATHS[url.pathname];
-    if (!kind) {
+    const exposureSession = url.pathname === "/ws/exposure/session" && !config.mock;
+    if (!kind && !exposureSession) {
       // Unknown WS endpoint — let the HTTP server reject it.
       socket.destroy();
       return;
@@ -84,6 +86,7 @@ export function attachWsProxy(
 
     void (async () => {
       const auth = authorize ? await authorize(req) : { ok: true as const };
+      if (socket.destroyed) return;
       if (!auth.ok) {
         const statusText = auth.status === 403 ? "Forbidden" : "Scan authorization failed";
         socket.write(
@@ -98,13 +101,16 @@ export function attachWsProxy(
       }
 
       wss.handleUpgrade(req, socket, head, (clientWs) => {
-        if (config.mock) {
+        if (exposureSession) {
+          handleExposureSession(clientWs);
+        } else if (config.mock) {
           handleMock(clientWs, kind, req, auth);
         } else {
           handleProxy(clientWs, kind, req, auth);
         }
       });
     })().catch((err) => {
+      if (socket.destroyed) return;
       socket.write(
         "HTTP/1.1 500 Internal Server Error\r\n" +
           "Connection: close\r\n" +

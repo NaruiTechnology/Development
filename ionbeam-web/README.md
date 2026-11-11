@@ -104,6 +104,19 @@ cd ../backend && npm run build && npm start
 The Node server then serves `frontend/dist/` and proxies `/api` + `/ws` to
 the FastAPI process. Put it behind nginx/Caddy for TLS.
 
+The pattern timeline displays exposure step state and elapsed time from the
+Exposure Start run, with scan workflow progress as the fallback. Step details
+are available on the numbered markers. This UI is bundled into `frontend/dist/`
+by the existing frontend build and deployment copy; no deployment settings or
+database changes are required.
+
+Exposure reliability and failure semantics are documented in
+[exposure-reliability.md](docs/exposure-reliability.md). Updated web backends
+advertise `exposure_session_stream`: a single authenticated channel carries the
+run's lattice segments and View frames. Deploy the frontend, backend, Glasgow
+service, and vector macro together; the distribution builder validates the new
+runtime modules and regenerates the compiled Python and source handoff.
+
 The scan canvas includes a glass-style scale chip at the bottom-right. Its
 1/2/5 scale bar uses the full calibrated field of view, swaps X/Y calibration
 for a quarter-turn, and stays with captured images in previous-scan panes.

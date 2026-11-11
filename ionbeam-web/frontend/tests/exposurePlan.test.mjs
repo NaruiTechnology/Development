@@ -96,6 +96,11 @@ test("DAC-finer-than-LSB spacing warns and merged spots keep their dwell", () =>
   assert.ok(plan.warnings.some(w => /DAC step/.test(w)));
   const pts = exposureVectorPoints([[0, 0], [0.1, 0], [10, 0]], 7, (x, y) => ({ x: Math.round(x), y }));
   assert.deepEqual(pts, [[0, 0, 15, false, 1], [10, 0, 7, false, 1]]);
+  const highDwell = exposureVectorPoints([[0, 0], [0.1, 0], [0.2, 0]], 65000,
+    (x, y) => ({x: Math.round(x), y}));
+  assert.equal(highDwell.reduce((sum, point) => sum + point[2] + 1, 0), 3 * 65001,
+    "16-bit dwell limit must not silently reduce delivered charge");
+  assert.ok(highDwell.every(point => point[2] <= 65535));
 });
 
 test("TypeScript lattice matches the shared golden fixture the Python service is also tested against", () => {

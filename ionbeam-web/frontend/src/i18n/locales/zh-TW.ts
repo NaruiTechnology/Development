@@ -164,6 +164,8 @@ export const zhTW: Partial<TranslationTable> = {
   "processing.exposure.viewStatus.completed": "全視野影像已更新。",
   "processing.exposure.viewStatus.stopped": "全視野檢視已取消。",
   "processing.exposure.viewStatus.error": "全視野檢視失敗。",
+  "processing.exposure.viewTimeout": "全視野檢視已逾時，連續 {seconds} 秒未收到掃描資料。",
+  "processing.exposure.streamTimeout": "晶格曝光已逾時，連續 {seconds} 秒未收到掃描資料。",
   "processing.exposure.start": "開始",
   "processing.exposure.startHelp": "開始已啟用圖形的曝光點陣",
   "processing.exposure.lineSpacing": "線間距覆寫值",

@@ -335,6 +335,8 @@ export interface LastScanMeta {
  */
 export interface ServerDefaults {
   exposure_cell_ranges?: boolean;
+  /** Node proxy keeps one authenticated channel for the whole exposure run. */
+  exposure_session_stream?: boolean;
   raster: Record<string, unknown>;
   vector: Record<string, unknown>;
   simulation?: Record<string, unknown>;

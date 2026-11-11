@@ -29,6 +29,7 @@ class LatticeVectorTest(unittest.TestCase):
         self.assertIsInstance(cmd, VectorScanCommand)
         self.assertEqual(cmd.pass_pixels, 20 * 10 * 2)
         self.assertEqual(cmd.link_dwell, 7)
+        self.assertTrue(cmd._require_sender_completion)
 
     def test_pass_samples_match_the_lattice_for_simulation(self):
         self.assertEqual(_simulated_pass_samples("vector", _lattice_req(passes=3)), 20 * 10 * 3)
@@ -126,3 +127,48 @@ def test_lattice_cell_ranges_are_validated_before_hardware_work():
     for start, end in [(10, 5), (0, 999999), (200, 201)]:
         with pytest.raises(ValidationError):
             _lattice_req(cell_start=start, cell_end=end)
+
+
+@pytest.mark.parametrize("failure", ["timeout", "usb", "sync"])
+def test_lattice_transfer_never_reports_success_after_sender_or_sync_failure(failure):
+    import asyncio
+    from GlasgowDataIO.IobeamControl.transfer.mock import MockStream
+    from GlasgowDataIO.IobeamControl.commands.low_level_commands import BlankCommand
+
+    class BrokenStream(MockStream):
+        def __init__(self):
+            super().__init__()
+            self.padding = False
+            self.writes = []
+
+        async def write(self, data):
+            self.writes.append(bytes(data))
+            # The padding command is substantially larger than this one-point exposure.
+            if len(data) > 100:
+                self.padding = True
+                blank = bytes(BlankCommand(enable=True, inline=False))
+                assert self.writes[-2] == blank, "exposure is blanked before padding"
+
+        async def flush(self):
+            if self.padding:
+                if failure == "timeout":
+                    await asyncio.Event().wait()
+                raise RuntimeError("USB sender failure")
+
+        async def read(self, length):
+            if failure == "sync":
+                raise RuntimeError("sync failed")
+            return await super().read(length)
+
+    async def acquire():
+        cmd = VectorScanCommand(cookie=123, iter_points=iter([(10, 10, 7, False, 1)]),
+            frame_blank=False, require_sender_completion=True, sender_drain_timeout_s=0.01,
+            drain_floor_pixels=32)
+        stream = BrokenStream()
+        with pytest.raises((TimeoutError, RuntimeError), match="sender drain timed out|USB sender failure|sync failed"):
+            async for _ in cmd.transfer(stream, latency=8196):
+                pass
+        await asyncio.sleep(0)
+        assert not [task for task in asyncio.all_tasks() if task is not asyncio.current_task()], "sender is reaped"
+
+    asyncio.run(acquire())

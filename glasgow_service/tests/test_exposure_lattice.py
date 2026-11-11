@@ -81,11 +81,12 @@ def test_sub_dac_pitch_merges_codes_and_preserves_dwell():
     assert all(0 <= p[0] <= 16383 and 0 <= p[1] <= 16383 for p in pts)
 
 
-def test_dwell_merge_saturates_at_16_bits():
+def test_dwell_merge_preserves_charge_at_16_bit_limit():
     shape = Rect(10, 11, 10, 11)
     lat = build_lattice(shape, 0.01)
     pts = list(lattice_points(shape, lat, 65000))
     assert all(p[2] <= 65535 for p in pts)
+    assert sum(p[2] + 1 for p in pts) == 10000 * 65001
 
 
 def test_validation():

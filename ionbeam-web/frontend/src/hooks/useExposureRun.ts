@@ -2,8 +2,9 @@ import { useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector, useAppStore, useAppWorkspace } from "../store";
 import { claimWorkspaceRun } from "./useScanWorkspace";
 import { useTranslation } from "../i18n";
-import { apiUrl, wsUrl } from "../lib/backendUrl";
-import { scanAuthHeaders, withScanAuthQuery } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
+import { scanAuthHeaders } from "../lib/authIdentity";
+import { ExposureStream, exposureJson } from "../lib/exposureStream";
 import { prepareExposureSequence, exposureRounds, exposureSegments } from "../lib/exposureSequence";
 import { exposurePreparing, exposurePrepared, exposureStepStarted, exposureStepCompleted,
   exposureSamplesReceived, exposureStopping, exposureFinished, exposureViewChanged, exposurePaused, exposureResumed } from "../store/exposureSlice";
@@ -20,7 +21,7 @@ export function useExposureRun() {
   const dispatch = useAppDispatch(), store = useAppStore(), workspace = useAppWorkspace();
   const state = useAppSelector(s => s.exposure);
   const running = useRef(false), cancelled = useRef(false);
-  const socket = useRef<WebSocket | null>(null), auth = useRef<AbortController | null>(null);
+  const socket = useRef<ExposureStream | null>(null), auth = useRef<AbortController | null>(null);
   const pendingStop = useRef<Promise<void> | null>(null), stopError = useRef<string | null>(null);
 
   const viewPending = useRef(false);
@@ -40,71 +41,39 @@ export function useExposureRun() {
     resumeWaiter.current?.();
   }
 
-  function runRequest(request: VectorRequest | RasterRequest, viewFrame?: {pixels: Uint16Array; cursor: number}, exposureStepId?: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (cancelled.current) { reject(new Error("Exposure stopped")); return; }
-      const path = viewFrame ? "/ws/scan/raster/stream" : "/ws/scan/vector/stream";
-      const ws = new WebSocket(wsUrl(withScanAuthQuery(path)));
-      socket.current = ws; ws.binaryType = "arraybuffer";
-      let done = false, error: string | null = null;
-      let pendingSamples = 0;
-      let sampleTimer: ReturnType<typeof setTimeout> | undefined;
-      const flushSamples = () => {
-        clearTimeout(sampleTimer);
-        sampleTimer = undefined;
-        if (pendingSamples > 0) {
-          if (exposureStepId) dispatch(exposureSamplesReceived({id: exposureStepId, count: pendingSamples}));
-          pendingSamples = 0;
+  async function runRequest(request: VectorRequest | RasterRequest, viewFrame?: {pixels: Uint16Array; cursor: number}, exposureStepId?: string): Promise<void> {
+    if (cancelled.current) throw new Error("Exposure stopped");
+    socket.current ??= new ExposureStream(store.getState().status.defaults?.exposure_session_stream === true,
+      () => resumeWaiter.current?.(), Number(store.getState().status.defaults?.adc?.adcHalfPeriod ?? 3));
+    let pendingSamples = 0;
+    let sampleTimer: ReturnType<typeof setTimeout> | undefined;
+    const flush = () => {
+      clearTimeout(sampleTimer); sampleTimer = undefined;
+      if (pendingSamples && exposureStepId) dispatch(exposureSamplesReceived({id: exposureStepId, count: pendingSamples}));
+      pendingSamples = 0;
+    };
+    try {
+      await socket.current.run(request, buffer => {
+        if (viewFrame) {
+          const pixels = decodeScanSamples(buffer, request.output_mode);
+          if (viewFrame.cursor + pixels.length > viewFrame.pixels.length)
+            throw new Error("Invalid full-field View sample count");
+          viewFrame.pixels.set(pixels, viewFrame.cursor);
+          viewFrame.cursor += pixels.length;
+        } else {
+          pendingSamples += buffer.byteLength / 2;
+          sampleTimer ??= setTimeout(flush, 50);
         }
-      };
-      ws.onopen = () => { if (!cancelled.current) ws.send(JSON.stringify(request)); else ws.close(1000, "exposure-stop"); };
-      ws.onmessage = event => {
-        if (cancelled.current) return;
-        if (typeof event.data !== "string") {
-          const buffer = event.data as ArrayBuffer;
-          if (viewFrame) {
-            const pixels = decodeScanSamples(buffer, request.output_mode);
-            if (buffer.byteLength % 2 || viewFrame.cursor + pixels.length > viewFrame.pixels.length) {
-              error = "Invalid full-field View sample count";
-              ws.close(1002, "invalid-view-frame");
-              return;
-            }
-            viewFrame.pixels.set(pixels, viewFrame.cursor);
-            viewFrame.cursor += pixels.length;
-            return;
-          }
-          pendingSamples += Math.floor(buffer.byteLength / 2);
-          // Redraw the trace at most 20 times per second, even when samples arrive in bursts.
-          sampleTimer ??= setTimeout(flushSamples, 50);
-          return;
-        }
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.event === "done") done = true;
-          else if (msg.event === "error") {
-            error = String(msg.detail ?? msg.message ?? msg.code ?? "Exposure stream error");
-            ws.close(1000, "exposure-error");
-          }
-        } catch { error = "Malformed exposure stream message"; ws.close(1002, "invalid-control"); }
-      };
-      ws.onerror = () => { error ??= "Exposure connection failed"; };
-      ws.onclose = () => {
-        flushSamples();
-        if (socket.current === ws) socket.current = null;
-        if (done && viewFrame && viewFrame.cursor !== viewFrame.pixels.length)
-          error ??= "Full-field View ended with an incomplete frame";
-        if (!cancelled.current && done && !error) resolve();
-        else reject(new Error(error ?? (cancelled.current ? "Exposure stopped" : "Exposure stream ended before completion")));
-      };
-    });
+      });
+      if (viewFrame && viewFrame.cursor !== viewFrame.pixels.length)
+        throw new Error("Full-field View ended with an incomplete frame");
+    } finally { flush(); }
   }
 
   async function checkAccount() {
     auth.current = new AbortController();
-    const response = await fetch(apiUrl("/api/admin/iobeam/auth/current-account"),
+    const account = await exposureJson(apiUrl("/api/admin/iobeam/auth/current-account"),
       {cache: "no-store", headers: scanAuthHeaders(), signal: auth.current.signal});
-    if (!response.ok) throw new Error(`Account check failed: HTTP ${response.status}`);
-    const account = await response.json();
     if (!account?.ok) throw new Error(account?.error ?? "Account check failed.");
     if (account.session_expired) throw new Error(t("auth.sessionExpired"));
     if (!account.registered || !account.user?.is_active)
@@ -122,7 +91,8 @@ export function useExposureRun() {
         // The loop is waiting for Resume, so the beam is free for one frame.
         viewPending.current = true;
         dispatch(exposureViewChanged({phase: "queued"}));
-        await runQueuedView();
+        try { await runQueuedView(); }
+        catch { resumeWaiter.current?.(); }
         return;
       }
       if (current.phase !== "running") return;
@@ -145,6 +115,7 @@ export function useExposureRun() {
       await pendingStop.current;
       if (cancelled.current) dispatch(exposureViewChanged({phase: stopError.current ? "error" : "stopped",
         error: stopError.current ?? undefined}));
+      socket.current?.close(); socket.current = null;
       auth.current = null; running.current = false; viewPending.current = false; release();
     }
   }
@@ -171,7 +142,7 @@ export function useExposureRun() {
         {...snapshot.scan.roi, selection: null, scan_zoom: 1},
         {isProduction: snapshot.status.defaults?.is_production !== false,
           allowBitmapSimulation: simulated});
-      const prepared = await prepareScanAssets(withBitmap);
+      const prepared = await prepareScanAssets(withBitmap, {signal: auth.current?.signal, timeoutMs: 15_000});
       if (cancelled.current) return;
       await runRequest(prepared, frame);
       if (cancelled.current) return;
@@ -182,6 +153,7 @@ export function useExposureRun() {
     } catch (error) {
       if (!cancelled.current) dispatch(exposureViewChanged({phase: "error",
         error: error instanceof Error ? error.message : String(error)}));
+      if (socket.current?.failed) throw error;
     }
   }
 
@@ -199,10 +171,9 @@ export function useExposureRun() {
       if (!snapshot.status.defaults) throw new Error("Service defaults are unavailable.");
       let cellRanges = snapshot.status.defaults.exposure_cell_ranges;
       if (cellRanges === undefined) {
-        const response = await fetch(apiUrl("/api/defaults"), {cache: "no-store",
+        const capabilities = await exposureJson(apiUrl("/api/defaults"), {cache: "no-store",
           headers: scanAuthHeaders(), signal: auth.current?.signal});
-        if (!response.ok) throw new Error(`Service capability check failed: HTTP ${response.status}`);
-        cellRanges = (await response.json()).exposure_cell_ranges === true;
+        cellRanges = capabilities.exposure_cell_ranges === true;
       }
       if (cancelled.current) return;
       const entries = prepareExposureSequence(snapshot.processing, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
@@ -253,6 +224,7 @@ export function useExposureRun() {
       await pendingStop.current;
       failure ??= stopError.current;
       dispatch(exposureFinished({phase: failure ? "error" : cancelled.current ? "stopped" : "completed", error: failure ?? undefined}));
+      socket.current?.close(); socket.current = null;
       auth.current = null; running.current = false; viewPending.current = false; release();
     }
   }
@@ -266,13 +238,17 @@ export function useExposureRun() {
     const ws = socket.current;
     pendingStop.current = (async () => {
       try {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          const response = await fetch(apiUrl("/api/scan/abort"), {method: "POST", headers: scanAuthHeaders()});
+        if (ws?.persistent) {
+          // Closing this channel cancels only its upstream stream. A global
+          // abort could stop another operator's scan while our recipe is paused.
+          ws.close();
+        } else if (ws?.isOpen && ws.hasPending) {
+          const response = await fetch(apiUrl("/api/scan/abort"), {method: "POST", headers: scanAuthHeaders(), signal: AbortSignal.timeout(5000)});
           if (!response.ok && response.status !== 409 && response.status !== 501)
             throw new Error(`Exposure abort failed: HTTP ${response.status}`);
         }
       } catch (e) { stopError.current = e instanceof Error ? e.message : String(e); }
-      finally { if (ws && ws.readyState < WebSocket.CLOSING) ws.close(1000, "exposure-stop"); }
+      finally { ws?.close(); }
     })();
     return pendingStop.current;
   }

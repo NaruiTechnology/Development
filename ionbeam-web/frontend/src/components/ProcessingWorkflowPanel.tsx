@@ -5,10 +5,11 @@ import { useAppSelector } from "../store";
 /** Orbit's numbered timeline, adapted to scan stream completion events. */
 export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) {
   const { workflowProgress, specs, instances, workflows } = useAppSelector(s => s.processing);
-  const cursor = useAppSelector(s => s.image.vectorCursor);
+  const exposureProgress = useAppSelector(s => s.exposure.progress);
   const instance = instances[patternKey];
   const selectedWorkflow = workflows.find(w => w.name === (instance?.workflowEnabled ? instance.workflow : "default"));
-  const recordedNodes = workflowProgress.filter(step => step.id.startsWith(`${patternKey}:`));
+  const exposureNodes = exposureProgress.filter(step => step.id.startsWith(`${patternKey}:`));
+  const recordedNodes = exposureNodes.length ? exposureNodes : workflowProgress.filter(step => step.id.startsWith(`${patternKey}:`));
   const nodes: WorkflowProgress[] = recordedNodes.length ? recordedNodes : specs.filter(spec => spec.key === patternKey).flatMap(spec => {
     const inst = instances[spec.key];
     if (!inst) return [];
@@ -34,18 +35,12 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
       : "Enable a pattern and draw its ROI to preview the workflow."}</p>}
     <ol className="processing-workflow__tree" aria-label="Workflow steps, left to right">{nodes.map((node, i) => <li key={node.id}
       className={`processing-workflow__node processing-workflow__node--${node.status}`} aria-current={node.status === "current" ? "step" : undefined}>
-      <span className="processing-workflow__number">{String(i + 1).padStart(2, "0")}</span>
+      <span className="processing-workflow__number" title={`${node.caption}: ${node.status}`}
+        aria-label={`Step ${i + 1}: ${node.caption}, ${node.status}`}>{String(i + 1).padStart(2, "0")}</span>
       {i === nodes.length - 1 && <span className="processing-workflow__end" role="img"
         aria-label={`Workflow end: ${completed === nodes.length ? "completed" : "not reached"}`}
         title={`Workflow end: ${completed === nodes.length ? "completed" : "not reached"}`}
         data-completed={completed === nodes.length} />}
-      <div className="processing-workflow__step"><small>{node.status}</small><strong>{node.caption}</strong>
-        <span className="processing-workflow__elapsed">Elapsed: {node.startedAt === undefined ? "—" : formatWorkflowElapsed(workflowElapsedMs(node, now))}</span>
-        <span>{node.pattern}</span><span>{node.action}</span>
-        {node.threshold !== null && <span>Gray threshold: {node.threshold.toFixed(2)}</span>}
-        {node.total > 0 && <span>Spot {node.spot.toLocaleString()} / {node.total.toLocaleString()} pixels</span>}
-        {node.status === "current" && <progress aria-label="Current step progress" value={node.total > 0 ? Math.min(cursor, node.total) : undefined} max={Math.max(1, node.total)} />}
-      </div>
     </li>)}</ol>
   </section>;
 }

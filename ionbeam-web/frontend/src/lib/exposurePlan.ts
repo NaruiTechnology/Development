@@ -187,9 +187,9 @@ export function exposureVectorPoints(spots: readonly (readonly [number, number])
   let lx = NaN, ly = NaN;
   for (const [wx, wy] of spots) {
     const { x, y } = toDac(wx, wy);
-    if (x === lx && y === ly) {
+    if (x === lx && y === ly && out[out.length - 1][2] + dwellTicks + 1 <= 65535) {
       const last = out[out.length - 1];
-      last[2] = Math.min(65535, last[2] + dwellTicks + 1);
+      last[2] += dwellTicks + 1;
       continue;
     }
     out.push([x, y, dwellTicks, false, 1]);

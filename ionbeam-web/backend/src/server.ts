@@ -27,6 +27,7 @@ import { config } from "./config";
 import { readEffectiveVacuumEnabled, readVacuumEnabled, prepareVacuumEnabledUpdate } from "./vacuumConfig";
 import { buildRestProxy } from "./restProxy";
 import { attachWsProxy } from "./wsProxy";
+import { accountIdentity } from "./accountIdentity";
 import { mockRest } from "./mockHardware";
 import { prepareMockScanAsset, appendMockScanAsset, completeMockScanAsset } from "./mockScanAssets";
 import { createScanQueue, latestScanQueue, queuePage, recoverInterruptedScanQueues, type QueueEntry } from "./scanQueueStore";
@@ -594,17 +595,14 @@ app.get("/api/admin/iobeam/auth/current-account", async (req, res) => {
   const login = session?.login || currentLoginName();
   try {
     const info = await readAdminWithBackup();
-    const dbUser =
-      session?.userId && session.userId > 0
-        ? await findAdminUserInDbById(session.userId).catch(() => null)
-        : await findAdminUserInDb(login).catch(() => null);
-    const configUser =
-      dbUser
-        ? null
-        : session?.userId && session.userId > 0
-          ? findAdminUserById(info.data, session.userId)
-          : findAdminUser(info.data, login);
-    const user = dbUser ?? configUser;
+    const user = await accountIdentity(
+      () => session?.userId && session.userId > 0
+        ? findAdminUserInDbById(session.userId) : findAdminUserInDb(login),
+      () => session?.userId && session.userId > 0
+        ? findAdminUserById(info.data, session.userId) : findAdminUser(info.data, login),
+    );
+    // A temporary DB outage is not evidence that a signed-in user disappeared.
+    // Returning registered:false here makes App erase a valid stored identity.
     // Do not silently fall back to the OS account when the browser actually
     // presented an invalid token. The frontend must discard that stale
     // identity and ask the operator to authenticate again.
@@ -1428,6 +1426,88 @@ app.post("/api/scan/vector/run", async (req, res) => {
   await proxyScanRunWithTelemetry("vector", req, res);
 });
 
+// Defaults must run before the catch-all proxy to advertise Node capabilities.
+app.get("/api/defaults", async (_req, res) => {
+  try {
+    const upstream = await fetch(`${config.proxyTargetHttp}/defaults`, {
+      headers: config.glasgowToken
+        ? { Authorization: `Bearer ${config.glasgowToken}` }
+        : undefined,
+      signal: AbortSignal.timeout(2_000),
+    });
+    const contentType = (upstream.headers.get("content-type") ?? "").toLowerCase();
+    const text = await upstream.text();
+    if (!upstream.ok) {
+      throw new Error(`upstream defaults returned HTTP ${upstream.status}`);
+    }
+    if (!contentType.includes("application/json")) {
+      res.status(502).json({
+        error: "upstream_invalid_content_type",
+        detail: `upstream /defaults returned ${contentType || "unknown content type"} instead of JSON`,
+        upstream_status: upstream.status,
+      });
+      return;
+    }
+    try {
+      res.status(upstream.status).json({...JSON.parse(text), exposure_session_stream: true});
+    } catch {
+      res.status(502).json({
+        error: "upstream_invalid_json",
+        detail: "upstream /defaults returned invalid JSON",
+        upstream_status: upstream.status,
+      });
+    }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    // Defaults are configuration metadata, not device state. Keep the UI
+    // authoritative when the Glasgow service is disconnected by reading the
+    // local streamData.json directly. In particular, this prevents a cached
+    // simulation checkbox from remaining enabled after IsProduction=true.
+    try {
+      const info = await readWithBackup();
+      const root = (info.data && typeof info.data === "object")
+        ? info.data as Record<string, any>
+        : {};
+      const states = root.Actions ?? root.WorkStates ?? root.workStates ?? root.states ?? [];
+      const stream = Array.isArray(states)
+        ? states.find((entry: any) => entry?.streamData || entry?.name === "streamData" || entry?.Name === "streamData")
+        : null;
+      const action = stream?.streamData?.actionData
+        ?? stream?.actionData
+        ?? stream?.ActionData
+        ?? stream?.action_data
+        ?? root.actionData
+        ?? {};
+      res.json({
+        raster: action.rasterScan ?? {},
+        vector: action.vectorScan ?? {},
+        simulation: action.simulation ?? {},
+        adc: {
+          adcHalfPeriod: action.adcHalfPeriod ?? 3,
+          adcSettleCycles: action.adcSettleCycles ?? 1,
+          adcLatchCycles: action.adcLatchCycles ?? 1,
+          busTurnaroundCycles: action.busTurnaroundCycles ?? 0,
+          dacDataSetupCycles: action.dacDataSetupCycles ?? 1,
+          dacLatchCycles: action.dacLatchCycles ?? 1,
+        },
+        is_production: root.IsProduction === true,
+        adc_test: root.AdcTest !== false && action.AdcTest !== false,
+        version: String(root.Version ?? ""),
+        defaults_source: "local-config",
+        exposure_session_stream: true,
+        service_error: detail,
+      });
+    } catch (fallbackError) {
+      res.status(502).json({
+        error: "defaults_unreachable",
+        detail: `glasgow_service unreachable: ${detail}`,
+        fallback_error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+        upstream: config.proxyTargetHttp,
+      });
+    }
+  }
+});
+
 // Proxy any remaining /api/* traffic to the Glasgow service.
 app.use("/api", buildRestProxy());
 
@@ -1473,86 +1553,6 @@ app.get("/api/status", async (_req, res) => {
       chunks_in_flight: 0,
       vacuum_enabled: false,
     });
-  }
-});
-
-app.get("/api/defaults", async (_req, res) => {
-  try {
-    const upstream = await fetch(`${config.proxyTargetHttp}/defaults`, {
-      headers: config.glasgowToken
-        ? { Authorization: `Bearer ${config.glasgowToken}` }
-        : undefined,
-      signal: AbortSignal.timeout(2_000),
-    });
-    const contentType = (upstream.headers.get("content-type") ?? "").toLowerCase();
-    const text = await upstream.text();
-    if (!upstream.ok) {
-      throw new Error(`upstream defaults returned HTTP ${upstream.status}`);
-    }
-    if (!contentType.includes("application/json")) {
-      res.status(502).json({
-        error: "upstream_invalid_content_type",
-        detail: `upstream /defaults returned ${contentType || "unknown content type"} instead of JSON`,
-        upstream_status: upstream.status,
-      });
-      return;
-    }
-    try {
-      res.status(upstream.status).json(JSON.parse(text));
-    } catch {
-      res.status(502).json({
-        error: "upstream_invalid_json",
-        detail: "upstream /defaults returned invalid JSON",
-        upstream_status: upstream.status,
-      });
-    }
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    // Defaults are configuration metadata, not device state. Keep the UI
-    // authoritative when the Glasgow service is disconnected by reading the
-    // local streamData.json directly. In particular, this prevents a cached
-    // simulation checkbox from remaining enabled after IsProduction=true.
-    try {
-      const info = await readWithBackup();
-      const root = (info.data && typeof info.data === "object")
-        ? info.data as Record<string, any>
-        : {};
-      const states = root.Actions ?? root.WorkStates ?? root.workStates ?? root.states ?? [];
-      const stream = Array.isArray(states)
-        ? states.find((entry: any) => entry?.streamData || entry?.name === "streamData" || entry?.Name === "streamData")
-        : null;
-      const action = stream?.streamData?.actionData
-        ?? stream?.actionData
-        ?? stream?.ActionData
-        ?? stream?.action_data
-        ?? root.actionData
-        ?? {};
-      res.json({
-        raster: action.rasterScan ?? {},
-        vector: action.vectorScan ?? {},
-        simulation: action.simulation ?? {},
-        adc: {
-          adcHalfPeriod: action.adcHalfPeriod ?? 3,
-          adcSettleCycles: action.adcSettleCycles ?? 1,
-          adcLatchCycles: action.adcLatchCycles ?? 1,
-          busTurnaroundCycles: action.busTurnaroundCycles ?? 0,
-          dacDataSetupCycles: action.dacDataSetupCycles ?? 1,
-          dacLatchCycles: action.dacLatchCycles ?? 1,
-        },
-        is_production: root.IsProduction === true,
-        adc_test: root.AdcTest !== false && action.AdcTest !== false,
-        version: String(root.Version ?? ""),
-        defaults_source: "local-config",
-        service_error: detail,
-      });
-    } catch (fallbackError) {
-      res.status(502).json({
-        error: "defaults_unreachable",
-        detail: `glasgow_service unreachable: ${detail}`,
-        fallback_error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
-        upstream: config.proxyTargetHttp,
-      });
-    }
   }
 });
 
@@ -2048,6 +2048,11 @@ async function requireScanPrivilege(
 
 async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true; actor: AdminUser } | { ok: false; status: number; message: string }> {
   try {
+    const token = readScanAuthToken(req);
+    if ((token && !verifyAdminSessionToken(token)) ||
+        (req.url?.startsWith("/ws/exposure/session") && !token)) {
+      return {ok: false, status: 401, message: "Session expired. Sign in before starting a new run."};
+    }
     const actor = await currentAdminActor(req);
     if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
       return {

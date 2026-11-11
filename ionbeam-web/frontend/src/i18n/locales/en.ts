@@ -174,6 +174,8 @@ export const en = {
   "processing.exposure.viewStatus.completed": "Full-field View updated.",
   "processing.exposure.viewStatus.stopped": "Full-field View cancelled.",
   "processing.exposure.viewStatus.error": "Full-field View failed.",
+  "processing.exposure.viewTimeout": "Full-field View timed out after {seconds} seconds without scan data.",
+  "processing.exposure.streamTimeout": "Lattice exposure timed out after {seconds} seconds without scan data.",
   "processing.exposure.start": "Start",
   "processing.exposure.startHelp": "Start the enabled pattern exposure lattices",
   "processing.exposure.lineSpacing": "Line spacing override",

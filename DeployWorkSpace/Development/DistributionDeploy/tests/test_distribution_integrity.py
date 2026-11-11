@@ -66,12 +66,16 @@ def make_workspace(base):
         "hooks/useExposureRun.ts",
         "lib/exposurePreview.ts",
         "lib/exposureSequence.ts",
+        "lib/exposureStream.ts",
         "lib/patternExposure.ts",
         "lib/stairRecipe.ts",
         "store/exposureSlice.ts",
         "styles/theme.css",
     ):
         source = frontend / rel
+        real[str(source)] = DEVELOPMENT / source
+    for rel in ("exposureSession.ts", "accountIdentity.ts"):
+        source = Path("ionbeam-web/backend/src") / rel
         real[str(source)] = DEVELOPMENT / source
     for rel, src in real.items():
         (dev / rel).parent.mkdir(parents=True, exist_ok=True)

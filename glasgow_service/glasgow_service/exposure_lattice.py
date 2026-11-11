@@ -186,8 +186,9 @@ def lattice_points(shape, lattice: Lattice, dwell_ticks: int, passes: int = 1,
         for cx, cy in spot_centres(shape, lattice, cell_start, cell_end):
             x = min(DAC_MAX, max(0, _round_half_up(cx)))
             y = min(DAC_MAX, max(0, _round_half_up(cy)))
-            if pending is not None and pending[0] == x and pending[1] == y:
-                pending[2] = min(65535, pending[2] + dwell_ticks + 1)
+            if (pending is not None and pending[0] == x and pending[1] == y
+                    and pending[2] + dwell_ticks + 1 <= 65535):
+                pending[2] += dwell_ticks + 1
                 continue
             if pending is not None:
                 yield (pending[0], pending[1], pending[2], False, 1)

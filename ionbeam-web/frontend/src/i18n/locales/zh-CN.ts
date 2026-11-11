@@ -156,6 +156,8 @@ export const zhCN: Partial<TranslationTable> = {
   "processing.exposure.viewStatus.completed": "全视场图像已更新。",
   "processing.exposure.viewStatus.stopped": "全视场查看已取消。",
   "processing.exposure.viewStatus.error": "全视场查看失败。",
+  "processing.exposure.viewTimeout": "全视场查看已超时，连续 {seconds} 秒未收到扫描数据。",
+  "processing.exposure.streamTimeout": "晶格曝光已超时，连续 {seconds} 秒未收到扫描数据。",
   "processing.exposure.start": "开始",
   "processing.exposure.startHelp": "开始已启用图形的曝光点阵",
   "processing.exposure.lineSpacing": "线间距覆盖值",

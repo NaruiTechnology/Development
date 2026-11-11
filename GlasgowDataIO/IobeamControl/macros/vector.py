@@ -154,6 +154,7 @@ class VectorScanCommand(BaseCommand):
         points_factory=None,
         frame_blank: bool = True,
         max_passes: int | None          = None,
+        require_sender_completion: bool = False,
     ):
         """
         Args:
@@ -176,6 +177,9 @@ class VectorScanCommand(BaseCommand):
             sender_drain_timeout_s (float): Bound on how long transfer()
                 waits for the sender task to drain after the receiver
                 loop ends, before logging a warning and cancelling.
+            require_sender_completion (bool): Lattice exposures fail rather than
+                silently completing after a sender/drain error. Also blanks
+                before drain padding even when frame blanking is disabled.
             continuous (bool): Live ("Infinite") scan, the vector
                 counterpart of OBI's live scan. The point list is replayed
                 pass after pass on ONE synchronized command stream until
@@ -239,6 +243,7 @@ class VectorScanCommand(BaseCommand):
         self._fpga_pipeline_depth_pixels = int(fpga_pipeline_depth_pixels)
         self._drain_safety_factor        = float(drain_safety_factor)
         self._sender_drain_timeout_s     = float(sender_drain_timeout_s)
+        self._require_sender_completion = bool(require_sender_completion)
 
         # Resolve the drain floor: explicit override wins, otherwise
         # derive from FPGA pipeline depth × safety factor.
@@ -564,6 +569,7 @@ class VectorScanCommand(BaseCommand):
             nonlocal tokens, sent_total
             total_pixels = 0
             between_frames = False
+            end_queued = False
             try:
                 for commands, pixel_count in self._iter_chunks(latency):
                     self._logger.debug(f"sender: tokens={tokens}")
@@ -601,10 +607,15 @@ class VectorScanCommand(BaseCommand):
                         break
                     await asyncio.sleep(0)
 
-                if self.frame_blank:
+                if self.frame_blank or self._require_sender_completion:
                     await BlankCommand(enable=True, inline=False).transfer(stream)
 
                 sent_total = total_pixels
+                # Let the receiver finish the real samples independently of
+                # drain padding. Otherwise a stuck padding flush keeps it
+                # waiting for the sentinel forever, bypassing the drain timeout.
+                await count_queue.put(end_marker)
+                end_queued = True
 
                 # ---------- pipeline-drain padding -----------------------------
                 # Mirrors RasterScanCommand.sender's tail. After the last real
@@ -644,7 +655,8 @@ class VectorScanCommand(BaseCommand):
 
                 await FlushCommand().transfer(stream)
             finally:
-                await count_queue.put(end_marker)
+                if not end_queued:
+                    await count_queue.put(end_marker)
 
         await BeamSelectCommand(beam_type=self._beam_type).transfer(stream)
         # Blank before taking over, so the relay never switches our output in
@@ -669,8 +681,8 @@ class VectorScanCommand(BaseCommand):
 
         # Discard the FFFF + cookie reply.
         # TODO: assert against synchronization result
-        cookie = await stream.read(4)
         try:
+            cookie = await stream.read(4)
             while True:
                 pixel_count = await count_queue.get()
                 if pixel_count is end_marker:
@@ -685,7 +697,7 @@ class VectorScanCommand(BaseCommand):
                 t_read = time.perf_counter()
                 res = await self.recv_res(pixel_count, stream, self._output_mode)
                 stats.received(time.perf_counter() - t_read, pixel_count)
-                if sent_total is not None and stats.pixels_recv >= sent_total:
+                if not self._require_sender_completion and sent_total is not None and stats.pixels_recv >= sent_total:
                     # Last chunk: log now; the consumer normally stops after
                     # it, so `finally` may not run until GC/teardown.
                     emit_summary("ok")
@@ -699,7 +711,8 @@ class VectorScanCommand(BaseCommand):
             outcome = "closed"
             raise
         finally:
-            emit_summary(outcome)
+            if not self._require_sender_completion:
+                emit_summary(outcome)
             # Wait for the sender to finish its drain padding + final
             # flush before this generator returns.
             #
@@ -731,12 +744,15 @@ class VectorScanCommand(BaseCommand):
                         asyncio.shield(sender_task),
                         timeout=self._sender_drain_timeout_s,
                     )
-                except asyncio.TimeoutError:
+                except asyncio.TimeoutError as exc:
                     sender_task.cancel()
                     await asyncio.gather(sender_task, return_exceptions=True)
                     self._logger.warning(
                         f"sender task did not finish drain in "
                         f"{self._sender_drain_timeout_s:.0f}s; cancelled")
+                    if self._require_sender_completion:
+                        emit_summary("error")
+                        raise TimeoutError("Exposure sender drain timed out; completion is uncertain") from exc
                 except asyncio.CancelledError:
                     sender_task.cancel()
                     await asyncio.gather(sender_task, return_exceptions=True)
@@ -749,3 +765,8 @@ class VectorScanCommand(BaseCommand):
                     # here would lose those chunks.
                     self._logger.exception(
                         "sender task raised during transfer cleanup")
+                    if self._require_sender_completion:
+                        emit_summary("error")
+                        raise
+            if self._require_sender_completion:
+                emit_summary(outcome)
