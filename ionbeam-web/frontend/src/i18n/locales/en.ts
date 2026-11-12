@@ -461,6 +461,8 @@ export const en = {
   /* ===== ROI editor =============================================== */
   "roi.select": "SELECT",
   "roi.loadLastScan": "Load last scan",
+  "roi.autoLoadLastScan": "Auto-load last scan",
+  "roi.autoLoadLastScan.help": "Load each newly completed scan into the Patterns canvas when enabled.",
   "card.simulationImage": "Load image",
   "simulation.mode.simulation": "Simulation",
   "simulation.mode.hardware": "Hardware",

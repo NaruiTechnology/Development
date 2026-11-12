@@ -2065,6 +2065,7 @@ body {
 .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .roi-image-action-row { gap: 4px; }
 .roi-image-action-row > .btn { flex: 0 0 auto; gap: 4px; padding-inline: 8px; font-size: 11px; letter-spacing: 0.025em; white-space: nowrap; }
+.roi-image-action-row > .roi-image-autoload { flex: 0 1 auto; min-width: 0; gap: 6px; font-size: 11px; white-space: nowrap; }
 .validation-download-controls {
   display: flex;
   align-items: center;

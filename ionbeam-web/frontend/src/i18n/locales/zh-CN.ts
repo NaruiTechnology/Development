@@ -436,6 +436,8 @@ export const zhCN: Partial<TranslationTable> = {
   /* ===== ROI editor =============================================== */
   "roi.select": "选择文件",
   "roi.loadLastScan": "加载上次扫描",
+  "roi.autoLoadLastScan": "自动加载上次扫描",
+  "roi.autoLoadLastScan.help": "启用后，将每次新完成的扫描加载到图形画布。",
   "card.simulationImage": "加载图像",
   "simulation.mode.simulation": "模拟",
   "simulation.mode.hardware": "硬件",

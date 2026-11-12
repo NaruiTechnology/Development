@@ -275,6 +275,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(imageWorkspace, null);
+  const [autoLoadLastScanToPatterns, setAutoLoadLastScanToPatterns] = useWorkspaceState<boolean>(imageWorkspace, true);
   const [mostRecentScanImage, setMostRecentScanImage] = useState<{ imageUrl: string } | null>(() => {
     const result = getWorkspaceStore("scan").getState().scan.lastResult;
     const imageUrl = result?.artifacts?.figureDataUrl;
@@ -1418,18 +1419,41 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   const handleLoadLastScan = useCallback((imageUrl?: string | null) => {
     const scanImageUrl = imageUrl ?? roiScanImageUrl;
     if (!scanImageUrl) return;
+    const sourceScan = getWorkspaceStore("scan").getState().scan;
+    const sourceROI = sourceScan.roi;
     suppressedROIScanImageUrlRef.current = null;
     setSuppressedROIScanImageUrl(null);
     resetROIContext({ clearSelection: true });
+    // Processing and Scan have separate stores. Carry the source scan's physical
+    // field mapping with its pixels so overlays and scale bars use the same axes.
+    dispatch(setScanGeometry(sourceROI.scanGeometry ?? null));
+    dispatch(setStreamTransforms(sourceScan.streamTransforms));
     dispatch(
       updateROI({
         imageName: t("roi.imageName.lastScan"),
         imageDataUrl: scanImageUrl,
         imageKind: "lastScan",
         imageBounds: null,
+        x_origin: sourceROI.x_origin,
+        x_end: sourceROI.x_end,
+        y_origin: sourceROI.y_origin,
+        y_end: sourceROI.y_end,
+        scale_unit: sourceROI.scale_unit,
+        scan_zoom: sourceROI.scan_zoom,
       })
     );
   }, [dispatch, resetROIContext, roiScanImageUrl, t, imageWorkspace]);
+
+  useEffect(() => {
+    if (activeTopTab !== "processing" || !autoLoadLastScanToPatterns || !availableLastScanImageUrl) return;
+    if (roiState.imageKind === "lastScan" && roiState.imageDataUrl === availableLastScanImageUrl) {
+      processingImageInitialized.current = true;
+      return;
+    }
+    processingImageInitialized.current = true;
+    handleLoadLastScan(availableLastScanImageUrl);
+  }, [activeTopTab, autoLoadLastScanToPatterns, availableLastScanImageUrl, roiState.imageKind,
+    roiState.imageDataUrl, handleLoadLastScan]);
 
   function selectKind(nextKind: ScanKind) {
     if (nextKind === storedKind) return;
@@ -1905,6 +1929,8 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                   disabled={panelDisabled}
                   lastScanImageUrl={availableLastScanImageUrl}
                   onLoadLastScan={handleLoadLastScan}
+                  autoLoadLastScan={autoLoadLastScanToPatterns}
+                  onAutoLoadLastScanChange={setAutoLoadLastScanToPatterns}
                   onImageChange={handleSimulationImageChange}
                 />
                 {processingImageError && <p className="scan-inline-error" role="alert">{t("processing.imageError", { error: processingImageError })}</p>}

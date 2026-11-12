@@ -444,6 +444,8 @@ export const zhTW: Partial<TranslationTable> = {
   /* ===== ROI editor =============================================== */
   "roi.select": "選擇檔案",
   "roi.loadLastScan": "載入上次掃描",
+  "roi.autoLoadLastScan": "自動載入上次掃描",
+  "roi.autoLoadLastScan.help": "啟用後，會將每次新完成的掃描載入圖形畫布。",
   "card.simulationImage": "載入影像",
   "simulation.mode.simulation": "模擬",
   "simulation.mode.hardware": "硬體",

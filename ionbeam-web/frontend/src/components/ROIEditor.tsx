@@ -110,6 +110,8 @@ export function ROIEditor({
   graySelectionResetToken = 0,
   renderCanvasOverlay,
   onLoadLastScan,
+  autoLoadLastScan,
+  onAutoLoadLastScanChange,
   onImageChange,
 }: {
   disabled: boolean;
@@ -129,6 +131,8 @@ export function ROIEditor({
     sampleGrayAtClient: (clientX: number, clientY: number) => { value: number; x: number; y: number } | null;
   }) => ReactNode;
   onLoadLastScan?: (imageUrl?: string | null) => void;
+  autoLoadLastScan?: boolean;
+  onAutoLoadLastScanChange?: (enabled: boolean) => void;
   onImageChange?: (imageUrl: string | null) => void;
 }) {
   const dispatch = useAppDispatch();
@@ -1550,17 +1554,27 @@ export function ROIEditor({
         <Icon name="upload" tone="accent" />
         {t("roi.select")}
       </button>
-      <button
-        className="btn btn--ghost"
-        disabled={disabled || !lastScanImageUrl || !onLoadLastScan}
-        onClick={() => {
-          if (fileRef.current) fileRef.current.value = "";
-          onLoadLastScan?.(lastScanImageUrl);
-        }}
-      >
-        <Icon name="download" tone="accent" />
-        {t("roi.loadLastScan")}
-      </button>
+      {autoLoadLastScan !== undefined ? (
+        <label className="checkbox vacuum-switch app-switch roi-image-autoload" title={t("roi.autoLoadLastScan.help")}>
+          <input type="checkbox" role="switch" checked={autoLoadLastScan} disabled={disabled}
+            aria-label={t("roi.autoLoadLastScan")}
+            onChange={event => onAutoLoadLastScanChange?.(event.target.checked)} />
+          <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+          <span>{t("roi.autoLoadLastScan")}</span>
+        </label>
+      ) : (
+        <button
+          className="btn btn--ghost"
+          disabled={disabled || !lastScanImageUrl || !onLoadLastScan}
+          onClick={() => {
+            if (fileRef.current) fileRef.current.value = "";
+            onLoadLastScan?.(lastScanImageUrl);
+          }}
+        >
+          <Icon name="download" tone="accent" />
+          {t("roi.loadLastScan")}
+        </button>
+      )}
       <button
         className="btn"
         disabled={disabled || (roi.imageKind === "none" && !roi.imageDataUrl)}
