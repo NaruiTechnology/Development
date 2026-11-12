@@ -20,6 +20,8 @@ export function ProcessingPatternsHelp() {
   const selected=new Set(result?.sourceRows ?? []);
   return <HelpPopover title={t("help.patterns.title")} ariaLabel={t("help.patterns.aria")} size="fit">
     <p>{t("help.patterns.intro")}</p>
+    <h3>{t("help.patterns.material")}</h3>
+    <p>{t("help.patterns.materialText")}</p>
     <h3>{t("help.patterns.latticeFit")}</h3>
     <p>{t("help.patterns.latticeFitText")}</p>
     {status === "loading" && <p role="status">{t("help.patterns.loading")}</p>}

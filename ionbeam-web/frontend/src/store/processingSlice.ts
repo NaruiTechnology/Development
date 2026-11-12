@@ -39,7 +39,7 @@ export interface PatternInstance {
 export interface ProcessingState {
   lensLookup: LensLookup | null;
   workflows: WorkflowSpec[];
-  materials: { name: string; caption?: string; brightness: number }[];
+  materials: { name: string; caption?: string; brightness: number; grayValueRange?: [number, number] | null }[];
   workflowProgress: WorkflowProgress[];
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
@@ -59,7 +59,7 @@ interface PatternsResponse {
   error?: string;
   patterns?: PatternSpec[];
   workflows?: WorkflowSpec[];
-  materials?: { name: string; caption?: string; brightness: number }[];
+  materials?: { name: string; caption?: string; brightness: number; grayValueRange?: [number, number] | null }[];
   errors?: string[];
 }
 

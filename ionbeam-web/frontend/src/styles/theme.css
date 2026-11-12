@@ -4642,6 +4642,8 @@ body {
   border-radius: 2px;
   border: 1px solid rgba(255, 255, 255, 0.7);
 }
+.roi-gray-tooltip__line { display: flex; align-items: center; min-height: 16px; }
+.roi-gray-tooltip__line + .roi-gray-tooltip__line { padding-left: 16px; }
 
 .roi-target-gray-status {
   position: absolute;

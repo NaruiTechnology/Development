@@ -204,14 +204,6 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpan
               {workflows.map(w => <option key={w.name} value={w.name}>{w.caption}</option>)}
             </select>
           </label>
-          {instance.workflow === MATERIAL_WORKFLOW && (
-            <label className="field">Material
-              <select className="select" aria-label={`${caption}: Material`} value={instance.material} disabled={disabled}
-                onChange={e => dispatch(setPatternMaterial({ key: spec.key, material: e.target.value }))}>
-                {materials.map(m => <option key={m.name} value={m.name}>{m.caption ?? m.name}</option>)}
-              </select>
-            </label>
-          )}
           <label className="field pattern-workflow-toggle">
             <span>Use workflow</span>
             <span className="checkbox vacuum-switch app-switch">
@@ -246,6 +238,18 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpan
             onChange={(value) => dispatch(setPatternParameter({ key: spec.key, name: p.name, value }))}
           />
         ))}
+        {spec.model !== "StairCutModel" && (
+          <label className="field">
+            {tr("processing.material", "Material")}
+            <select className="select" aria-label={`${caption}: ${tr("processing.material", "Material")}`}
+              value={instance.material} disabled={disabled || materials.length === 0}
+              onChange={e => dispatch(setPatternMaterial({ key: spec.key, material: e.target.value }))}>
+              {materials.length ? materials.map(material =>
+                <option key={material.name} value={material.name}>{material.caption ?? material.name}</option>)
+                : <option value="">{tr("processing.material.empty", "No materials configured")}</option>}
+            </select>
+          </label>
+        )}
         </div>
         {spec.model === "StairCutModel" && <StairStepsTable patternKey={spec.key} caption={caption} instance={instance} disabled={disabled} />}
         <fieldset className="pattern-axis-field" disabled={disabled}>

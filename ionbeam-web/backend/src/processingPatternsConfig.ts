@@ -60,7 +60,17 @@ function parseWorkflows(data: Record<string, unknown>): Pick<ProcessingPatternsC
   const materials = (Array.isArray(data.Materials) ? data.Materials : []).map((m: unknown) => {
     if (!isObject(m) || typeof m.name !== "string" || typeof m.brightness !== "number" || !Number.isFinite(m.brightness) || m.brightness <= 0)
       throw new ConfigError("Invalid workflow material brightness", 500);
-    return { name: m.name, caption: typeof m.caption === "string" && m.caption ? m.caption : m.name, brightness: m.brightness };
+    let grayValueRange: [number, number] | null = null;
+    if (m.grayValueRange !== undefined && m.grayValueRange !== null) {
+      const values = Array.isArray(m.grayValueRange) ? m.grayValueRange
+        : typeof m.grayValueRange === "string" ? m.grayValueRange.split(/[,-]/).map(value => value.trim()) : [];
+      const low = Number(values[0]), high = Number(values[1]);
+      if (values.length !== 2 || !Number.isInteger(low) || !Number.isInteger(high) || low < 0 || high > 255 || low > high)
+        throw new ConfigError(`Invalid workflow material grayValueRange: ${m.name}`, 500);
+      grayValueRange = [low, high];
+    }
+    return { name: m.name, caption: typeof m.caption === "string" && m.caption ? m.caption : m.name,
+      brightness: m.brightness, grayValueRange };
   });
   const names = new Set<string>();
   const workflows = (Array.isArray(data.Workflows) ? data.Workflows : []).map((w: unknown): WorkflowSpec => {
@@ -101,7 +111,7 @@ export interface ProcessingPatternsConfig {
   header: Record<string, unknown>;
   patterns: PatternSpec[];
   errors: string[];
-  materials: { name: string; caption: string; brightness: number }[];
+  materials: { name: string; caption: string; brightness: number; grayValueRange: [number, number] | null }[];
   workflows: WorkflowSpec[];
 }
 

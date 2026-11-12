@@ -81,7 +81,7 @@ The Processing scan-path preview clips its sweep and marker to the current drawn
 The API now returns validated `Workflows` and `Materials` alongside `Patterns`.
 Completing a valid ROI drawing automatically turns that pattern's Enable switch on.
 Draft previews and cancelled drawings do not enable it.
-Each pattern card has a Workflow dropdown (initially Default) and a switch.
+Each non-Stair Cut pattern card has a Material dropdown backed by the configured Materials catalogue. Stair Cut keeps its per-step material selectors. Each pattern card has a Workflow dropdown (initially Default) and a switch.
 Switching off retains the selected workflow and executes Default instead.
 Default is an ordinary acquisition with no workflow or global gray filter.
 
@@ -101,11 +101,19 @@ Spot dwell is at least two clock cycles, matching the ROI Spot action in
 commit `15f6a0a9`. The display preserves the dark result when the bright step starts.
 
 `MaterialLinelCut` spots bright pixels against the selected material's brightness
-ratio. Its Material selector sits next to Workflow, is populated from the JSON
-`Materials` list, and is hidden until that workflow is selected. A Target gray
+ratio. Each non-Stair Cut pattern card has a Material selector populated from the JSON
+`Materials` list; Stair Cut keeps its per-step Material controls. For non-Stair Cut
+patterns, Material is consumed by the image-guided `MaterialLinelCut` workflow only.
+It does not affect `expose-lattice`; Stair Cut's calibrated per-step removal rate
+(`Sr`), rather than its Material label, affects lattice dose and pass calculation. A Target gray
 level row appears below the selectors for this workflow and displays
 `AvgGray × selected material brightness`. This calculated target is also used as
-the workflow threshold.
+the workflow threshold. The Patterns canvas hover tooltip also looks up the hovered
+pixel against each material's configured `grayValueRange` and lists all inclusive
+matches. If no range contains the pixel, it lists the material(s) whose range is
+nearest by distance to the range boundary. Overlapping ranges can produce multiple
+candidates, and these source ranges are illustrative rather than guaranteed material
+identifications. Materials without a configured range, such as SiO2, cannot be returned.
 
 `AreaRemoval` uses the rounded average of every pixel in the full source field
 as its target. It uses the ROI gray filter in Spot mode over `[target + 1, 255]`

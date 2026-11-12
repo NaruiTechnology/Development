@@ -56,10 +56,31 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   const [grayTooltip, setGrayTooltip] = useState<{ x: number; y: number; value: number } | null>(null);
   const roi = useAppSelector((s) => s.scan.roi);
   const { specs, instances, activeKey } = useAppSelector((s) => s.processing);
+  const materials = useAppSelector((s) => s.processing.materials);
   const [, repaint] = useReducer((n: number) => n + 1, 0);
   const draft = useRef<Draft | null>(null);
   const edit = useRef<{ key: string; start: Pt; original: PatternRoi; corner: Corner | null; inner: boolean } | null>(null);
   const active = specs.find((s) => s.key === activeKey) ?? null;
+  const rangedMaterials = materials.filter(material => material.grayValueRange);
+  const grayMaterialMatches = grayTooltip ? rangedMaterials.filter(material => {
+    const range = material.grayValueRange;
+    return range !== undefined && range !== null && grayTooltip.value >= range[0] && grayTooltip.value <= range[1];
+  }) : [];
+  const materialRangeDistance = (material: typeof materials[number]) => {
+    const range = material.grayValueRange;
+    if (!grayTooltip || !range) return Number.POSITIVE_INFINITY;
+    return grayTooltip.value < range[0] ? range[0] - grayTooltip.value
+      : grayTooltip.value > range[1] ? grayTooltip.value - range[1] : 0;
+  };
+  const nearestDistance = grayTooltip && !grayMaterialMatches.length && rangedMaterials.length
+    ? Math.min(...rangedMaterials.map(materialRangeDistance)) : Number.POSITIVE_INFINITY;
+  const nearestMaterials = grayTooltip && !grayMaterialMatches.length && rangedMaterials.length
+    ? rangedMaterials.filter(material => materialRangeDistance(material) === nearestDistance) : [];
+  const grayMaterialText = grayTooltip && grayMaterialMatches.length
+    ? t("roi.materialLookup.tooltip", { materials: grayMaterialMatches.map(material => material.caption ?? material.name).join(", ") })
+    : grayTooltip && nearestMaterials.length
+      ? t("roi.materialLookup.nearest", { materials: nearestMaterials.map(material => material.caption ?? material.name).join(", ") })
+      : null;
 
   const bounds = imageWorldBounds(roi);
   const view = viewportBounds(roi);
@@ -385,8 +406,11 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     </svg>
     {workspaceActive && grayTooltip && createPortal(
       <div className="roi-gray-tooltip" style={{ left: grayTooltip.x, top: grayTooltip.y }} role="tooltip">
-        <span className="roi-gray-tooltip__swatch" style={{ background: `rgb(${grayTooltip.value}, ${grayTooltip.value}, ${grayTooltip.value})` }} />
-        {t("roi.targetGray.tooltip", { value: grayTooltip.value })}
+        <div className="roi-gray-tooltip__line">
+          <span className="roi-gray-tooltip__swatch" style={{ background: `rgb(${grayTooltip.value}, ${grayTooltip.value}, ${grayTooltip.value})` }} />
+          {t("roi.targetGray.tooltip", { value: grayTooltip.value })}
+        </div>
+        {grayMaterialText && <div className="roi-gray-tooltip__line">{grayMaterialText}</div>}
       </div>,
       document.body,
     )}
