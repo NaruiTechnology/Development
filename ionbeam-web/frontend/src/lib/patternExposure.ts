@@ -112,3 +112,21 @@ export function simulationExposureSteps(spec: PatternSpec, shape: PatternRoi, pa
   }
   return [{ shape, parameters, caption: "Pattern exposure" }];
 }
+
+/** Planned beam-on time and lattice spots, using the same step expansion as Exposure Start. */
+export function plannedPatternExposureMetrics(spec: PatternSpec, shape: PatternRoi, parameters: PatternParameters,
+  lookup: LensLookup, fov: Pick<ROIState, "x_origin" | "x_end" | "y_origin" | "y_end" | "scanGeometry">,
+  options: {simulation?: boolean; stairOverrides?: ReadonlyArray<StairStepOverride | null | undefined>; defaultMaterial?: string} = {}):
+  {spotCount: number; beamOnS: number} {
+  const stair = spec.model === "StairCutModel";
+  const base = stair ? null : preparePatternExposure(spec, shape, parameters, lookup, fov);
+  const steps = stair ? stairExposureSteps(shape, parameters, options.stairOverrides, options.defaultMaterial)
+    : options.simulation ? simulationExposureSteps(spec, shape, parameters, base!.plan.spacingUM)
+    : [{shape, parameters}];
+  return steps.reduce((total, step) => {
+    const plan = stair || options.simulation
+      ? preparePatternExposure(spec, step.shape, step.parameters, lookup, fov).plan
+      : base!.plan;
+    return {spotCount: total.spotCount + plan.count, beamOnS: total.beamOnS + plan.beamOnS};
+  }, {spotCount: 0, beamOnS: 0});
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { workflowElapsedMs, formatWorkflowElapsed, type WorkflowProgress } from "../lib/processingWorkflows";
 import { useAppSelector } from "../store";
 
@@ -27,6 +27,11 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
   }, [running]);
   const elapsed = nodes.reduce((total, node) => total + workflowElapsedMs(node, now), 0);
   const completed = nodes.filter(n => n.status === "completed").length;
+  const currentNode = nodes.find(node => node.status === "current");
+  const currentNodeRef = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    currentNodeRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [currentNode?.id]);
   const caption = specs.find(spec => spec.key === patternKey)?.caption ?? patternKey;
   return <section className="processing-workflow" aria-label={`${caption}: Workflow progress`}>
     <p className="processing-workflow__elapsed">Elapsed: {formatWorkflowElapsed(elapsed)}</p>
@@ -34,6 +39,7 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
       ? "This workflow has no steps configured."
       : "Enable a pattern and draw its ROI to preview the workflow."}</p>}
     <ol className="processing-workflow__tree" aria-label="Workflow steps, left to right">{nodes.map((node, i) => <li key={node.id}
+      ref={node.status === "current" ? currentNodeRef : undefined}
       className={`processing-workflow__node processing-workflow__node--${node.status}`} aria-current={node.status === "current" ? "step" : undefined}>
       <span className="processing-workflow__number" title={`${node.caption}: ${node.status}`}
         aria-label={`Step ${i + 1}: ${node.caption}, ${node.status}`}>{String(i + 1).padStart(2, "0")}</span>

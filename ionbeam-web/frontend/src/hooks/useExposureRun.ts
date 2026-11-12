@@ -181,6 +181,9 @@ export function useExposureRun() {
       if (snapshot.exposure.parallel && entries.some(e => e.node.exposure?.model === "CleaningLineModel"))
         throw new Error("Cleaning lines require serial exposure (Parallel off).");
       dispatch(exposurePrepared(entries.map(e => e.node)));
+      // Yield so the pattern cards can render their calculated spot counts before the first lattice starts.
+      await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+      if (cancelled.current) return;
       const rounds = exposureRounds(entries, snapshot.exposure.parallel);
       let upcoming = rounds.next();
       while (!upcoming.done) {

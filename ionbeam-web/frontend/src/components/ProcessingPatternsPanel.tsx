@@ -127,10 +127,10 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
   };
   const ordered = [...promoteWithinGroup(enabledSpecs), ...promoteWithinGroup(disabledSpecs)];
   return <>{ordered.map((spec) => (
-    <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key}
-      disabled={disabled || !instances[spec.key]?.roi} enableDisabled={enableDisabled || !instances[spec.key]?.roi}
-      onExpansionChange={onExpansionChange} />
-  ))}</>;
+      <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key}
+        disabled={disabled || !instances[spec.key]?.roi} enableDisabled={enableDisabled || !instances[spec.key]?.roi}
+        onExpansionChange={onExpansionChange} />
+    ))}</>;
 }
 
 function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpansionChange }: {
@@ -142,6 +142,7 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpan
   const unit = unitLabel(useAppSelector((s) => s.scan.roi.scale_unit));
   const workflows = useAppSelector(s => s.processing.workflows);
   const materials = useAppSelector(s => s.processing.materials);
+  const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
   const exposing = useAppSelector(s => s.exposure.activeStepIds.some(id => id.startsWith(`${spec.key}:`)));
   const hasExposureData = useAppSelector(s => [...s.exposure.progress, ...s.exposure.retainedPreview]
     .some(node => node.id.startsWith(`${spec.key}:`) && node.id.endsWith(":exposure")));
@@ -261,7 +262,8 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpan
             </label>;
           })}
         </fieldset>
-        <PatternRuntimeReadouts spec={spec} roi={instance.roi} />
+        <PatternRuntimeReadouts spec={spec} roi={instance.roi} parameters={instance.parameters}
+          stairSteps={instance.stairSteps} defaultMaterial={materials[0]?.name} simulation={simulation} />
         <p className="pattern-card__readout">{roiReadout(spec, instance.roi, unit)}{`\nAvgGray: ${instance.AvgGray == null ? "—" : instance.AvgGray.toFixed(2)}`}</p>
       </div>
     </div>
