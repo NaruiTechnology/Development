@@ -8244,6 +8244,12 @@ body {
 
 .pattern-card[aria-disabled="true"] > .pattern-card__body { opacity: 0.5; }
 
+/* Keep the running recipe readable while its editing controls remain locked. */
+.pattern-card--exposing[aria-disabled="true"] > .pattern-card__body,
+.pattern-card--exposing :disabled,
+.pattern-card--exposing .checkbox--disabled,
+.pattern-card--exposing .checkbox[aria-disabled="true"] { opacity: 1; }
+
 /* Pattern enable switches use amber for their on state. */
 .pattern-card__enable { --pattern-enable-color: #f59e0b; }
 .pattern-card__enable input:checked + .vacuum-switch__track {

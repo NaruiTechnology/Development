@@ -142,6 +142,7 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpan
   const unit = unitLabel(useAppSelector((s) => s.scan.roi.scale_unit));
   const workflows = useAppSelector(s => s.processing.workflows);
   const materials = useAppSelector(s => s.processing.materials);
+  const exposing = useAppSelector(s => s.exposure.activeStepIds.some(id => id.startsWith(`${spec.key}:`)));
   const hasExposureData = useAppSelector(s => [...s.exposure.progress, ...s.exposure.retainedPreview]
     .some(node => node.id.startsWith(`${spec.key}:`) && node.id.endsWith(":exposure")));
   const [collapsed, setCollapsed] = useState(true);
@@ -162,7 +163,7 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpan
 
   return (
     <div id={`processing-pattern-${encodeURIComponent(spec.key)}`} tabIndex={-1} role="region" aria-label={caption} aria-disabled={disabled}
-      className={`card pattern-card${active ? " pattern-card--active" : ""}`} data-pattern={spec.key}>
+      className={`card pattern-card${active ? " pattern-card--active" : ""}${exposing ? " pattern-card--exposing" : ""}`} data-pattern={spec.key}>
       <div className="card__header">
         <span className="card__title">{caption}</span>
         <label className="checkbox vacuum-switch app-switch pattern-card__enable">

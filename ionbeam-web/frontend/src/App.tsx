@@ -50,7 +50,6 @@ import { ImageCanvas, type CapturedScanImage } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { PatternOverlay } from "./components/PatternOverlay";
-import { ProcessingScanStatus } from "./components/ProcessingScanStatus";
 import { exposureBusy } from "./store/exposureSlice";
 import { ProcessingPatternCards, ProcessingPatternsPanel } from "./components/ProcessingPatternsPanel";
 import { ROIScanPreview } from "./components/ROIScanPreview";
@@ -2121,7 +2120,6 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                   {roiCanvas}
                 </ProcessingImagePanel>
                 <ExposureLatticeMessage />
-                <ProcessingScanStatus kind={scanSubTab} />
               </WorkspaceView>
               <WorkspaceView workspace="scan" active={activeTopTab !== "processing"}>
                 {adcView ? (
