@@ -1091,7 +1091,7 @@ export function ROIEditor({
           const x = index % width, y = Math.floor(index / width);
           const i = (Math.floor(y * data.height / height) * data.width + Math.floor(x * data.width / width)) * 4;
           return data.data[i + 3] ? pixelGray(data.data[i], data.data[i + 1], data.data[i + 2]) : null;
-        }) : null;
+        }, inst.parameters) : null;
       let value: number | null = null;
       if (steps) {
         let next = steps.next();

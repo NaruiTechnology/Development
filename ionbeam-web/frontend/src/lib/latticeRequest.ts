@@ -15,7 +15,7 @@ function ellipsePolygon(cx: number, cy: number, r: number): [number, number][] {
   });
 }
 
-export function latticeShapeToDac(shape: PatternRoi, map: DacMap): LatticeShapeRequest {
+export function latticeShapeToDac(shape: PatternRoi, map: DacMap, frameWidthUM?: number): LatticeShapeRequest {
   const pt = (x: number, y: number): [number, number] => { const d = map.toDac(x, y); return [d.x, d.y]; };
   if ("points" in shape) return { kind: "polygon", points: shape.points.map(([x, y]) => pt(x, y)) };
   if ("cx" in shape) {
@@ -31,6 +31,15 @@ export function latticeShapeToDac(shape: PatternRoi, map: DacMap): LatticeShapeR
     return { kind: "polygon", points: ellipsePolygon(shape.cx, shape.cy, outer).map(([x, y]) => pt(x, y)) };
   }
   const a = pt(shape.x_start, shape.y_start), b = pt(shape.x_end, shape.y_end);
+  if (frameWidthUM !== undefined && frameWidthUM > 0) {
+    const x0 = Math.min(shape.x_start, shape.x_end), x1 = Math.max(shape.x_start, shape.x_end);
+    const y0 = Math.min(shape.y_start, shape.y_end), y1 = Math.max(shape.y_start, shape.y_end);
+    const w = Math.min(frameWidthUM, (x1 - x0) / 2), h = Math.min(frameWidthUM, (y1 - y0) / 2);
+    const outer = [pt(x0, y0), pt(x1, y0), pt(x1, y1), pt(x0, y1)];
+    if (w >= (x1 - x0) / 2 || h >= (y1 - y0) / 2) return { kind: "polygon", points: outer };
+    const inner = [pt(x0 + w, y0 + h), pt(x1 - w, y0 + h), pt(x1 - w, y1 - h), pt(x0 + w, y1 - h)];
+    return { kind: "frame", outer, inner };
+  }
   if (map.linear) return { kind: "rect", x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), y0: Math.min(a[1], b[1]), y1: Math.max(a[1], b[1]) };
   return { kind: "polygon", points: [pt(shape.x_start, shape.y_start), pt(shape.x_end, shape.y_start), pt(shape.x_end, shape.y_end), pt(shape.x_start, shape.y_end)] };
 }
@@ -40,11 +49,11 @@ export function latticeShapeToDac(shape: PatternRoi, map: DacMap): LatticeShapeR
  * so the service needs no calibration. `plan` supplies spacing and passes; dwellTicks as in VectorRequest.dwell.
  */
 export function buildLatticeRequest(shape: PatternRoi, plan: Pick<ExposurePlan, "spacingUM" | "passes">, dwellTicks: number,
-  map: DacMap, field: { widthUM: number; heightUM: number }, axis: ScanAxis = "long"): LatticeRequest {
+  map: DacMap, field: { widthUM: number; heightUM: number }, axis: ScanAxis = "long", frameWidthUM?: number): LatticeRequest {
   if (!(field.widthUM > 0 && field.heightUM > 0)) throw new Error("Field size must be positive to convert spacing to DAC codes.");
   patternBounds(shape); // throws for malformed shapes early
   return {
-    shape: latticeShapeToDac(shape, map),
+    shape: latticeShapeToDac(shape, map, frameWidthUM),
     pitch_x: plan.spacingUM / (field.widthUM / DAC_FULL_SCALE),
     pitch_y: plan.spacingUM / (field.heightUM / DAC_FULL_SCALE),
     axis, dwell: dwellTicks, passes: plan.passes,

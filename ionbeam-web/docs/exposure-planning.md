@@ -35,6 +35,8 @@ The service now generates the spots, so no point list crosses the wire.
 
 Processing **Scan** remains an image acquisition and follows Controls settings (Zoom, ROI scan, dwell and scan path). Processing **Run** prepares one finite lattice request for each enabled pattern with a drawn ROI. It uses the pattern's beam-current reference, dwell, overlap, dose/passes and X/Y axis; it maps the saved world-space pattern through the full-field DAC mapping. Controls Zoom, ROI-scan state, vector resolution, dwell and scan path are not inputs to Run. The axis radio defaults to X (horizontal serpentine); Y uses vertical serpentine.
 
+Lattice traversal starts at the high-Y edge and proceeds toward low Y, reversing the fast-axis direction on each row (or column for Y-axis scans). This inverts the previous bottom-up order while preserving the selected serpentine axis, spot count, and pass segmentation. Lattice requests have no idle timeout; Stop remains available and connection heartbeats still detect a lost session.
+
 The service rejects live Zoom/ROI/gray-rule updates during lattice exposure. Lattice detector payloads are counted for stream progress and are not rendered as image pixels; Run leaves the Scan image untouched. Exposure uses the first voltage in `LensLookup` (currently 30 kV). The Beam current field informs the spot-size lookup; it does not program the instrument current. Set the instrument to the recipe current before starting.
 
 ## Still open
@@ -43,7 +45,7 @@ The service rejects live Zoom/ROI/gray-rule updates during lattice exposure. Lat
 2. Actual milling depth still needs a calibrated material removal rate; the LENS table has no removal-rate data.
 3. `ionbeam-web/backend/src/mockHardware.ts` does not know `lattice`.
 4. Hardware validation of a multi-million-point stream (host-link pacing, `VECTOR_MAX_CHUNK_POINTS`, abort latency) has not been run.
-5. Cross-section recipes, Sr in the material catalogue, `.PAT` dwell-unit trap, and OpenBox/StairCut outline handling (they currently share the solid-rect model).
+5. Cross-section recipes, Sr in the material catalogue, and the `.PAT` dwell-unit trap.
 
 Tests: `npm run test:compile && node --test tests/exposurePlan.test.mjs` in `ionbeam-web/frontend`; `python -m pytest glasgow_service/tests/test_exposure_lattice.py glasgow_service/tests/test_lattice_vector_service.py` from the repo root.
 
@@ -132,7 +134,7 @@ distinct errors. The canvas message area displays exposure errors even if planni
 fails before the first step. Trace updates are batched while samples stream in.
 
 Parallel off finishes each step and all its passes before advancing. Parallel on lazily
-interleaves bounded cell segments from each enabled pattern on the single beam, so both
+interleaves scan-line requests from each enabled pattern on the single beam, so both
 patterns make progress during the same round. Each pattern's pass and Stair cut step order
 is preserved, and patterns with fewer passes finish earlier. The hardware still exposes
 one segment at a time. Cleaning lines require serial execution: enabling Parallel with a
@@ -146,9 +148,9 @@ service owns one physical scan path at a time, so the raster cannot run concurre
 with an active lattice command; finishing the current pass first preserves its
 traversal and avoids aborting or replaying any cells.
 Cell ranges use the original serpentine traversal, with direct offsets and preserved
-row parity. Segments contain at most 131072 cells and target at most 100 ms of programmed
-dwell. Existing services advertise support through `exposure_cell_ranges`; an older
-service receives complete passes until upgraded.
+row parity. Cell ranges are bounded by programmed dwell and host encoding workload. The
+lattice stream has no idle timeout, while connection heartbeats and the Stop control remain
+active.
 
 The beam session retains ownership through View and resume. Repeated clicks coalesce
 into one pending frame. View uses the raster resolution and dwell and the full DAC field.

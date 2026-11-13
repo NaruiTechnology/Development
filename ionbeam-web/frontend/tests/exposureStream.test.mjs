@@ -44,21 +44,19 @@ test("exposure transport reuses authorization and settles every terminal path", 
     assert.match(first.url, /auth=original-token/);
     stream.close();
 
-    // A slow programmed dwell is allowed; heartbeats cannot conceal a stalled acquisition.
+    // Lattice exposure has no idle timeout; the operator can Stop and connection loss still fails.
     const slow = {...request, lattice: {dwell: 65535}, latency_bytes: 131072};
-    assert.ok(exposureIdleTimeoutMs(slow) > 60_000);
-    assert.ok(exposureIdleTimeoutMs(slow, 12) > exposureIdleTimeoutMs(slow), "configured ADC timing affects the deadline");
+    assert.equal(exposureIdleTimeoutMs(request), Infinity);
+    assert.equal(exposureIdleTimeoutMs(slow), Infinity);
     const stalled = new ExposureStream(true);
     run = stalled.run(request, () => {});
-    const timedOut = assert.rejects(run, /acquisition timed out.*not replayed/);
     const second = sockets.at(-1); second.open();
     for (let i = 0; i < 7; i++) { t.mock.timers.tick(10_000); second.message({event: "heartbeat"}); }
-    await timedOut;
-    const count = sockets.length;
-    await assert.rejects(stalled.run(request, () => {}), /timed out/);
-    assert.equal(sockets.length, count, "uncertain dose is never replayed");
+    assert.equal(stalled.failed, false);
+    const stopped = assert.rejects(run, /stopped/);
+    stalled.close(); await stopped;
 
-    // Each request has its own dwell deadline, including after switching from View.
+    // Lattice runs stay timeout-free after switching between View and exposure.
     const switched = new ExposureStream(true);
     run = switched.run(request, () => {});
     const third = sockets.at(-1); third.open(); third.message({event: "done"}); await run;

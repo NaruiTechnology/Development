@@ -10,6 +10,8 @@ glasgow_service/execution_authority.py
 glasgow_service/executor_config.py
 glasgow_service/executor_lifecycle.py
 glasgow_service/executor_logging.py
+glasgow_service/exposure_lattice.py
+glasgow_service/exposure_lattice_adapter.py
 glasgow_service/failover_executor.py
 glasgow_service/lens_lookup.py
 glasgow_service/models.py
@@ -63,9 +65,11 @@ tests/test_execution_authority.py
 tests/test_executor_config.py
 tests/test_executor_lifecycle.py
 tests/test_executor_logging.py
+tests/test_exposure_lattice.py
 tests/test_failover_executor.py
 tests/test_figure_levels.py
 tests/test_host_sbc_decoupling.py
+tests/test_lattice_vector_service.py
 tests/test_lens_lookup.py
 tests/test_link_pacing.py
 tests/test_live_scan_continuous.py

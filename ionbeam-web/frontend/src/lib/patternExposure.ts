@@ -34,7 +34,7 @@ export function preparePatternExposure(spec: PatternSpec, shape: PatternRoi, par
     throw new Error(`${spec.caption}: no exact ${beamCurrentPA} pA spot-size reference at ${beamVoltageKV} kV.`);
   const widthUM = Math.abs(fov.x_end - fov.x_origin), heightUM = Math.abs(fov.y_end - fov.y_origin);
   const plan = planExposure(spec, shape, { beamCurrentPA, spotDiameterUM: spot.spotSizeUM, overlapPct, dwellUS, dose, passes },
-    { axis, fieldWidthUM: widthUM });
+    { axis, fieldWidthUM: widthUM, parameters });
   const map: DacMap = fov.scanGeometry?.enabled
     ? { linear: false, toDac: (x, y) => {
         const [dx, dy] = transform(fov.scanGeometry!.inverse, [x, y]);
@@ -42,7 +42,7 @@ export function preparePatternExposure(spec: PatternSpec, shape: PatternRoi, par
       } }
     : linearDacMap(fov);
   const lattice = buildLatticeRequest(shape, plan, Math.max(0, Math.min(65535, Math.ceil(dwellUS / 0.125) - 1)), map,
-    { widthUM, heightUM }, axis);
+    { widthUM, heightUM }, axis, spec.model === "OpenBoxModel" ? Number(parameters.lineWidth ?? 0) : undefined);
   return { plan, lattice, beamVoltageKV, beamCurrentPA, spotSizeNM: spot.spotSizeNM };
 }
 

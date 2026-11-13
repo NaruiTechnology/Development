@@ -360,6 +360,13 @@ class LatticePolygon(BaseModel):
     points: List[Tuple[float, float]] = Field(..., min_length=3, max_length=4096)
 
 
+class LatticeFrame(BaseModel):
+    """Frame exposure: include the outer polygon except its inner polygon."""
+    kind: Literal["frame"] = "frame"
+    outer: List[Tuple[float, float]] = Field(..., min_length=3, max_length=4096)
+    inner: List[Tuple[float, float]] = Field(..., min_length=3, max_length=4096)
+
+
 class LatticeRequest(BaseModel):
     """Shape and spacing of a physically-spaced exposure, in DAC codes.
 
@@ -367,7 +374,7 @@ class LatticeRequest(BaseModel):
     so the service needs no calibration knowledge. `dwell` is in ADC-average ticks (N + 1
     conversions), as for `VectorRequest.dwell`.
     """
-    shape: Union[LatticeRect, LatticeEllipse, LatticePolygon] = Field(..., discriminator="kind")
+    shape: Union[LatticeRect, LatticeEllipse, LatticePolygon, LatticeFrame] = Field(..., discriminator="kind")
     pitch_x: float = Field(..., gt=0, description="Spot spacing along X, DAC codes (may be < 1).")
     pitch_y: Optional[float] = Field(None, gt=0, description="Spot spacing along Y; defaults to pitch_x.")
     axis: Literal["long", "x", "y"] = "long"

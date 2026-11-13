@@ -7,10 +7,10 @@ type Request = RasterRequest | VectorRequest;
 const STARTUP_MS = 60_000;
 const HTTP_MS = 15_000;
 
-/** Include configured ADC timing, USB buffering and service startup;
- * heartbeat traffic must never extend the acquisition-progress deadline. */
+/** Lattice runs can have long backend work gaps; let Stop and connection heartbeat govern them. */
 export function exposureIdleTimeoutMs(request: Request, adcHalfPeriod = 3): number {
-  const dwell = "lattice" in request && request.lattice ? request.lattice.dwell : request.dwell;
+  if ("lattice" in request && request.lattice) return Number.POSITIVE_INFINITY;
+  const dwell = request.dwell;
   const bufferedSamples = Math.max(65536, request.latency_bytes / 2);
   const pixelSeconds = estimateRevC3ScanTiming(1, dwell, adcHalfPeriod).frameSeconds;
   return Math.min(2_147_000_000, STARTUP_MS + Math.ceil(bufferedSamples * pixelSeconds * 1000 * 4));
@@ -72,9 +72,10 @@ export class ExposureStream {
     return new Promise((resolve, reject) => {
       const arm = () => {
         clearTimeout(this.timer);
+        const timeoutMs = exposureIdleTimeoutMs(request, this.adcHalfPeriod);
+        if (!Number.isFinite(timeoutMs)) return;
         this.timer = setTimeout(() => this.fail(new Error(
-          `Exposure acquisition timed out after ${Math.ceil(exposureIdleTimeoutMs(request, this.adcHalfPeriod) / 1000)} seconds without progress. The segment was not replayed.`)),
-          exposureIdleTimeoutMs(request, this.adcHalfPeriod));
+          `Exposure acquisition timed out after ${Math.ceil(timeoutMs / 1000)} seconds without progress. The segment was not replayed.`)), timeoutMs);
       };
       this.pending = {resolve, reject, samples, progress: arm};
       const send = () => {

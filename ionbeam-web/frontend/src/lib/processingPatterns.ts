@@ -54,8 +54,8 @@ export type PatternParameters = Record<string, ParameterValue>;
 export interface PatternModelDef {
   roi: RoiKind;
   validateRoi(roi: unknown): PatternRoi;
-  area(roi: PatternRoi): number;
-  contains(roi: PatternRoi, x: number, y: number): boolean;
+  area(roi: PatternRoi, parameters?: Record<string, unknown>): number;
+  contains(roi: PatternRoi, x: number, y: number, parameters?: Record<string, unknown>): boolean;
 }
 
 /* ---------------------------------------------------------------- parameters */
@@ -214,7 +214,19 @@ function validateFourPointPolygon(roi: unknown): PolygonRoi {
 /** Data models by the name used in processingPatterns.json. */
 export const MODEL_REGISTRY: Record<string, PatternModelDef> = {
   SolidBoxModel: rectDef(),
-  OpenBoxModel: rectDef(),
+  OpenBoxModel: {
+    ...rectDef(),
+    area: (r, parameters = {}) => {
+      const q = r as RectRoi, width = Math.max(0, Number(parameters.lineWidth ?? 0));
+      const w = q.x_end - q.x_start, h = q.y_end - q.y_start;
+      return w * h - Math.max(0, w - 2 * width) * Math.max(0, h - 2 * width);
+    },
+    contains: (r, x, y, parameters = {}) => {
+      const q = r as RectRoi, width = Math.max(0, Number(parameters.lineWidth ?? 0));
+      return x >= q.x_start && x <= q.x_end && y >= q.y_start && y <= q.y_end &&
+        (x - q.x_start <= width || q.x_end - x <= width || y - q.y_start <= width || q.y_end - y <= width);
+    },
+  },
   StairCutModel: rectDef(),
   CleaningLineModel: rectDef(),
   CircleModel: circleDef,
@@ -293,7 +305,7 @@ export function patternBounds(roi: PatternRoi): RectRoi {
 /** Average raw gray of opaque pixel centres inside the actual ROI shape. */
 export function* patternAvgGraySteps(roi: PatternRoi, model: (typeof MODEL_REGISTRY)[string], width: number, height: number,
   world: { x_origin: number; x_end: number; y_origin: number; y_end: number },
-  sample: (index: number) => number | null): Generator<void, number | null> {
+  sample: (index: number) => number | null, parameters: Record<string, unknown> = {}): Generator<void, number | null> {
   let sum = 0, count = 0;
   const bounds = patternBounds(roi);
   const range = (a: number, b: number, origin: number, end: number, size: number) => {
@@ -310,7 +322,7 @@ export function* patternAvgGraySteps(roi: PatternRoi, model: (typeof MODEL_REGIS
     for (let x = x0; x < x1; x++) {
       if (x > x0 && (x - x0) % 128 === 0) yield;
       const wx = world.x_origin + (x + 0.5) / width * (world.x_end - world.x_origin);
-      if (!model.contains(roi, wx, wy)) continue;
+      if (!model.contains(roi, wx, wy, parameters)) continue;
       const gray = sample(y * width + x);
       if (gray !== null) { sum += gray; count++; }
     }

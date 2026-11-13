@@ -1,7 +1,7 @@
 """Bridge between the API models (models.py) and the dependency-free lattice generator."""
 from __future__ import annotations
 
-from .exposure_lattice import Ellipse, Polygon, Rect, build_lattice
+from .exposure_lattice import Ellipse, Frame, Polygon, Rect, build_lattice
 
 
 def shape_from_request(shape):
@@ -16,6 +16,8 @@ def shape_from_request(shape):
         if shape.inner_rx >= shape.rx or shape.inner_ry >= shape.ry:
             raise ValueError("ring inner radii must be smaller than the outer radii")
         return Ellipse(shape.cx, shape.cy, shape.rx, shape.ry, shape.inner_rx, shape.inner_ry)
+    if kind == "frame":
+        return Frame(Polygon(tuple(map(tuple, shape.outer))), Polygon(tuple(map(tuple, shape.inner))))
     return Polygon(tuple((float(x), float(y)) for x, y in shape.points))
 
 

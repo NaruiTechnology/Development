@@ -91,27 +91,28 @@ export function latticeSpec(shape: PatternRoi, pitchWorld: number, axis: ScanAxi
 const cellCentre = (l: LatticeSpec, i: number, j: number): [number, number] =>
   [l.x0 + (i + 0.5) * l.pitchX, l.y0 + (j + 0.5) * l.pitchY];
 
-/** Spots in serpentine order: the fast axis reverses on every row (FEI scan strategy). */
+/** Spots start at the high-Y edge; the fast axis reverses on every row. */
 export function* latticeCells(l: LatticeSpec): Generator<[number, number]> {
   const [fast, slow] = l.axis === "x" ? [l.nx, l.ny] : [l.ny, l.nx];
   for (let s = 0; s < slow; s++) for (let f = 0; f < fast; f++) {
     const k = s % 2 ? fast - 1 - f : f;
-    yield l.axis === "x" ? [k, s] : [s, k];
+    yield l.axis === "x" ? [k, l.ny - 1 - s] : [s, l.ny - 1 - k];
   }
 }
 
 export interface SpotCount { count: number; exact: boolean }
 
 /** Spots inside the true shape. Falls back to area / pitch^2 for lattices too large to walk. */
-export function countSpots(spec: Pick<PatternSpec, "model">, shape: PatternRoi, l: LatticeSpec): SpotCount {
+export function countSpots(spec: Pick<PatternSpec, "model">, shape: PatternRoi, l: LatticeSpec,
+  parameters: Record<string, unknown> = {}): SpotCount {
   const model = MODEL_REGISTRY[spec.model];
   if (l.nx * l.ny > MAX_COUNT_CELLS) {
-    return { count: Math.max(1, Math.round(model.area(shape) / (l.pitchX * l.pitchY))), exact: false };
+    return { count: Math.max(1, Math.round(model.area(shape, parameters) / (l.pitchX * l.pitchY))), exact: false };
   }
   let count = 0;
   for (let j = 0; j < l.ny; j++) for (let i = 0; i < l.nx; i++) {
     const [x, y] = cellCentre(l, i, j);
-    if (model.contains(shape, x, y)) count++;
+    if (model.contains(shape, x, y, parameters)) count++;
   }
   return { count, exact: true };
 }
@@ -154,6 +155,7 @@ export interface PlanContext {
   axis?: ScanAxis;
   /** Field width in um, used to flag spacing finer than one DAC step. */
   fieldWidthUM?: number;
+  parameters?: Record<string, unknown>;
 }
 
 export function planExposure(spec: Pick<PatternSpec, "model">, shape: PatternRoi, input: ExposureInputs, ctx: PlanContext = {}): ExposurePlan {
@@ -163,7 +165,7 @@ export function planExposure(spec: Pick<PatternSpec, "model">, shape: PatternRoi
     if (!(v > 0) || !Number.isFinite(v)) throw new Error(`${name} must be a positive number.`);
   const spacingUM = pointSpacingUM(input.spotDiameterUM, input.overlapPct);
   const lattice = latticeSpec(shape, spacingUM / umPerWorld, ctx.axis);
-  const { count, exact } = countSpots(spec, shape, lattice);
+  const { count, exact } = countSpots(spec, shape, lattice, ctx.parameters);
   // Dose is delivered per actual cell area, which differs slightly from s^2 after pitch adjustment.
   const cellUM2 = lattice.pitchX * lattice.pitchY * umPerWorld * umPerWorld;
   const perPass = chargePerSpotNC(input.beamCurrentPA, input.dwellUS) / cellUM2;

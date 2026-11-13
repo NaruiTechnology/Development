@@ -5,7 +5,7 @@ import { useTranslation } from "../i18n";
 import { apiUrl } from "../lib/backendUrl";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { ExposureStream, exposureJson } from "../lib/exposureStream";
-import { prepareExposureSequence, exposureRounds, exposureSegments } from "../lib/exposureSequence";
+import { prepareExposureSequence, exposureRounds, exposureSegments, totalExposureSpots, MAX_EXPOSURE_SPOTS } from "../lib/exposureSequence";
 import { selectPattern } from "../store/processingSlice";
 import { exposurePreparing, exposurePrepared, exposureStepStarted, exposureStepCompleted,
   exposureSamplesReceived, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposurePaused, exposureResumed } from "../store/exposureSlice";
@@ -177,27 +177,27 @@ export function useExposureRun() {
         cellRanges = capabilities.exposure_cell_ranges === true;
       }
       if (cancelled.current) return;
-      const entries = prepareExposureSequence(snapshot.processing, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
-      if (snapshot.exposure.parallel && entries.some(e => e.node.exposure?.model === "CleaningLineModel"))
+      const plannedEntries = prepareExposureSequence(snapshot.processing, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
+      const totalSpots = totalExposureSpots(plannedEntries);
+      if (totalSpots > MAX_EXPOSURE_SPOTS)
+        throw new Error(t("processing.exposure.totalLimit", {count: totalSpots.toLocaleString(), limit: MAX_EXPOSURE_SPOTS.toLocaleString()}));
+      if (snapshot.exposure.parallel && plannedEntries.some(e => e.node.exposure?.model === "CleaningLineModel"))
         throw new Error("Cleaning lines require serial exposure (Parallel off).");
-      dispatch(exposurePrepared(entries.map(e => e.node)));
+      dispatch(exposurePrepared(plannedEntries.map(e => e.node)));
       // Yield so the pattern cards can render their calculated spot counts before the first lattice starts.
       await new Promise<void>(resolve => window.setTimeout(resolve, 0));
       if (cancelled.current) return;
-      const rounds = exposureRounds(entries, snapshot.exposure.parallel);
+      const rounds = exposureRounds(plannedEntries, snapshot.exposure.parallel);
       let upcoming = rounds.next();
       while (!upcoming.done) {
         const round = upcoming.value;
         upcoming = rounds.next();
         if (cancelled.current) break;
-        const queues = round.map(run => {
-          const lattice = {...run.request.lattice!, passes: 1};
-          const segments = cellRanges ? exposureSegments(lattice) : [lattice];
-          return {run, segments: segments[Symbol.iterator]()};
-        });
+        const queues = round.map(run => ({run, requests: (cellRanges
+          ? exposureSegments({...run.request.lattice!, passes: 1})
+          : [{...run.request.lattice!, passes: 1}])[Symbol.iterator]()}));
         const skipped = new Set<string>();
-        // Parallel alternates bounded segments across patterns on the single
-        // beam, so both ROIs make progress during the same exposure round.
+        // Parallel alternates scan-line requests across patterns on the single beam.
         let remaining = true;
         while (remaining && !cancelled.current) {
           remaining = false;
@@ -207,7 +207,7 @@ export function useExposureRun() {
               dispatch(exposureStepSkipped(queue.run.entry.node.id));
               continue;
             }
-            const next = queue.segments.next();
+            const next = queue.requests.next();
             if (next.done) continue;
             remaining = true;
             if (!snapshot.exposure.parallel && store.getState().processing.activeKey !== queue.run.entry.key)

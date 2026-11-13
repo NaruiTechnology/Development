@@ -374,6 +374,10 @@ body {
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
 }
+.pattern-card__axis { grid-column: auto; justify-self: start; width: fit-content; max-width: 100%; display: flex; flex-direction: row; align-items: center; margin: 0; padding: 0; gap: 2px; border: 0; }
+.pattern-card__axis .pattern-axis-option { gap: 2px; }
+.pattern-card__axis .pattern-axis-option .vector-scan-path-preview { width: 18px; height: 18px; }
+.pattern-card__axis legend { margin: 0 2px 0 0; padding: 0; }
 .pattern-axis-field legend { padding: 0 4px; color: var(--c-text-muted); font-size: 0.75rem; }
 .pattern-axis-option { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .pattern-axis-option .vector-scan-path-preview { width: 34px; height: 30px; }
@@ -1250,7 +1254,7 @@ body {
 
 .image-panel-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   width: 100%;
   min-width: 0;
@@ -8113,6 +8117,7 @@ body {
   gap: 10px 8px;
 }
 
+
 .pattern-card__unit { text-transform: none; }
 
 .pattern-card__runtime {
@@ -8131,6 +8136,16 @@ body {
   flex: 1 1 0;
   min-width: 0;
 }
+
+.pattern-card__parameters > .field > label {
+  white-space: nowrap;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+}
+
+.pattern-card__axis { flex-wrap: nowrap; min-width: 0; }
+.pattern-card__axis .pattern-axis-option { flex: 0 0 auto; white-space: nowrap; }
+.pattern-card__axis .vector-scan-path-preview { flex: 0 0 auto; }
 
 .roi-pattern-overlay {
   z-index: 3;

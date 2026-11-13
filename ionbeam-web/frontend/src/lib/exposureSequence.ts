@@ -5,6 +5,13 @@ import type { LatticeRequest, VectorRequest } from "../types/api";
 import type { WorkflowProgress } from "./processingWorkflows.js";
 
 export interface ExposureEntry { key: string; node: WorkflowProgress; request: VectorRequest }
+/** Aggregate guard for one selected exposure run. Mirrors the service's per-lattice sanity bound. */
+export const MAX_EXPOSURE_SPOTS = 200_000_000;
+
+export function totalExposureSpots(entries: readonly ExposureEntry[]): number {
+  return entries.reduce((sum, entry) => sum + (entry.node.total ?? entry.node.spot) * (entry.request.lattice?.passes ?? 1), 0);
+}
+
 export function prepareExposureSequence(patterns: ProcessingState, field: ROIState, simulation: boolean): ExposureEntry[] {
   if (!patterns.lensLookup) throw new Error("Load the LensLookup reference before exposure.");
   const entries: ExposureEntry[] = [];
@@ -83,7 +90,8 @@ export function* exposureSegments(lattice: LatticeRequest): Generator<LatticeReq
   } else if (shape.kind === "ellipse") {
     width = shape.rx * 2; height = shape.ry * 2;
   } else {
-    const xs = shape.points.map(point => point[0]), ys = shape.points.map(point => point[1]);
+    const points = shape.kind === "frame" ? shape.outer : shape.points;
+    const xs = points.map(point => point[0]), ys = points.map(point => point[1]);
     width = Math.max(...xs) - Math.min(...xs); height = Math.max(...ys) - Math.min(...ys);
   }
   const cells = Math.max(1, Math.round(width / lattice.pitch_x))
@@ -93,3 +101,4 @@ export function* exposureSegments(lattice: LatticeRequest): Generator<LatticeReq
   for (let start = 0; start < cells; start += size)
     yield {...lattice, cell_start: start, cell_end: Math.min(cells, start + size)};
 }
+

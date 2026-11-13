@@ -4,9 +4,9 @@
  * (entries marked skip never arrive), and every card is bound to its pattern instance in the processing slice.
  *
  * Picking an icon arms drawing on the image canvas (PatternOverlay); picking it again disarms.
- * Cards start collapsed and expand when their ROI is drawn or edited.
+ * The active icon also controls which pattern card is expanded, keeping both selections aligned.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { materialTargetGrayLevel } from "../lib/processingWorkflows";
@@ -33,6 +33,7 @@ import { PatternRuntimeReadouts } from "./PatternRuntimeReadouts";
 import { VectorScanPathPreview } from "./VectorScanPathPreview";
 import { ProcessingWorkflowPanel } from "./ProcessingWorkflowPanel";
 import { unitLabel } from "./ROIEditor";
+import { prepareExposureSequence, totalExposureSpots, MAX_EXPOSURE_SPOTS } from "../lib/exposureSequence";
 
 import { ExposureControls } from "./ExposureControls";
 import { LoadingSpinner } from "./LoadingSpinner";
@@ -112,13 +113,34 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
 }
 
 export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: { disabled: boolean; enableDisabled?: boolean }) {
-  const { specs, instances, activeKey } = useAppSelector((s) => s.processing);
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const onExpansionChange = useCallback((key: string, expanded: boolean) => {
-    setExpandedKey(current => expanded ? key : current === key ? null : current);
-  }, []);
+  const dispatch = useAppDispatch();
+  const processing = useAppSelector((s) => s.processing);
+  const { specs, instances, activeKey } = processing;
+  const field = useAppSelector(s => s.scan.roi);
+  const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
+  const { tr } = useTr();
+  const [limitMessage, setLimitMessage] = useState("");
+  const setEnabled = (key: string, enabled: boolean) => {
+    if (enabled && processing.lensLookup) {
+      const instance = instances[key];
+      if (instance) {
+        const candidate = { ...processing, instances: { ...instances, [key]: { ...instance, enabled: true } } };
+        try {
+          const total = totalExposureSpots(prepareExposureSequence(candidate, field, simulation));
+          if (total > MAX_EXPOSURE_SPOTS) {
+            setLimitMessage(tr("processing.exposure.selectionLimit", `Cannot enable this pattern: the selected patterns would require ${total.toLocaleString()} spots including passes; the limit is ${MAX_EXPOSURE_SPOTS.toLocaleString()}. Reduce the ROI, increase pitch, or reduce passes.`));
+            return;
+          }
+        } catch {
+          // Keep enablement available while a recipe is incomplete; Start performs the same guard.
+        }
+      }
+    }
+    setLimitMessage("");
+    dispatch(setPatternEnabled({ key, enabled }));
+  };
   // Only presentation order changes. Catalogue order still determines acquisition/execution order.
-  const promotedKey = disabled && activeKey && instances[activeKey]?.enabled && instances[activeKey]?.roi ? activeKey : expandedKey;
+  const promotedKey = activeKey && instances[activeKey]?.roi ? activeKey : null;
   const enabledSpecs = specs.filter(spec => instances[spec.key]?.enabled && instances[spec.key]?.roi);
   const disabledSpecs = specs.filter(spec => !instances[spec.key]?.enabled || !instances[spec.key]?.roi);
   const promoteWithinGroup = (group: typeof specs) => {
@@ -126,16 +148,17 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
     return index > 0 ? [group[index], ...group.slice(0, index), ...group.slice(index + 1)] : group;
   };
   const ordered = [...promoteWithinGroup(enabledSpecs), ...promoteWithinGroup(disabledSpecs)];
-  return <>{ordered.map((spec) => (
+  return <>{limitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{limitMessage}</p>}{ordered.map((spec) => (
       <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key}
         disabled={disabled || !instances[spec.key]?.roi} enableDisabled={enableDisabled || !instances[spec.key]?.roi}
-        onExpansionChange={onExpansionChange} />
+        onEnabledChange={setEnabled}
+      />
     ))}</>;
 }
 
-function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpansionChange }: {
+function PatternCard({ spec, instance, active, disabled, enableDisabled, onEnabledChange }: {
   spec: PatternSpec; instance: PatternInstance | undefined; active: boolean; disabled: boolean; enableDisabled: boolean;
-  onExpansionChange: (key: string, expanded: boolean) => void;
+  onEnabledChange: (key: string, enabled: boolean) => void;
 }) {
   const dispatch = useAppDispatch();
   const { t, tr } = useTr();
@@ -144,18 +167,8 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpan
   const materials = useAppSelector(s => s.processing.materials);
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
   const exposing = useAppSelector(s => s.exposure.activeStepIds.some(id => id.startsWith(`${spec.key}:`)));
-  const hasExposureData = useAppSelector(s => [...s.exposure.progress, ...s.exposure.retainedPreview]
-    .some(node => node.id.startsWith(`${spec.key}:`) && node.id.endsWith(":exposure")));
-  const [collapsed, setCollapsed] = useState(true);
-  useEffect(() => {
-    if (active && instance?.roi && instance.enabled !== false) setCollapsed(false);
-    else if (!hasExposureData) setCollapsed(true);
-  }, [active, instance?.roi, instance?.enabled, hasExposureData]);
-  useEffect(() => {
-    onExpansionChange(spec.key, !collapsed);
-  }, [spec.key, collapsed, onExpansionChange]);
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
-  const label = collapsed ? t("processing.expand") : t("processing.collapse");
+  const label = active ? t("processing.collapse") : t("processing.expand");
   if (!instance) return null;
   const materialBrightness = materials.find(material => material.name === instance.material)?.brightness;
   const targetGrayLevel = instance.AvgGray !== null && materialBrightness !== undefined
@@ -171,8 +184,7 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpan
           <input type="checkbox" checked={Boolean(instance.roi) && instance.enabled !== false} disabled={enableDisabled}
             aria-label={`${caption}: ${t("processing.enable")}`}
             onChange={(event) => {
-              if (!event.target.checked) setCollapsed(true);
-              dispatch(setPatternEnabled({ key: spec.key, enabled: event.target.checked }));
+              onEnabledChange(spec.key, event.target.checked);
             }} />
           <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
           <span>{t("processing.enable")}</span>
@@ -180,20 +192,17 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpan
         <button
           type="button"
           className="card__collapse-btn"
-          aria-expanded={!collapsed}
+          aria-expanded={active}
           aria-label={`${caption}: ${label}`}
           data-tooltip={`${caption}: ${label}`}
           data-styled-tooltip="true"
           disabled={false}
-          onClick={() => {
-            setCollapsed((value) => !value);
-            if (collapsed) dispatch(selectPattern(spec.key));
-          }}
+          onClick={() => dispatch(selectPattern(active ? null : spec.key))}
         >
           <Icon name="chevronDown" />
         </button>
       </div>
-      <div className="pattern-card__body" hidden={collapsed}>
+      <div className="pattern-card__body" hidden={!active}>
         <details className="pattern-image-guided" open={instance.workflowEnabled && instance.workflow !== "default"}>
           <summary>{tr("processing.imageGuided.title", "Image-guided removal (Scan only)")}</summary>
           <p className="pattern-image-guided__note">{tr("processing.imageGuided.note", "These gray-level workflow settings act on the Scan image path. Exposure Start uses the step recipe and ignores them.")}</p>
@@ -250,9 +259,7 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpan
             </select>
           </label>
         )}
-        </div>
-        {spec.model === "StairCutModel" && <StairStepsTable patternKey={spec.key} caption={caption} instance={instance} disabled={disabled} />}
-        <fieldset className="pattern-axis-field" disabled={disabled}>
+        <fieldset className="pattern-axis-field pattern-card__axis" disabled={disabled}>
           <legend>{t("processing.exposureAxis")}</legend>
           {(["x", "y"] as const).map((axis) => {
             const path = axis === "x" ? "horizontal_triangle" : "vertical_serpentine";
@@ -266,6 +273,8 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onExpan
             </label>;
           })}
         </fieldset>
+        </div>
+        {spec.model === "StairCutModel" && <StairStepsTable patternKey={spec.key} caption={caption} instance={instance} disabled={disabled} />}
         <PatternRuntimeReadouts spec={spec} roi={instance.roi} parameters={instance.parameters}
           stairSteps={instance.stairSteps} defaultMaterial={materials[0]?.name} simulation={simulation} />
         <p className="pattern-card__readout">{roiReadout(spec, instance.roi, unit)}{`\nAvgGray: ${instance.AvgGray == null ? "—" : instance.AvgGray.toFixed(2)}`}</p>

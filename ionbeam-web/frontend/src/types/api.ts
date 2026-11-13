@@ -101,6 +101,7 @@ export type VectorRequestPattern = VectorPattern | "lattice";
 export type LatticeShapeRequest =
   | { kind: "rect"; x0: number; x1: number; y0: number; y1: number }
   | { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number; inner_rx?: number; inner_ry?: number }
+  | { kind: "frame"; outer: [number, number][]; inner: [number, number][] }
   | { kind: "polygon"; points: [number, number][] };
 export interface LatticeRequest {
   cell_start?: number;

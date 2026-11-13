@@ -1,4 +1,4 @@
-Metadata-Version: 2.2
+Metadata-Version: 2.4
 Name: glasgow-service
 Version: 0.2.0
 Summary: Long-lived HTTP/WebSocket service wrapping a single Glasgow device.
@@ -14,13 +14,13 @@ Requires-Dist: numpy>=2.0
 Provides-Extra: examples
 Requires-Dist: websockets>=12; extra == "examples"
 Provides-Extra: tests
-Requires-Dist: pillow>=10; extra == "tests"
-Requires-Dist: pytest-cov>=5; extra == "tests"
 Requires-Dist: pytest>=8; extra == "tests"
+Requires-Dist: pytest-cov>=5; extra == "tests"
+Requires-Dist: pillow>=10; extra == "tests"
 Provides-Extra: sbc
 Requires-Dist: gpiozero>=2.0; extra == "sbc"
-Requires-Dist: pyserial>=3.5; extra == "sbc"
 Requires-Dist: smbus2>=0.4; extra == "sbc"
+Requires-Dist: pyserial>=3.5; extra == "sbc"
 
 # Glasgow Device Service
 

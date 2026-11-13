@@ -41,7 +41,7 @@ def test_python_lattice_matches_typescript_golden(case):
 
 def test_serpentine_order_reverses_each_row():
     lat = build_lattice(Rect(0, 1, 0, 0.5), 0.25)
-    assert list(lat.cells()) == [(0, 0), (1, 0), (2, 0), (3, 0), (3, 1), (2, 1), (1, 1), (0, 1)]
+    assert list(lat.cells()) == [(0, 1), (1, 1), (2, 1), (3, 1), (3, 0), (2, 0), (1, 0), (0, 0)]
 
 
 def test_points_are_lazy_and_do_not_materialise_the_pattern():
