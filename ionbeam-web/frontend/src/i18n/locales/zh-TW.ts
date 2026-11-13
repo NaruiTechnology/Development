@@ -182,7 +182,7 @@ export const zhTW: Partial<TranslationTable> = {
   "processing.exposure.path": "規劃路徑",
   "processing.exposure.trace": "束斑軌跡",
   "processing.exposure.head": "目前束斑",
-  "processing.exposure.schematic": "取樣模擬預覽",
+  "processing.exposure.schematic": "取樣晶格預覽",
   "processing.exposure.depth": "灰階：請求深度，越暗越深（未校正）",
   "canvas.scanParams.exposureLattice": "曝光晶格",
   "canvas.scanParams.dwell": "駐留",

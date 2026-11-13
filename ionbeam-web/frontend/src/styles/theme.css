@@ -8305,7 +8305,7 @@ body {
 .processing-workflow progress::-webkit-progress-value { background: var(--c-accent); border-radius: 3px; }
 .processing-workflow progress::-moz-progress-bar { background: var(--c-accent); border-radius: 3px; }
 .processing-workflow p { font-size: 12px; opacity: .8; }
-.processing-workflow__tree { display: flex; gap: 28px; list-style: none; padding: 0 0 20px; margin: 18px 0 0; overflow-x: auto; }
+.processing-workflow__tree { display: flex; gap: 28px; list-style: none; padding: 12px 0 20px; margin: 6px 0 0; overflow-x: auto; }
 .processing-workflow__node { --workflow-direction-color: #7b8794; display: flex; flex-direction: column; flex: 1 0 120px; min-width: 0; gap: 8px; position: relative; }
 .processing-workflow__node::before { content: ""; position: absolute; top: 12px; left: 32px; right: -21px; border-top: 1px solid var(--workflow-direction-color); }
 .processing-workflow__node::after { content: ""; position: absolute; top: 9px; right: -21px; width: 6px; height: 6px; border-top: 1px solid var(--workflow-direction-color); border-right: 1px solid var(--workflow-direction-color); transform: rotate(45deg); }
@@ -8315,6 +8315,8 @@ body {
 .processing-workflow__end { position: absolute; top: 6px; right: 0; width: 12px; height: 12px; border: 2px solid #3498ff; border-radius: 50%; background: var(--c-bg-elev); }
 .processing-workflow__end[data-completed="true"] { background: #3498ff; }
 .processing-workflow__number { border: 1px solid var(--c-border); border-radius: 50%; width: 25px; height: 25px; display: grid; place-items: center; font-size: 10px; }
+.processing-workflow__pass { position: absolute; z-index: 1; top: -11px; left: calc(50% + 27px); transform: translateX(-50%); padding: 0 3px; border-radius: 3px; background: var(--c-bg-elev); color: var(--c-text); font-size: 9px; line-height: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.processing-workflow__pass--last { left: calc(50% + 7px); }
 .processing-workflow__duration { position: absolute; z-index: 1; top: 5px; left: calc(50% + 27px); transform: translateX(-50%); padding: 0 3px; border-radius: 3px; background: var(--c-bg-elev); color: var(--c-text-dim); font-size: 9px; line-height: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .processing-workflow__duration--last { left: calc(50% + 7px); }
 .processing-workflow__elapsed { font-variant-numeric: tabular-nums; }

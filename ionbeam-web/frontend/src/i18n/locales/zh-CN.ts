@@ -174,7 +174,7 @@ export const zhCN: Partial<TranslationTable> = {
   "processing.exposure.path": "规划路径",
   "processing.exposure.trace": "束斑轨迹",
   "processing.exposure.head": "当前束斑",
-  "processing.exposure.schematic": "采样模拟预览",
+  "processing.exposure.schematic": "采样晶格预览",
   "processing.exposure.depth": "灰度：请求深度，越暗越深（未标定）",
   "canvas.scanParams.exposureLattice": "曝光晶格",
   "canvas.scanParams.dwell": "驻留",

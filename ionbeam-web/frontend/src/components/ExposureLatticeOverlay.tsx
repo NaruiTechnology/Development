@@ -50,9 +50,7 @@ const ExposureStep = memo(function ExposureStep({ node, index, depthRank, depthC
 
 export function ExposureLatticeGeometry({ project }: { project: Project }) {
   const nodes = useAppSelector(selectExposurePreview);
-  const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
-  const steps = nodes.filter(n => n.exposure?.simulation);
-  if (!simulation) return null;
+  const steps = nodes.filter(n => n.exposure);
   const budget = Math.max(4, Math.floor(3000 / Math.max(1, steps.length)));
   const counts = new Map<string, number>(), ranks = new Map<string, number>();
   for (const step of steps) {
@@ -117,13 +115,13 @@ export function ExposureLatticeMessage() {
     <span>{e.beamCurrentPA} pA · Ø {(p.spotDiameterUM*1000).toFixed(1)} nm · {t("processing.exposure.pitch")} {(p.spacingUM*1000).toFixed(2)} nm · OL {p.overlapPct}% · {e.dwellUS} µs · {p.lattice.axis.toUpperCase()} · {p.countExact ? "" : "≈"}{p.count.toLocaleString()} {t("processing.exposure.spots")} · {p.passes} {t("processing.exposure.passes")}</span>
     {e.requestedDepthUM !== undefined && <span>Material {e.material ?? "—"} · Depth {e.requestedDepthUM.toFixed(3)} µm · Layer {e.incrementUM?.toFixed(3) ?? "—"} µm · Sr {e.removalRate ? `${e.removalRate.toPrecision(4)} µm³/nC` : "not calibrated"}</span>}
     {e.lineSpacingUM !== undefined && <span>{t("processing.exposure.lineSpacing")} {e.lineSpacingUM.toFixed(4)} µm</span>}
-    {e.simulation && <span className="exposure-lattice-message__legend">
+    <span className="exposure-lattice-message__legend">
       <span style={{color:"#22d3ee"}}>○ {t("processing.exposure.path")}</span>
       <span style={{color:COLORS[(index-1)%COLORS.length]}}>○ {t("processing.exposure.trace")}</span>
       <span>○ {t("processing.exposure.head")}</span>
       <span>{t("processing.exposure.schematic")}</span>
       {steps.some(n=>n.exposure?.requestedDepthUM !== undefined) && <span>{t("processing.exposure.depth")}</span>}
-    </span>}
+    </span>
     </div>
   </>;
 }

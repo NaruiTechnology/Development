@@ -72,6 +72,13 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
   }, [exposurePhase, exposureProgress, patternKey, estimateSeconds, now, exposureInProgress]);
   const completed = nodes.filter(n => n.status === "completed").length;
   const currentNode = nodes.find(node => node.status === "current");
+  const passLabel = (node: WorkflowProgress) => {
+    const plan = node.exposure?.plan;
+    if (!plan || node.status === "upcoming") return null;
+    const pass = node.status === "completed" ? plan.passes
+      : Math.min(plan.passes, Math.floor((node.exposure?.receivedSamples ?? 0) / Math.max(1, plan.count)) + 1);
+    return `Pass - ${pass} / ${plan.passes}`;
+  };
   const currentNodeRef = useRef<HTMLLIElement | null>(null);
   useEffect(() => {
     currentNodeRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
@@ -87,6 +94,8 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
       className={`processing-workflow__node processing-workflow__node--${node.status}`} aria-current={node.status === "current" ? "step" : undefined}>
       <span className="processing-workflow__number" title={`${node.caption}: ${node.status}`}
         aria-label={`Step ${i + 1}: ${node.caption}, ${node.status}`}>{String(i + 1).padStart(2, "0")}</span>
+      {passLabel(node) && <span className={`processing-workflow__pass${i === nodes.length - 1 ? " processing-workflow__pass--last" : ""}`}
+        title={`${passLabel(node)} completed`} aria-label={passLabel(node)!}>{passLabel(node)}</span>}
       {node.startedAt !== undefined && <time className={`processing-workflow__duration${i === nodes.length - 1 ? " processing-workflow__duration--last" : ""}`}
         aria-label={`Step ${i + 1} time spent: ${formatWorkflowElapsed(workflowElapsedMs(node, now))}`}
         title={`Step ${i + 1} time spent`}>{formatWorkflowElapsed(workflowElapsedMs(node, now))}</time>}

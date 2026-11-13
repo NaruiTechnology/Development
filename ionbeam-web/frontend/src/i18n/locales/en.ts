@@ -192,7 +192,7 @@ export const en = {
   "processing.exposure.path": "Planned path",
   "processing.exposure.trace": "Spot trace",
   "processing.exposure.head": "Current preview spot",
-  "processing.exposure.schematic": "Sampled simulation preview",
+  "processing.exposure.schematic": "Sampled lattice preview",
   "processing.exposure.depth": "Gray: requested depth, darker = deeper (uncalibrated)",
   "canvas.scanParams.exposureLattice": "Exposure lattice",
   "canvas.scanParams.dwell": "Dwell",
