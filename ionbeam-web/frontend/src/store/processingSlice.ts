@@ -48,10 +48,12 @@ export interface ProcessingState {
   instances: Record<string, PatternInstance>;
   /** Pattern being drawn; its card is the only expanded one. */
   activeKey: string | null;
-  roiHistory: Array<{ key: string; roi: PatternRoi | null }>;
+  /** Order in which pattern ROIs were first committed; exposure follows this order. */
+  roiCreationOrder: string[];
+  roiHistory: Array<{ key: string; roi: PatternRoi | null; orderIndex: number }>;
 }
 
-const initialState: ProcessingState = { lensLookup: null, workflows: [DEFAULT_WORKFLOW], materials: [], workflowProgress: [], status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiHistory: [] };
+const initialState: ProcessingState = { lensLookup: null, workflows: [DEFAULT_WORKFLOW], materials: [], workflowProgress: [], status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiCreationOrder: [], roiHistory: [] };
 
 interface PatternsResponse {
   lensLookup?: unknown;
@@ -134,7 +136,7 @@ const slice = createSlice({
           const previous = inst.roi;
           const next = editPatternGeometry(pattern, previous, spec.name, value);
           if (JSON.stringify(previous) !== JSON.stringify(next)) {
-            s.roiHistory.push({ key: a.payload.key, roi: previous });
+            s.roiHistory.push({ key: a.payload.key, roi: previous, orderIndex: s.roiCreationOrder.indexOf(a.payload.key) });
             if (s.roiHistory.length > 100) s.roiHistory.shift();
             inst.roi = MODEL_REGISTRY[pattern.model].validateRoi(next);
             inst.AvgGray = null;
@@ -183,8 +185,9 @@ const slice = createSlice({
         }
         if (JSON.stringify(inst.roi) === JSON.stringify(next)) return;
         if (!a.payload.preview) {
-          s.roiHistory.push({ key: a.payload.key, roi: inst.roi });
+          s.roiHistory.push({ key: a.payload.key, roi: inst.roi, orderIndex: s.roiCreationOrder.indexOf(a.payload.key) });
           if (s.roiHistory.length > 100) s.roiHistory.shift();
+          if (!inst.roi && !s.roiCreationOrder.includes(a.payload.key)) s.roiCreationOrder.push(a.payload.key);
         }
         inst.roi = next;
         syncPatternGeometry(spec, next, inst.parameters);
@@ -196,13 +199,18 @@ const slice = createSlice({
     commitPatternRoiEdit(s, a: PayloadAction<{ key: string; original: PatternRoi }>) {
       const inst = s.instances[a.payload.key];
       if (!inst || JSON.stringify(inst.roi) === JSON.stringify(a.payload.original)) return;
-      s.roiHistory.push({ key: a.payload.key, roi: a.payload.original });
+      s.roiHistory.push({ key: a.payload.key, roi: a.payload.original, orderIndex: s.roiCreationOrder.indexOf(a.payload.key) });
       if (s.roiHistory.length > 100) s.roiHistory.shift();
     },
     undoPatternRoi(s) {
       const previous = s.roiHistory.pop();
       if (!previous || !s.instances[previous.key]) return;
       s.instances[previous.key].roi = previous.roi;
+      s.roiCreationOrder = s.roiCreationOrder.filter(key => key !== previous.key);
+      if (previous.roi) {
+        const index = previous.orderIndex >= 0 ? Math.min(previous.orderIndex, s.roiCreationOrder.length) : s.roiCreationOrder.length;
+        s.roiCreationOrder.splice(index, 0, previous.key);
+      }
       const spec = s.specs.find(p => p.key === previous.key);
       if (previous.roi && spec) syncPatternGeometry(spec, previous.roi, s.instances[previous.key].parameters);
       if (!previous.roi) s.instances[previous.key].enabled = false;
@@ -217,9 +225,10 @@ const slice = createSlice({
     clearPatternRoi(s, a: PayloadAction<string>) {
       const inst = s.instances[a.payload];
       if (inst?.roi) {
-        s.roiHistory.push({ key: a.payload, roi: inst.roi });
+        s.roiHistory.push({ key: a.payload, roi: inst.roi, orderIndex: s.roiCreationOrder.indexOf(a.payload) });
         if (s.roiHistory.length > 100) s.roiHistory.shift();
         inst.roi = null;
+        s.roiCreationOrder = s.roiCreationOrder.filter(key => key !== a.payload);
         inst.AvgGray = null;
         inst.enabled = false;
         s.workflowProgress = [];
@@ -246,6 +255,8 @@ const slice = createSlice({
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
       s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ? { ...s.instances[p.key], parameters: { ...defaultParameters(p.parameters), ...s.instances[p.key].parameters } } : { workflow: "default", workflowEnabled: true, material: "", AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
+      s.roiCreationOrder = s.roiCreationOrder.filter(key => Boolean(s.instances[key]?.roi));
+      for (const spec of specs) if (s.instances[spec.key]?.roi && !s.roiCreationOrder.includes(spec.key)) s.roiCreationOrder.push(spec.key);
       for (const spec of specs) {
         const inst = s.instances[spec.key];
         if (inst.roi) syncPatternGeometry(spec, inst.roi, inst.parameters);

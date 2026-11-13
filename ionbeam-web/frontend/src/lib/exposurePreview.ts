@@ -5,7 +5,8 @@ export interface PreviewSpot { x: number; y: number; order: number; connect: boo
 
 /** Bounded sampling of real lattice centres, preserving row direction and shape clipping.
  * order is the normalized cell traversal position; dense/clipped previews are schematic. */
-export function sampleExposureLattice(model: string, shape: PatternRoi, l: LatticeSpec, limit = 2000): PreviewSpot[] {
+export function sampleExposureLattice(model: string, shape: PatternRoi, l: LatticeSpec, limit = 2000,
+  parameters: Record<string, unknown> = {}): PreviewSpot[] {
   const fast = l.axis === "x" ? l.nx : l.ny, slow = l.axis === "x" ? l.ny : l.nx;
   const budget = Math.max(1, Math.floor(limit));
   const rows = Math.min(slow, Math.max(1, Math.floor(Math.sqrt(budget))));
@@ -20,12 +21,12 @@ export function sampleExposureLattice(model: string, shape: PatternRoi, l: Latti
     for (let c = 0; c < columns; c++) {
       const f = columns === 1 ? 0 : Math.round(c * (fast - 1) / (columns - 1));
       const k = s % 2 ? fast - 1 - f : f;
-      const [i, j] = l.axis === "x" ? [k, s] : [s, k];
+      const [i, j] = l.axis === "x" ? [k, s] : [s, s % 2 ? l.ny - 1 - k : k];
       const x = l.x0 + (i + 0.5) * l.pitchX, y = l.y0 + (j + 0.5) * l.pitchY;
-      if (!contains(shape, x, y)) { previous = -1; continue; }
+      if (!contains(shape, x, y, parameters)) { previous = -1; continue; }
       // Never draw a bridge across clipped geometry; polygons may be concave.
       const withinRow = previous >= 0 && ((model !== "PolygonModel" && model !== "FreeHandModel" && model !== "RingModel") || f === previous + 1);
-      const rowTurn = c === 0 && f === 0 && previousRow === s - 1 && endedAtRowEnd;
+      const rowTurn = model !== "RingModel" && c === 0 && f === 0 && previousRow === s - 1 && endedAtRowEnd;
       const connect = withinRow || rowTurn;
       out.push({ x, y, order: (s * fast + f + 1) / (fast * slow), connect });
       previous = f;

@@ -48,51 +48,82 @@ export function handleExposureSession(client: WebSocket): void {
     }
     done = null;
     segments++;
-    const source = new WebSocket(`${config.proxyTargetWs}/scan/${kind}/stream`, {
-      headers: config.glasgowToken ? {Authorization: `Bearer ${config.glasgowToken}`} : {},
-      handshakeTimeout: 15_000,
-    });
-    upstream = source;
     let closeTimer: ReturnType<typeof setTimeout> | undefined;
-    source.on("open", () => {
-      if (client.readyState !== WebSocket.OPEN) { source.terminate(); return; }
-      source.send(JSON.stringify(request));
-    });
-    source.on("message", (data, isBinary) => {
-      if (client.readyState !== WebSocket.OPEN) return;
-      if (isBinary) bytes += Array.isArray(data) ? data.reduce((sum, chunk) => sum + chunk.length, 0) : data.byteLength;
-      if (!isBinary) {
-        let message;
-        try { message = JSON.parse(data.toString()); }
-        catch { fail("Invalid exposure service response"); return; }
-        if (message.event === "done") {
-          done = data.toString();
-          // The service sends done after the generator releases the device.
-          // Closing it here also bounds a service that forgets its close frame.
-          source.close(1000, "exposure-complete");
-          closeTimer = setTimeout(() => source.terminate(), 2000);
-          closeTimer.unref();
-          return;
+    let handshakeAttempts = 0;
+    const maxHandshakeAttempts = 2;
+    const connectUpstream = () => {
+      handshakeAttempts++;
+      const source = new WebSocket(`${config.proxyTargetWs}/scan/${kind}/stream`, {
+        headers: config.glasgowToken ? {Authorization: `Bearer ${config.glasgowToken}`} : {},
+        handshakeTimeout: 15_000,
+      });
+      upstream = source;
+      let opened = false;
+      let retryScheduled = false;
+      const retryBeforeRequest = (message: string): boolean => {
+        if (opened || retryScheduled || handshakeAttempts >= maxHandshakeAttempts) return false;
+        retryScheduled = true;
+        console.warn("[exposure-session] retrying upstream handshake", {
+          sessionId, attempt: handshakeAttempts, message,
+        });
+        const retryTimer = setTimeout(() => {
+          if (upstream === source && client.readyState === WebSocket.OPEN) connectUpstream();
+        }, 250);
+        retryTimer.unref();
+        source.terminate();
+        return true;
+      };
+
+      source.on("open", () => {
+        opened = true;
+        if (client.readyState !== WebSocket.OPEN) { source.terminate(); return; }
+        source.send(JSON.stringify(request));
+      });
+      source.on("message", (data, isBinary) => {
+        if (client.readyState !== WebSocket.OPEN) return;
+        if (isBinary) bytes += Array.isArray(data) ? data.reduce((sum, chunk) => sum + chunk.length, 0) : data.byteLength;
+        if (!isBinary) {
+          let message;
+          try { message = JSON.parse(data.toString()); }
+          catch { fail("Invalid exposure service response"); return; }
+          if (message.event === "done") {
+            done = data.toString();
+            // The service sends done after the generator releases the device.
+            // Closing it here also bounds a service that forgets its close frame.
+            source.close(1000, "exposure-complete");
+            closeTimer = setTimeout(() => source.terminate(), 2000);
+            closeTimer.unref();
+            return;
+          }
+          if (message.event === "error") {
+            fail(String(message.detail ?? message.message ?? message.code ?? "Exposure failed")); return;
+          }
         }
-        if (message.event === "error") {
-          fail(String(message.detail ?? message.message ?? message.code ?? "Exposure failed")); return;
-        }
-      }
-      client.send(data, {binary: isBinary});
-    });
-    source.on("error", error => {
-      if (!done) {
+        client.send(data, {binary: isBinary});
+      });
+      source.on("error", error => {
+        if (done || retryScheduled) return;
+        if (retryBeforeRequest(error.message)) return;
         console.warn("[exposure-session] upstream error", {sessionId, message: error.message});
         fail("Exposure service connection failed; the segment was not replayed");
-      }
-    });
-    source.on("close", () => {
-      clearTimeout(closeTimer);
-      if (upstream !== source) return;
-      upstream = null;
-      if (done && client.readyState === WebSocket.OPEN) client.send(done);
-      else if (client.readyState === WebSocket.OPEN)
-        fail("Exposure service disconnected before completion; the segment was not replayed");
-    });
+      });
+      source.on("close", (_code, reason) => {
+        clearTimeout(closeTimer);
+        if (retryScheduled || upstream !== source) return;
+        if (done && client.readyState === WebSocket.OPEN) {
+          upstream = null;
+          client.send(done);
+        } else if (client.readyState === WebSocket.OPEN &&
+            retryBeforeRequest(reason.toString() || "upstream closed during handshake")) {
+          return;
+        } else if (client.readyState === WebSocket.OPEN) {
+          upstream = null;
+          fail("Exposure service disconnected before completion; the segment was not replayed");
+        } else {
+          upstream = null;
+        }
+      });
+    };
+    connectUpstream();
   });
 }

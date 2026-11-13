@@ -14,8 +14,8 @@ const ExposureStep = memo(function ExposureStep({ node, index, depthRank, depthC
   node: WorkflowProgress; index: number; depthRank: number; depthCount: number; project: Project; budget: number;
 }) {
   const e = node.exposure!;
-  const spots = useMemo(() => sampleExposureLattice(e.model, e.shape, e.plan.lattice, budget),
-    [e.model, e.shape, e.plan.lattice, budget]);
+  const spots = useMemo(() => sampleExposureLattice(e.model, e.shape, e.plan.lattice, budget, e.parameters),
+    [e.model, e.shape, e.plan.lattice, e.parameters, budget]);
   const fraction = exposureTraceFraction(e.receivedSamples ?? 0, e.plan.count, node.status === "completed");
   const color = COLORS[index % COLORS.length];
   const points = spots.map(p => ({ ...project(p.x, p.y), order: p.order, connect: p.connect }));

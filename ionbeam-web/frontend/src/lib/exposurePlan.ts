@@ -91,12 +91,12 @@ export function latticeSpec(shape: PatternRoi, pitchWorld: number, axis: ScanAxi
 const cellCentre = (l: LatticeSpec, i: number, j: number): [number, number] =>
   [l.x0 + (i + 0.5) * l.pitchX, l.y0 + (j + 0.5) * l.pitchY];
 
-/** Spots start at the high-Y edge; the fast axis reverses on every row. */
+/** Spots start at the displayed top edge (low Y); the fast axis reverses on every row. */
 export function* latticeCells(l: LatticeSpec): Generator<[number, number]> {
   const [fast, slow] = l.axis === "x" ? [l.nx, l.ny] : [l.ny, l.nx];
   for (let s = 0; s < slow; s++) for (let f = 0; f < fast; f++) {
     const k = s % 2 ? fast - 1 - f : f;
-    yield l.axis === "x" ? [k, l.ny - 1 - s] : [s, l.ny - 1 - k];
+    yield l.axis === "x" ? [k, s] : [s, s % 2 ? l.ny - 1 - k : k];
   }
 }
 

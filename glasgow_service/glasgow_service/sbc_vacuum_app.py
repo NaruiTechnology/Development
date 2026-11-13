@@ -489,6 +489,10 @@ def main() -> None:
         app,
         host=os.environ.get("SBC_VACUUM_HOST", "0.0.0.0"),
         port=int(os.environ.get("SBC_VACUUM_PORT", "8765")),
+        # The executor renews its fencing window once per poll. Keep meaningful
+        # application and safety logs, but avoid an access-log disk write
+        # for every successful heartbeat.
+        access_log=False,
     )
 
 

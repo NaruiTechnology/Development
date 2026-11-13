@@ -43,6 +43,8 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
   const [pending, setPending] = useState<string | null>(null);
   const [windowOffset, setWindowOffset] = useState({ x: 0, y: 0 });
   const mutationRef = useRef(false);
+  const refreshInFlightRef = useRef(false);
+  const lastSuccessAtRef = useRef<number | null>(null);
   const statusVersionRef = useRef(0);
   const dragRef = useRef<{
     pointerId: number;
@@ -114,12 +116,13 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
   }
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
-    if (mutationRef.current) return;
+    if (mutationRef.current || refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
     const statusVersion = statusVersionRef.current;
     try {
       const response = await fetch(apiUrl("/api/vacuum"), {
         cache: "no-store", headers: scanAuthHeaders(),
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(3000)]) : AbortSignal.timeout(3000),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),
       });
       if (!response.ok) {
         // Show the SBC's own reason (e.g. "vacuum controller is disabled").
@@ -137,14 +140,21 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
       const refreshed = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
       if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
       setStatus(vacuumStatusForDisplay(refreshed));
+      lastSuccessAtRef.current = Date.now();
       setErrorDetails(null);
       setError(!vacuumReadingsAreFresh(refreshed.updated_at) && !refreshed.last_error
         ? "Vacuum readings are unavailable or stale" : null);
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
-      setStatus(null);
+      // Keep the last known readings during a brief SBC/network interruption.
+      // Once they are more than 10 seconds old, return to the reconnect view.
+      if (lastSuccessAtRef.current === null || Date.now() - lastSuccessAtRef.current > 10_000) {
+        setStatus(null);
+      }
       reportError(cause);
+    } finally {
+      refreshInFlightRef.current = false;
     }
   }, [reportError]);
 
@@ -152,6 +162,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     if (!open) return;
     setWindowOffset({ x: 0, y: 0 });
     const pollController = new AbortController();
+    lastSuccessAtRef.current = null;
     setStatus(null);
     setError(null);
     setErrorDetails(null);

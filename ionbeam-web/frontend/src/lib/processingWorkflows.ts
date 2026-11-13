@@ -21,6 +21,7 @@ export interface WorkflowProgress {
   startedAt?: number; finishedAt?: number;
   exposure?: {
     shape: PatternRoi; model: string;
+    parameters: Record<string, unknown>;
     plan: import("./exposurePlan.js").ExposurePlan;
     dwellUS: number; beamCurrentPA: number;
     requestedDepthUM?: number;

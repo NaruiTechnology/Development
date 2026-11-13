@@ -1,0 +1,15 @@
+@LOG_DIR@/glasgow-svc.log
+@LOG_DIR@/vacuum-executor.log
+@LOG_DIR@/sbc-vacuum.log
+@LOG_DIR@/ionbeam-web-backend.log
+@LOG_DIR@/ionbeam-web-frontend.log {
+    daily
+    maxsize 10M
+    rotate 3
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    su @ADMIN_USER@ @ADMIN_GROUP@
+}

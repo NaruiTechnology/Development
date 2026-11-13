@@ -129,13 +129,13 @@ class Lattice:
         return (self.x0 + (i + 0.5) * self.pitch_x, self.y0 + (j + 0.5) * self.pitch_y)
 
     def cells(self, start: int = 0, end: Optional[int] = None) -> Iterator[Tuple[int, int]]:
-        """Serpentine order from the high-Y edge, with the fast axis reversing per row."""
+        """Serpentine order from the displayed top edge (low Y), reversing per row."""
         fast, slow = (self.nx, self.ny) if self.axis == "x" else (self.ny, self.nx)
         end = fast * slow if end is None else min(end, fast * slow)
         for s in range(start // fast, (end + fast - 1) // fast):
             for f in range(max(0, start - s * fast), min(fast, end - s * fast)):
                 k = fast - 1 - f if s % 2 else f
-                yield (k, self.ny - 1 - s) if self.axis == "x" else (s, self.ny - 1 - k)
+                yield (k, s) if self.axis == "x" else (s, self.ny - 1 - k if s % 2 else k)
 
 
 def build_lattice(shape, pitch_x: float, pitch_y: Optional[float] = None, axis: str = "long") -> Lattice:

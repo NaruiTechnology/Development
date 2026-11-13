@@ -15,7 +15,15 @@ export function totalExposureSpots(entries: readonly ExposureEntry[]): number {
 export function prepareExposureSequence(patterns: ProcessingState, field: ROIState, simulation: boolean): ExposureEntry[] {
   if (!patterns.lensLookup) throw new Error("Load the LensLookup reference before exposure.");
   const entries: ExposureEntry[] = [];
-  for (const spec of patterns.specs) {
+  const order = new Map((patterns.roiCreationOrder ?? []).map((key, index) => [key, index]));
+  const specs = [...patterns.specs].sort((a, b) => {
+    const ai = order.get(a.key), bi = order.get(b.key);
+    if (ai === undefined && bi === undefined) return 0;
+    if (ai === undefined) return 1;
+    if (bi === undefined) return -1;
+    return ai - bi;
+  });
+  for (const spec of specs) {
     const instance = patterns.instances[spec.key];
     if (!instance?.enabled || !instance.roi) continue;
     const stair = spec.model === "StairCutModel";
@@ -29,7 +37,7 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
       entries.push({ key: spec.key, node: {
         id: `${spec.key}:${index}:exposure`, pattern: spec.caption, caption: step.caption, action: "Exposure lattice",
         status: "upcoming", threshold: null, spot: p.plan.count, total: p.plan.count,
-        exposure: { shape: step.shape, model: spec.model, plan: p.plan, dwellUS: Number(step.parameters.dwell),
+        exposure: { shape: step.shape, model: spec.model, parameters: step.parameters, plan: p.plan, dwellUS: Number(step.parameters.dwell),
           beamCurrentPA: p.beamCurrentPA, requestedDepthUM: step.requestedDepthUM, depthBand: step.depthBand,
           material: step.material, incrementUM: step.incrementUM, removalRate: step.removalRate, after: step.after,
           lineSpacingUM: simulation && spec.model === "CleaningLineModel" ? Number(instance.parameters.spacing) : undefined, simulation },

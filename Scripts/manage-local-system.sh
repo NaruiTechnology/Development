@@ -19,6 +19,7 @@ SBC_UNIT="sbc-vacuum.service"
 BACKEND_UNIT="ionbeam-web-backend.service"
 FRONTEND_UNIT="ionbeam-web-frontend.service"
 POLKIT_RULE="60-ionbeam-glasgow-restart.rules"
+LOGROTATE_RULE="ionbeam-local-services"
 BACKEND_ROOT="${OPERATIONS_ROOT}/Development/ionbeam-web/backend"
 FRONTEND_ROOT="${OPERATIONS_ROOT}/Development/ionbeam-web/frontend"
 LOG_DIR="${OPERATIONS_LOG_DIR:-${OPERATIONS_ROOT}/logs}"
@@ -72,6 +73,7 @@ ADMIN_USER="${ADMIN_USER:-${SUDO_USER:-${USER}}}"
   exit 1
 }
 ADMIN_UID="$(id -u "${ADMIN_USER}")"
+ADMIN_GROUP="$(id -gn "${ADMIN_USER}")"
 ADMIN_HOME="$(getent passwd "${ADMIN_USER}" | cut -d: -f6)"
 USER_SYSTEMD_DIR="${ADMIN_HOME}/.config/systemd/user"
 # Shared secrets file (systemd EnvironmentFile format). It lives in the
@@ -124,6 +126,7 @@ render() {
     -e "s|@FRONTEND_ROOT@|${FRONTEND_ROOT}|g" \
     -e "s|@LOG_DIR@|${LOG_DIR}|g" \
     -e "s|@ADMIN_USER@|${ADMIN_USER}|g" \
+    -e "s|@ADMIN_GROUP@|${ADMIN_GROUP}|g" \
     -e "s|@SECRETS_FILE@|${SECRETS_FILE}|g" \
     "$1"
 }
@@ -141,6 +144,10 @@ install_units() {
   done
   [[ -s "${DEPLOY_DIR}/${POLKIT_RULE}" ]] || {
     echo "Missing or empty restart permission rule: ${DEPLOY_DIR}/${POLKIT_RULE}" >&2
+    exit 1
+  }
+  [[ -s "${DEPLOY_DIR}/${LOGROTATE_RULE}.logrotate.in" ]] || {
+    echo "Missing or empty local log rotation policy: ${DEPLOY_DIR}/${LOGROTATE_RULE}.logrotate.in" >&2
     exit 1
   }
   [[ -x "${PYTHON_BIN}" && -x "${UVICORN_BIN}" ]] || {
@@ -173,6 +180,7 @@ install_units() {
   render "${DEPLOY_DIR}/sbc-vacuum.local.service.in" >"${temp_dir}/${SBC_UNIT}"
   render "${DEPLOY_DIR}/ionbeam-web-backend.local.service.in" >"${temp_dir}/${BACKEND_UNIT}"
   render "${DEPLOY_DIR}/ionbeam-web-frontend.local.service.in" >"${temp_dir}/${FRONTEND_UNIT}"
+  render "${DEPLOY_DIR}/${LOGROTATE_RULE}.logrotate.in" >"${temp_dir}/${LOGROTATE_RULE}"
 
   if [[ ! -f /etc/vacuum-executor.env ]]; then
     sed "s|@SBC_URL@|http://127.0.0.1:8766|g" \
@@ -186,6 +194,7 @@ install_units() {
   sudo_cmd install -m 0644 "${temp_dir}/${EXECUTOR_UNIT}" "/etc/systemd/system/${EXECUTOR_UNIT}"
   sudo_cmd install -d -m 0755 /etc/polkit-1/rules.d
   sudo_cmd install -m 0644 "${DEPLOY_DIR}/${POLKIT_RULE}" "/etc/polkit-1/rules.d/${POLKIT_RULE}"
+  sudo_cmd install -m 0644 "${temp_dir}/${LOGROTATE_RULE}" "/etc/logrotate.d/${LOGROTATE_RULE}"
   install -d -m 0755 "${USER_SYSTEMD_DIR}"
   install -m 0644 "${temp_dir}/${SBC_UNIT}" "${USER_SYSTEMD_DIR}/${SBC_UNIT}"
   install -m 0644 "${temp_dir}/${BACKEND_UNIT}" "${USER_SYSTEMD_DIR}/${BACKEND_UNIT}"

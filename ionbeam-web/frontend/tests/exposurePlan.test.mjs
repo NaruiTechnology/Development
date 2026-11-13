@@ -40,10 +40,10 @@ test("rectangle lattice has an integral number of spots, centred in cells, serpe
   const l = latticeSpec(roi, 0.25);
   assert.deepEqual([l.nx, l.ny, l.axis], [4, 2, "x"]);
   const cells = [...latticeCells(l)];
-  assert.deepEqual(cells.map(c => c.join(",")), ["0,1", "1,1", "2,1", "3,1", "3,0", "2,0", "1,0", "0,0"]);
+  assert.deepEqual(cells.map(c => c.join(",")), ["0,0", "1,0", "2,0", "3,0", "3,1", "2,1", "1,1", "0,1"]);
   const spots = exposureSpots(box, roi, l);
-  assert.deepEqual(spots[0], [0.125, 0.375]);
-  assert.deepEqual(spots[4], [0.875, 0.125]);
+  assert.deepEqual(spots[0], [0.125, 0.125]);
+  assert.deepEqual(spots[4], [0.875, 0.375]);
   // a tall rectangle scans along y
   assert.equal(latticeSpec({ x_start: 0, x_end: 0.5, y_start: 0, y_end: 1 }, 0.25).axis, "y");
   assert.equal(latticeSpec(roi, 0.25, "y").axis, "y");

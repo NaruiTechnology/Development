@@ -29,3 +29,9 @@ def configure_logging(level: str = "INFO") -> None:
     root.handlers.clear()
     root.addHandler(handler)
     root.setLevel(level.upper())
+    # httpx logs every successful request at INFO. The executor renews its
+    # lease and SBC fencing window on every poll (normally once per second),
+    # so this produced hundreds of thousands of redundant log lines and
+    # tens of megabytes of disk writes while hiding the safety events we need.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
