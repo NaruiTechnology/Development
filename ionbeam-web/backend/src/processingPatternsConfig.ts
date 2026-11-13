@@ -69,8 +69,17 @@ function parseWorkflows(data: Record<string, unknown>): Pick<ProcessingPatternsC
         throw new ConfigError(`Invalid workflow material grayValueRange: ${m.name}`, 500);
       grayValueRange = [low, high];
     }
+    const removalRateUM3PerNC = m.removalRateUM3PerNC;
+    const removalRateSource = m.removalRateSource;
+    if (removalRateUM3PerNC !== undefined && (typeof removalRateUM3PerNC !== "number" || !Number.isFinite(removalRateUM3PerNC) || removalRateUM3PerNC <= 0))
+      throw new ConfigError(`Invalid workflow material removal rate: ${m.name}`, 500);
+    if (removalRateSource !== undefined && (typeof removalRateSource !== "string" || !removalRateSource.trim()))
+      throw new ConfigError(`Invalid workflow material removal-rate source: ${m.name}`, 500);
+    if (removalRateUM3PerNC !== undefined && removalRateSource === undefined)
+      throw new ConfigError(`Missing workflow material removal-rate source: ${m.name}`, 500);
     return { name: m.name, caption: typeof m.caption === "string" && m.caption ? m.caption : m.name,
-      brightness: m.brightness, grayValueRange };
+      brightness: m.brightness, grayValueRange,
+      ...(removalRateUM3PerNC === undefined ? {} : { removalRateUM3PerNC, removalRateSource: removalRateSource as string }) };
   });
   const names = new Set<string>();
   const workflows = (Array.isArray(data.Workflows) ? data.Workflows : []).map((w: unknown): WorkflowSpec => {
@@ -111,7 +120,8 @@ export interface ProcessingPatternsConfig {
   header: Record<string, unknown>;
   patterns: PatternSpec[];
   errors: string[];
-  materials: { name: string; caption: string; brightness: number; grayValueRange: [number, number] | null }[];
+  materials: { name: string; caption: string; brightness: number; grayValueRange: [number, number] | null;
+    removalRateUM3PerNC?: number; removalRateSource?: string }[];
   workflows: WorkflowSpec[];
 }
 

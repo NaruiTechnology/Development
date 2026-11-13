@@ -10,15 +10,15 @@ import {
 type NumericField = "depth" | "dwell" | "overlap" | "passes" | "removalRate";
 
 /** One recipe cell. Empty = inherit the card-level default (shown as the placeholder). */
-function Cell({ label, value, placeholder, disabled, integer, onCommit }: {
-  label: string; value: number | undefined; placeholder: number; disabled: boolean; integer?: boolean;
+function Cell({ label, value, placeholder, disabled, integer, title, onCommit }: {
+  label: string; value: number | undefined; placeholder: number; disabled: boolean; integer?: boolean; title?: string;
   onCommit: (value: number | undefined) => void;
 }) {
   const [text, setText] = useState(value === undefined ? "" : String(value));
   useEffect(() => { setText(cur => (cur !== "" && Number(cur) === value) || (cur === "" && value === undefined) ? cur : value === undefined ? "" : String(value)); }, [value]);
   const invalid = text.trim() !== "" && (!Number.isFinite(Number(text)) || (integer && !Number.isInteger(Number(text))));
   return (
-    <input className="input stair-steps__input" type="text" inputMode={integer ? "numeric" : "decimal"} aria-label={label} title={label}
+    <input className="input stair-steps__input" type="text" inputMode={integer ? "numeric" : "decimal"} aria-label={label} title={title ?? label}
       aria-invalid={invalid} data-invalid={invalid || undefined} disabled={disabled} value={text} placeholder={String(placeholder)}
       onChange={e => {
         const v = e.target.value;
@@ -48,11 +48,18 @@ export function StairStepsTable({ patternKey, caption, instance, disabled }: {
   const problem = stairStepsError(resolved);
   const set = (index: number, field: keyof StairStep, value: number | string | boolean | undefined) =>
     dispatch(setStairStepField({ key: patternKey, index, field, value }));
-  const num = (index: number, field: NumericField, label: string, integer = false) => (
-    <Cell label={`${caption} ${tr("processing.stair.step", "Step")} ${index + 1}: ${label}`} value={overrides[index]?.[field]}
+  const num = (index: number, field: NumericField, label: string, integer = false) => {
+    const step = resolved[index];
+    const material = materials.find(item => item.name === step?.material);
+    const value = field === "removalRate"
+      ? (overrides[index]?.removalRate && overrides[index]!.removalRate! > 0
+        ? overrides[index]!.removalRate : material?.removalRateUM3PerNC)
+      : overrides[index]?.[field];
+    return <Cell label={`${caption} ${tr("processing.stair.step", "Step")} ${index + 1}: ${label}`}
+      title={field === "removalRate" ? material?.removalRateSource : undefined} value={value}
       placeholder={field === "removalRate" ? 0 : defaultStairStep(instance.parameters, index)[field]} disabled={disabled} integer={integer}
       onCommit={v => set(index, field, v)} />
-  );
+  };
 
   return (
     <fieldset className="stair-steps" disabled={disabled} data-stair-steps={patternKey}>

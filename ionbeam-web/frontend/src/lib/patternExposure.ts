@@ -63,11 +63,13 @@ export interface PatternExposureStep {
  * Step i exposes the box covering strips i..n, so strip k receives k layers and depths accumulate.
  * Used by simulation and production alike. */
 export function stairExposureSteps(shape: PatternRoi, parameters: PatternParameters,
-  overrides?: ReadonlyArray<StairStepOverride | null | undefined>, defaultMaterial?: string): PatternExposureStep[] {
+  overrides?: ReadonlyArray<StairStepOverride | null | undefined>, defaultMaterial?: string,
+  materialRemovalRates: Readonly<Record<string, number>> = {}): PatternExposureStep[] {
   const strips = stairRects(shape as RectRoi, parameters);
   const recipe = resolveStairSteps(parameters, overrides).map(step => ({
     ...step,
     material: step.material || defaultMaterial || "",
+    removalRate: step.removalRate > 0 ? step.removalRate : materialRemovalRates[step.material || defaultMaterial || ""] ?? 0,
   }));
   const error = stairStepsError(recipe);
   if (error) throw new Error(error);
@@ -116,11 +118,12 @@ export function simulationExposureSteps(spec: PatternSpec, shape: PatternRoi, pa
 /** Planned beam-on time and lattice spots, using the same step expansion as Exposure Start. */
 export function plannedPatternExposureMetrics(spec: PatternSpec, shape: PatternRoi, parameters: PatternParameters,
   lookup: LensLookup, fov: Pick<ROIState, "x_origin" | "x_end" | "y_origin" | "y_end" | "scanGeometry">,
-  options: {simulation?: boolean; stairOverrides?: ReadonlyArray<StairStepOverride | null | undefined>; defaultMaterial?: string} = {}):
+  options: {simulation?: boolean; stairOverrides?: ReadonlyArray<StairStepOverride | null | undefined>; defaultMaterial?: string;
+    materialRemovalRates?: Readonly<Record<string, number>>} = {}):
   {spotCount: number; beamOnS: number} {
   const stair = spec.model === "StairCutModel";
   const base = stair ? null : preparePatternExposure(spec, shape, parameters, lookup, fov);
-  const steps = stair ? stairExposureSteps(shape, parameters, options.stairOverrides, options.defaultMaterial)
+  const steps = stair ? stairExposureSteps(shape, parameters, options.stairOverrides, options.defaultMaterial, options.materialRemovalRates)
     : options.simulation ? simulationExposureSteps(spec, shape, parameters, base!.plan.spacingUM)
     : [{shape, parameters}];
   return steps.reduce((total, step) => {

@@ -170,7 +170,8 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onEnabl
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
   const label = active ? t("processing.collapse") : t("processing.expand");
   if (!instance) return null;
-  const materialBrightness = materials.find(material => material.name === instance.material)?.brightness;
+  const selectedMaterial = materials.find(material => material.name === instance.material);
+  const materialBrightness = selectedMaterial?.brightness;
   const targetGrayLevel = instance.AvgGray !== null && materialBrightness !== undefined
     ? materialTargetGrayLevel(instance.AvgGray, materialBrightness)
     : null;
@@ -248,16 +249,24 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onEnabl
           />
         ))}
         {spec.model !== "StairCutModel" && (
-          <label className="field">
-            {tr("processing.material", "Material")}
-            <select className="select" aria-label={`${caption}: ${tr("processing.material", "Material")}`}
-              value={instance.material} disabled={disabled || materials.length === 0}
-              onChange={e => dispatch(setPatternMaterial({ key: spec.key, material: e.target.value }))}>
-              {materials.length ? materials.map(material =>
-                <option key={material.name} value={material.name}>{material.caption ?? material.name}</option>)
-                : <option value="">{tr("processing.material.empty", "No materials configured")}</option>}
-            </select>
-          </label>
+          <>
+            <label className="field">
+              {tr("processing.material", "Material")}
+              <select className="select" aria-label={`${caption}: ${tr("processing.material", "Material")}`}
+                value={instance.material} disabled={disabled || materials.length === 0}
+                onChange={e => dispatch(setPatternMaterial({ key: spec.key, material: e.target.value }))}>
+                {materials.length ? materials.map(material =>
+                  <option key={material.name} value={material.name}>{material.caption ?? material.name}</option>)
+                  : <option value="">{tr("processing.material.empty", "No materials configured")}</option>}
+              </select>
+            </label>
+            <div className="field pattern-material-sr" title={selectedMaterial?.removalRateSource ?? "No Sr configured"}>
+              <span>Sr (µm³/nC)</span>
+              <output className="pattern-target-gray-value" aria-label={`${caption}: Sr`}>
+                {selectedMaterial?.removalRateUM3PerNC?.toLocaleString(undefined, { maximumSignificantDigits: 4 }) ?? "—"}
+              </output>
+            </div>
+          </>
         )}
         <fieldset className="pattern-axis-field pattern-card__axis" disabled={disabled}>
           <legend>{t("processing.exposureAxis")}</legend>

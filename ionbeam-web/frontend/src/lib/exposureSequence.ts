@@ -27,9 +27,14 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
     const instance = patterns.instances[spec.key];
     if (!instance?.enabled || !instance.roi) continue;
     const stair = spec.model === "StairCutModel";
+    const materialRemovalRates = Object.fromEntries(patterns.materials
+      .filter(material => material.removalRateUM3PerNC !== undefined)
+      .map(material => [material.name, material.removalRateUM3PerNC!]));
+    const selectedMaterial = instance.material || patterns.materials[0]?.name;
+    const selectedRemovalRate = selectedMaterial ? materialRemovalRates[selectedMaterial] : undefined;
     const base = stair ? null : preparePatternExposure(spec, instance.roi, instance.parameters, patterns.lensLookup, field);
     // Stair cut is a per-step sequence in production too; Cleaning line stays simulation-only.
-    const steps = stair ? stairExposureSteps(instance.roi, instance.parameters, instance.stairSteps, patterns.materials[0]?.name)
+    const steps = stair ? stairExposureSteps(instance.roi, instance.parameters, instance.stairSteps, patterns.materials[0]?.name, materialRemovalRates)
       : simulation ? simulationExposureSteps(spec, instance.roi, instance.parameters, base!.plan.spacingUM)
       : [{ shape: instance.roi, parameters: instance.parameters, caption: "Pattern exposure", requestedDepthUM: undefined, depthBand: undefined }];
     for (const [index, step] of steps.entries()) {
@@ -39,7 +44,8 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
         status: "upcoming", threshold: null, spot: p.plan.count, total: p.plan.count,
         exposure: { shape: step.shape, model: spec.model, parameters: step.parameters, plan: p.plan, dwellUS: Number(step.parameters.dwell),
           beamCurrentPA: p.beamCurrentPA, requestedDepthUM: step.requestedDepthUM, depthBand: step.depthBand,
-          material: step.material, incrementUM: step.incrementUM, removalRate: step.removalRate, after: step.after,
+          material: step.material ?? selectedMaterial, incrementUM: step.incrementUM,
+          removalRate: step.removalRate ?? selectedRemovalRate, after: step.after,
           lineSpacingUM: simulation && spec.model === "CleaningLineModel" ? Number(instance.parameters.spacing) : undefined, simulation },
       }, request: {
         pattern: "lattice", lattice: p.lattice, points: null, continuous: false, pre_process: false,

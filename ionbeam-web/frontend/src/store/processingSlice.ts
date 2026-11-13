@@ -26,7 +26,7 @@ import { MAX_STAIR_STEPS, STAIR_STEP_FIELDS, type StairStepOverride } from "../l
 export interface PatternInstance {
   workflow: string;
   workflowEnabled: boolean;
-  /** Selected entry in the Materials catalogue for MaterialLinelCut. */
+  /** Selected entry in the Materials catalogue, used for image guidance and Sr readouts. */
   material: string;
   AvgGray: number | null;
   enabled: boolean;
@@ -39,7 +39,8 @@ export interface PatternInstance {
 export interface ProcessingState {
   lensLookup: LensLookup | null;
   workflows: WorkflowSpec[];
-  materials: { name: string; caption?: string; brightness: number; grayValueRange?: [number, number] | null }[];
+  materials: { name: string; caption?: string; brightness: number; grayValueRange?: [number, number] | null;
+    removalRateUM3PerNC?: number; removalRateSource?: string }[];
   workflowProgress: WorkflowProgress[];
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
@@ -61,7 +62,8 @@ interface PatternsResponse {
   error?: string;
   patterns?: PatternSpec[];
   workflows?: WorkflowSpec[];
-  materials?: { name: string; caption?: string; brightness: number; grayValueRange?: [number, number] | null }[];
+  materials?: { name: string; caption?: string; brightness: number; grayValueRange?: [number, number] | null;
+    removalRateUM3PerNC?: number; removalRateSource?: string }[];
   errors?: string[];
 }
 
@@ -156,6 +158,7 @@ const slice = createSlice({
       const rows = inst.stairSteps ?? [];
       while (rows.length <= index) rows.push({});
       const row: Record<string, unknown> = { ...rows[index] };
+      if (field === "material" && row.material !== value) delete row.removalRate;
       if (value === undefined) delete row[field]; else row[field] = value;
       rows[index] = row as StairStepOverride;
       inst.stairSteps = rows;

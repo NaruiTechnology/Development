@@ -1,6 +1,7 @@
 import { createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { WorkflowProgress } from "../lib/processingWorkflows";
-import { clearPatternRoi, setPatternEnabled, type ProcessingState } from "./processingSlice";
+import { clearPatternRoi, setPatternEnabled, setPatternMaterial, setPatternParameter, setPatternRoi,
+  setStairStepField, setStairSteps, type ProcessingState } from "./processingSlice";
 
 export type ExposurePhase = "idle" | "preparing" | "running" | "paused" | "stopping" | "completed" | "stopped" | "error";
 /** "paused" still owns the beam session and keeps the recipe locked. */
@@ -105,11 +106,13 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
     s.retainedPreview = s.retainedPreview.filter(node => !belongsToPattern(node));
     s.activeStepIds = s.activeStepIds.filter(id => !id.startsWith(`${action.payload.key}:`));
   });
-  builder.addMatcher(action => /^processing\/(setPatternParameter|setPatternRoi|undoPatternRoi|setPatternEnabled)$/.test(action.type), s => {
-    if (!exposureBusy(s.phase) && s.progress.length) {
-      // Recipe edits invalidate its readouts. Keep the executed geometry in world coordinates.
-      s.retainedPreview = s.progress;
+  builder.addMatcher(action => [setPatternParameter.type, setPatternRoi.type, setPatternMaterial.type,
+    setStairStepField.type, setStairSteps.type, "processing/undoPatternRoi", setPatternEnabled.type].includes(action.type), s => {
+    if (!exposureBusy(s.phase) && (s.progress.length || s.retainedPreview.length)) {
+      // A recipe edit makes the last run's path and depth bands stale. Drop it so
+      // the canvas reflects the current pattern model instead of old run values.
       s.progress = [];
+      s.retainedPreview = [];
       s.activeStepIds = [];
     }
   });

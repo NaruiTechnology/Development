@@ -30,7 +30,9 @@
             "density": 2.33,
             "comment": "Density in g/cm3. Illustrative Ga+ image brightness based on the user,supplied Google AI table: gray range 70,100 (0,255), midpoint 85; brightness = midpoint / 85 (silicon midpoint), rounded to 4 decimal places. 1.0 = 100% of silicon; percentage = brightness * 100. These display,gray ratios are not calibrated secondary,electron yields or universal material constants; beam conditions, charging, surface geometry and detector gain/offset affect contrast.",
             "brightness": 1.0,
-            "grayValueRange": "70,100"
+            "grayValueRange": "70,100",
+            "removalRateUM3PerNC": 0.27,
+            "removalRateSource": "EPFL CMi typical 30 kV sputtering rate"
         },
         {
             "name": "SiO2",
@@ -38,7 +40,9 @@
             "density": 2.65,
             "comment": "Density in g/cm3. The user,supplied Google AI table describes SiO2 as dark to variable but provides no numeric gray range. Brightness 1.0 remains an uncalibrated placeholder, not an estimate of equal brightness to silicon. Supply a gray range or measured ratio before using this value; charging and charge compensation affect the signal. 1.0 = 100% of silicon; percentage = brightness * 100.",
             "brightness": 1.0,
-            "grayValueRange": null
+            "grayValueRange": null,
+            "removalRateUM3PerNC": 0.24,
+            "removalRateSource": "EPFL CMi typical 30 kV sputtering rate"
         },
         {
             "name": "Pt",
@@ -46,7 +50,9 @@
             "density": 21.45,
             "comment": "Density in g/cm3. Illustrative Ga+ image brightness based on the user,supplied Google AI table: gray range 230,255 (0,255), midpoint 242.5; brightness = midpoint / 85 (silicon midpoint), rounded to 4 decimal places. 1.0 = 100% of silicon; percentage = brightness * 100. These display,gray ratios are not calibrated secondary,electron yields or universal material constants; beam conditions, charging, surface geometry and detector gain/offset affect contrast.",
             "brightness": 2.8529,
-            "grayValueRange": "230,255"
+            "grayValueRange": "230,255",
+            "removalRateUM3PerNC": 0.23,
+            "removalRateSource": "EPFL CMi typical 30 kV sputtering rate"
         },
         {
             "name": "Au",
@@ -54,7 +60,9 @@
             "density": 19.32,
             "comment": "Density in g/cm3. Illustrative Ga+ image brightness based on the user,supplied Google AI table: gray range 210,240 (0,255), midpoint 225; brightness = midpoint / 85 (silicon midpoint), rounded to 4 decimal places. 1.0 = 100% of silicon; percentage = brightness * 100. These display,gray ratios are not calibrated secondary,electron yields or universal material constants; beam conditions, charging, surface geometry and detector gain/offset affect contrast.",
             "brightness": 2.6471,
-            "grayValueRange": "210,240"
+            "grayValueRange": "210,240",
+            "removalRateUM3PerNC": 1.5,
+            "removalRateSource": "EPFL CMi typical 30 kV sputtering rate"
         },
         {
             "name": "Al",
@@ -62,7 +70,9 @@
             "density": 2.7,
             "comment": "Density in g/cm3. Illustrative Ga+ image brightness based on the user,supplied Google AI table: gray range 110,140 (0,255), midpoint 125; brightness = midpoint / 85 (silicon midpoint), rounded to 4 decimal places. 1.0 = 100% of silicon; percentage = brightness * 100. These display,gray ratios are not calibrated secondary,electron yields or universal material constants; beam conditions, charging, surface geometry and detector gain/offset affect contrast.",
             "brightness": 1.4706,
-            "grayValueRange": "110,140"
+            "grayValueRange": "110,140",
+            "removalRateUM3PerNC": 0.3,
+            "removalRateSource": "EPFL CMi typical 30 kV sputtering rate"
         },
         {
             "name": "Cu",
@@ -70,7 +80,9 @@
             "density": 8.96,
             "comment": "Density in g/cm3. Illustrative Ga+ image brightness based on the user,supplied Google AI table: gray range 140,180 (0,255), midpoint 160; brightness = midpoint / 85 (silicon midpoint), rounded to 4 decimal places. 1.0 = 100% of silicon; percentage = brightness * 100. These display,gray ratios are not calibrated secondary,electron yields or universal material constants; beam conditions, charging, surface geometry and detector gain/offset affect contrast.",
             "brightness": 1.8824,
-            "grayValueRange": "140,180"
+            "grayValueRange": "140,180",
+            "removalRateUM3PerNC": 0.25,
+            "removalRateSource": "EPFL CMi typical 30 kV sputtering rate"
         }
     ],
     "LensLookup": {

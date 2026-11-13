@@ -18,6 +18,7 @@ import { ExposureLatticeGeometry } from "./ExposureLatticeOverlay";
 import { createPortal } from "react-dom";
 
 import { MODEL_REGISTRY, lineRoi, patternBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
+import { resolveStairSteps, type StairStepOverride } from "../lib/stairRecipe";
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { useAppDispatch, useAppSelector, useWorkspaceActive } from "../store";
 import { useTranslation } from "../i18n";
@@ -346,7 +347,9 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         const inst = instances[spec.key];
         return inst?.roi ? (
           <g key={spec.key} data-pattern-key={spec.key} style={{ cursor: disabled ? "default" : "grab" }}>
-            <Shape spec={spec} params={inst.parameters} roi={inst.roi} active={spec.key === activeKey} cx={cx} cy={cy} sx={sx} sy={sy} />
+            <Shape spec={spec} params={inst.parameters} roi={inst.roi} active={spec.key === activeKey}
+              stairSteps={inst.stairSteps} materials={materials} defaultMaterial={materials[0]?.name} cx={cx} cy={cy} sx={sx} sy={sy} />
+            <ScanAxisCue roi={inst.roi} axis={inst.parameters.axis === "y" ? "y" : "x"} cx={cx} cy={cy} sx={sx} sy={sy} />
             {spec.key === activeKey && (() => {
               const box = patternBounds(inst.roi);
               const x = Math.min(cx(box.x_start), cx(box.x_end));
@@ -431,6 +434,9 @@ interface ShapeProps {
   roi: PatternRoi;
   active: boolean;
   draft?: boolean;
+  stairSteps?: ReadonlyArray<StairStepOverride | null | undefined>;
+  materials?: ReadonlyArray<{name: string; caption?: string; removalRateUM3PerNC?: number}>;
+  defaultMaterial?: string;
   cx: (x: number) => number;
   cy: (y: number) => number;
   sx: number;
@@ -441,7 +447,7 @@ function ellipsePath(x: number, y: number, rx: number, ry: number) {
   return `M${x - rx} ${y}A${rx} ${ry} 0 1 0 ${x + rx} ${y}A${rx} ${ry} 0 1 0 ${x - rx} ${y}Z`;
 }
 
-function Shape({ spec, params, roi, active, draft = false, cx, cy, sx, sy }: ShapeProps) {
+function Shape({ spec, params, roi, active, draft = false, stairSteps, materials = [], defaultMaterial, cx, cy, sx, sy }: ShapeProps) {
   const color = active ? ACTIVE_COLOR : OTHER_COLOR;
   const common = {
     pointerEvents: "all" as const,
@@ -482,11 +488,28 @@ function Shape({ spec, params, roi, active, draft = false, cx, cy, sx, sy }: Sha
   }
   if (spec.model === "StairCutModel") {
     const steps = stairRects(r, params);
+    const recipe = resolveStairSteps(params, stairSteps);
+    const maxDepth = Math.max(...recipe.map(step => step.depth), Number.EPSILON);
     return (
       <g>
-        {steps.map((s, i) => (
-          <rect key={i} {...rectBox(s)} fill={`rgb(${225 - Math.round(170*(i+1)/steps.length)},${225 - Math.round(170*(i+1)/steps.length)},${225 - Math.round(170*(i+1)/steps.length)})`} fillOpacity={0.7} {...common} />
-        ))}
+        {steps.map((s, i) => {
+          const step = recipe[i];
+          const materialName = step.material || defaultMaterial || "";
+          const material = materials.find(item => item.name === materialName);
+          const removalRate = step.removalRate > 0 ? step.removalRate : material?.removalRateUM3PerNC;
+          const box = rectBox(s);
+          const level = 225 - Math.round(170 * step.depth / maxDepth);
+          const label = `${i + 1} · ${step.depth.toFixed(2)} µm${materialName ? ` · ${materialName}` : ""}${removalRate ? ` · Sr ${removalRate}` : ""}`;
+          return <g key={i} opacity={step.enabled ? 1 : 0.2}>
+            <rect {...box} fill={`rgb(${level},${level},${level})`} fillOpacity={0.7} {...common}>
+              <title>{`${step.enabled ? "Enabled" : "Disabled"} · ${label}`}</title>
+            </rect>
+            {box.width > 72 && box.height > 14 && <text x={box.x + box.width / 2} y={box.y + box.height / 2 + 3}
+              textAnchor="middle" fontSize={9} fill="white" stroke="#111827" strokeWidth={2.5} paintOrder="stroke" pointerEvents="none">
+              {label}
+            </text>}
+          </g>;
+        })}
       </g>
     );
   }
@@ -501,6 +524,26 @@ function Shape({ spec, params, roi, active, draft = false, cx, cy, sx, sy }: Sha
     );
   }
   return <rect {...box} {...fill} {...common} />;
+}
+
+/** Small axis glyph makes the selected fast scan direction visible before a run starts. */
+function ScanAxisCue({roi, axis, cx, cy, sx, sy}: {
+  roi: PatternRoi; axis: "x" | "y"; cx: (x: number) => number; cy: (y: number) => number; sx: number; sy: number;
+}) {
+  const b = patternBounds(roi), mx = (b.x_start + b.x_end) / 2, my = (b.y_start + b.y_end) / 2;
+  const span = Math.max(4, Math.min(10, Math.min((b.x_end - b.x_start) * sx, (b.y_end - b.y_start) * sy) * 0.18));
+  const horizontal = axis === "x";
+  const x1 = cx(mx) - (horizontal ? span : 0), x2 = cx(mx) + (horizontal ? span : 0);
+  const y1 = cy(my) - (horizontal ? 0 : span), y2 = cy(my) + (horizontal ? 0 : span);
+  const color = "#22d3ee";
+  return <g pointerEvents="none" opacity={0.95}>
+    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#0b1220" strokeWidth={4} />
+    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={1.8} />
+    {horizontal ? <><path d={`M${x1 + 4},${y1 - 3}L${x1},${y1}L${x1 + 4},${y1 + 3}M${x2 - 4},${y2 - 3}L${x2},${y2}L${x2 - 4},${y2 + 3}`} fill="none" stroke={color} strokeWidth={1.4} />
+      <text x={cx(mx)} y={cy(my) - 5} textAnchor="middle" fontSize={8} fill="white" stroke="#111827" strokeWidth={2} paintOrder="stroke">X</text></>
+      : <><path d={`M${x1 - 3},${y1 + 4}L${x1},${y1}L${x1 + 3},${y1 + 4}M${x2 - 3},${y2 - 4}L${x2},${y2}L${x2 + 3},${y2 - 4}`} fill="none" stroke={color} strokeWidth={1.4} />
+        <text x={cx(mx) + 5} y={cy(my) + 3} textAnchor="middle" fontSize={8} fill="white" stroke="#111827" strokeWidth={2} paintOrder="stroke">Y</text></>}
+  </g>;
 }
 
 /** Let pointer-driven geometry render before the readout text. */

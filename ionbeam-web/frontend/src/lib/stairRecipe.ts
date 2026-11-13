@@ -21,9 +21,9 @@ export interface StairStep {
   overlap: number;
   /** Explicit pass count. Ignored when `removalRate` > 0 (passes are then derived from dose). */
   passes: number;
-  /** Free-text material label for this layer (reported, not used in the maths). */
+  /** Material label selects the layer's default Sr from the material catalogue. */
   material: string;
-  /** Calibrated removal rate Sr of this layer, um^3/nC. 0 = not calibrated. */
+  /** Optional entered Sr override of the material catalogue value, um^3/nC. 0 = use catalogue value. */
   removalRate: number;
   /** What happens once this step is finished: nothing, a full-field View, or a View then wait for Resume. */
   after: StairAfter;
@@ -82,7 +82,7 @@ export function stairStepsError(steps: ReadonlyArray<StairStep>): string | null 
   return null;
 }
 
-/** Parameters one step feeds to the exposure planner. Passes derive from dose only with a calibrated Sr. */
+/** Parameters one step feeds to the exposure planner. Passes derive from dose when an Sr is available. */
 export function stairStepParameters(params: PatternParameters, steps: ReadonlyArray<StairStep>, index: number): PatternParameters {
   const s = steps[index];
   const merged: PatternParameters = { ...params, dwell: s.dwell, overlap: s.overlap, passes: s.passes };
