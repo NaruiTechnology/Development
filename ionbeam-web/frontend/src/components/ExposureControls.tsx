@@ -42,7 +42,7 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
               title={t("processing.exposure.viewHelp")}
               onChange={event => { if (event.target.checked) void view(); }} />
             <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-            <span>{t("processing.exposure.view")}</span>
+            <Icon name="eye" />
           </label>}
           <label className="patterns-exposure__pause">
             <span>{t("processing.exposure.pause")}</span>

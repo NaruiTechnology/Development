@@ -191,10 +191,13 @@ function PatternCard({ spec, instance, active, countInvalid = false, disabled, e
   const materials = useAppSelector(s => s.processing.materials);
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
   const exposureState = useAppSelector(s => s.exposure);
-  const exposing = exposureState.activeStepIds.some(id => id.startsWith(`${spec.key}:`));
-  const activeExposureNode = exposureState.progress.find(node => node.status === "current");
-  const isActiveExposurePattern = activeExposureNode?.id.startsWith(`${spec.key}:`) ?? false;
   const viewBusy = exposureState.viewPhase === "queued" || exposureState.viewPhase === "scanning";
+  const exposing = exposureState.activeStepIds.some(id => id.startsWith(`${spec.key}:`));
+  const activeExposureNode = exposureState.progress.find(node => node.status === "current")
+    ?? (viewBusy ? [...exposureState.progress]
+      .filter(node => node.status === "completed" && node.finishedAt !== undefined)
+      .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))[0] : undefined);
+  const isActiveExposurePattern = activeExposureNode?.id.startsWith(`${spec.key}:`) ?? false;
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
   const label = active ? t("processing.collapse") : t("processing.expand");
   if (!instance) return null;
@@ -211,7 +214,7 @@ function PatternCard({ spec, instance, active, countInvalid = false, disabled, e
       <div className="card__header">
         <span className="card__title">{caption}</span>
         <span className="pattern-card__header-actions">
-          {viewBusy && isActiveExposurePattern && <span className="pattern-card__pause-indicator" title="Exposure paused for View scan" aria-label="Exposure paused">
+          {viewBusy && isActiveExposurePattern && <span className="pattern-card__pause-indicator pattern-card__pause-indicator--blink" title="Exposure paused for View scan" aria-label="Exposure paused">
             <Icon name="pause" />
           </span>}
           <label className="checkbox vacuum-switch app-switch pattern-card__enable">
@@ -385,6 +388,7 @@ function ParameterField({
   return (
     <NumberStepperField
       label={<>{label}{unit && <span className="pattern-card__unit"> ({unit})</span>}</>}
+      className={spec.name === "passes" ? "pattern-parameter--passes" : undefined}
       value={text}
       disabled={disabled}
       step={spec.step}

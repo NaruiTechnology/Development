@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 interface NumberStepperFieldProps {
   label: ReactNode;
+  className?: string;
   value: string | number;
   onValueChange: (value: string) => void;
   disabled?: boolean;
@@ -19,6 +20,7 @@ interface NumberStepperFieldProps {
 
 export function NumberStepperField({
   label,
+  className,
   value,
   onValueChange,
   disabled = false,
@@ -34,7 +36,7 @@ export function NumberStepperField({
   fractionDigits,
 }: NumberStepperFieldProps) {
   return (
-    <div className="field">
+    <div className={`field${className ? ` ${className}` : ""}`}>
       <label>{label}</label>
       <NumberStepperInput
         value={value}
