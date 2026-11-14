@@ -24,10 +24,6 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
             <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
             <span>{t("scan.parallel")}</span>
           </label>
-          {showView && <button type="button" className="btn btn--primary"
-            disabled={disabled || !defaultsReady || scanBusy || otherBusy || state.phase === "preparing" || state.phase === "stopping" || viewBusy}
-            aria-busy={state.viewPhase === "queued" || state.viewPhase === "scanning"}
-            title={t("processing.exposure.viewHelp")} onClick={view}><Icon name="eye" />{t("processing.exposure.view")}</button>}
           <button type="button" className="btn btn--stop" disabled={!busy || state.phase === "stopping"}
             onClick={() => void stop()}><Icon name="hand" />{t("scan.stop")}</button>
           {state.phase === "paused"
@@ -36,6 +32,16 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
             : <button type="button" className="btn btn--primary" disabled={startDisabled}
                 title={serialRequired ? t("processing.exposure.serialRequired") : t("processing.exposure.startHelp")}
                 onClick={() => void start()}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>}
+          {showView && <label className={`checkbox vacuum-switch app-switch patterns-exposure__view${viewBusy ? " patterns-exposure__view--busy" : ""}`}>
+            <input type="checkbox" role="switch" checked={viewBusy}
+              disabled={!defaultsReady || scanBusy || otherBusy || state.phase !== "running" || viewBusy}
+              aria-label={t("processing.exposure.view")}
+              aria-busy={viewBusy}
+              title={t("processing.exposure.viewHelp")}
+              onChange={event => { if (event.target.checked) void view(); }} />
+            <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+            <span>{t("processing.exposure.view")}</span>
+          </label>}
         </div>
         {state.phase === "paused" && <p className="scan-inline-note" role="status">{t("processing.exposure.paused").replace("{step}", state.progress.find(n => n.id === state.pausedAfterId)?.caption ?? "")}</p>}
         {serialRequired && <p className="scan-inline-error">{t("processing.exposure.serialRequired")}</p>}

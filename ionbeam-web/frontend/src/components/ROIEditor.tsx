@@ -107,6 +107,7 @@ export function ROIEditor({
   liveVectorPreview = false,
   processingPreview = null,
   hideSelectionOverlay = false,
+  hideLevelWedge = false,
   graySelectionResetToken = 0,
   renderCanvasOverlay,
   onLoadLastScan,
@@ -123,6 +124,7 @@ export function ROIEditor({
   liveVectorPreview?: boolean;
   processingPreview?: "raster" | "vector" | null;
   hideSelectionOverlay?: boolean;
+  hideLevelWedge?: boolean;
   graySelectionResetToken?: number;
   /** Extra layer drawn over the canvas (the Processing tab's pattern drawing). Receives pointer/world mapping. */
   renderCanvasOverlay?: (api: {
@@ -1605,7 +1607,7 @@ export function ROIEditor({
   const draftBounds = viewportBounds(roi, "draft");
 
   return (
-    <div>
+    <div className={variant === "canvas" ? "roi-canvas-root" : undefined}>
       {variant === "actions" && imageActionRow}
 
       {(variant === "controls" || variant === "all") && (
@@ -1768,7 +1770,7 @@ export function ROIEditor({
       )}
 
       {(variant === "canvas" || variant === "all") && (
-        <div className="canvas-stage roi-canvas-stage">
+        <div className={`canvas-stage roi-canvas-stage${hideLevelWedge ? " roi-canvas-stage--view" : ""}`}>
         <div className="roi-canvas-frame">
         <div
           ref={canvasWrapRef}
@@ -2298,7 +2300,7 @@ export function ROIEditor({
         {processingPreview && <ImageScaleChip extent={fullCanvasImageExtent(roi, globalPixelSize)}
           rotate90={streamTransforms.rotate90} zoom={roi.scan_zoom} />}
         </div>
-        <LevelWedge
+        {!hideLevelWedge && <LevelWedge
           histogram={grayHist}
           levels={levels}
           auto={levelSetting.mode === "auto"}
@@ -2307,7 +2309,7 @@ export function ROIEditor({
           disabled={!grayHist || grayHist.total <= 0 || roi.calibration_enabled}
           fullScale={ROI_GRAY_FULL_SCALE}
           codeDivisor={ROI_GRAY_SAMPLE_SCALE}
-        />
+        />}
         </div>
       )}
       {calibrationCorrection && (

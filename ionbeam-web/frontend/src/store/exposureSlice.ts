@@ -18,10 +18,15 @@ export interface ExposureState {
   pausedAfterId: string | null;
   viewPhase: ExposureViewPhase;
   viewError: string | null;
+  viewRequestId: number;
+  viewReceivedSamples: number;
+  viewReceivedChunks: number;
+  viewExpectedSamples: number;
 }
 const initialState: ExposureState = {
   parallel: false, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
-  viewPhase: "idle", viewError: null,
+  viewPhase: "idle", viewError: null, viewRequestId: 0,
+  viewReceivedSamples: 0, viewReceivedChunks: 0, viewExpectedSamples: 0,
 };
 
 type ExposurePreviewState = {exposure: ExposureState; processing: Pick<ProcessingState, "instances">};
@@ -39,6 +44,22 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
   exposureViewChanged(s, a: PayloadAction<{phase: ExposureViewPhase; error?: string}>) {
     s.viewPhase = a.payload.phase;
     s.viewError = a.payload.error ?? null;
+    if (a.payload.phase === "scanning") {
+      s.viewReceivedSamples = 0; s.viewReceivedChunks = 0; s.viewExpectedSamples = 0;
+    }
+  },
+  exposureViewExpectedSamples(s, a: PayloadAction<number>) {
+    s.viewExpectedSamples = Math.max(0, a.payload);
+  },
+  exposureViewSamplesReceived(s, a: PayloadAction<number>) {
+    s.viewReceivedSamples += Math.max(0, a.payload);
+    s.viewReceivedChunks += 1;
+  },
+  requestExposureView(s) {
+    if (s.phase !== "running" || s.viewPhase === "queued" || s.viewPhase === "scanning") return;
+    s.viewRequestId++;
+    s.viewPhase = "queued";
+    s.viewError = null;
   },
   exposurePrepared(s, a: PayloadAction<WorkflowProgress[]>) {
     s.progress = a.payload; s.retainedPreview = []; s.phase = "running"; s.activeStepIds = [];
@@ -118,5 +139,7 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
   });
 } });
 export const { setExposureParallel, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
-  exposureStepCompleted, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposurePaused, exposureResumed } = slice.actions;
+  exposureStepCompleted, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
+  exposureViewSamplesReceived, requestExposureView,
+  exposurePaused, exposureResumed } = slice.actions;
 export default slice.reducer;

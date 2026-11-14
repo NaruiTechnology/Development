@@ -1,11 +1,15 @@
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useAppSelector } from "../store";
 import { selectExposurePreview } from "../store/exposureSlice";
 import { useTranslation, type TranslationKey } from "../i18n";
-import { imageWorldBounds } from "../lib/roiGeometry";
+import { imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { patternBounds } from "../lib/processingPatterns";
 import { sampleExposureLattice, exposureTraceFraction, exposureHeadFraction } from "../lib/exposurePreview";
+import { orientCanvas } from "../lib/canvasOrientation";
+import { effectiveScanRegions } from "../lib/scanRegions";
+import { exposureViewScanRegions } from "../lib/processingScanRegions";
 import type { WorkflowProgress } from "../lib/processingWorkflows";
+import type { StreamTransforms } from "../store/scanSlice";
 
 type Project = (x: number, y: number) => { x: number; y: number };
 const COLORS = ["#fbbf24", "#fb923c", "#f472b6", "#a78bfa", "#4ade80"];
@@ -70,8 +74,10 @@ export function ExposureLatticeOverlay({ transforms: displayTransforms }: {
   transforms?: {rotate90: boolean; xflip: boolean; yflip: boolean};
 }) {
   const roi = useAppSelector(s => s.scan.roi);
+  const viewPhase = useAppSelector(s => s.exposure.viewPhase);
   const configuredTransforms = useAppSelector(s => s.scan.streamTransforms);
   const transforms = displayTransforms ?? configuredTransforms;
+  if (viewPhase === "queued" || viewPhase === "scanning") return null;
   const bounds = imageWorldBounds(roi);
   const project: Project = (wx,wy) => {
     let x = (wx-bounds.x_origin)/(bounds.x_end-bounds.x_origin);
@@ -85,11 +91,83 @@ export function ExposureLatticeOverlay({ transforms: displayTransforms }: {
     aria-hidden="true"><ExposureLatticeGeometry project={project} /></svg>;
 }
 
+/** Separate raster canvas for the on-the-fly View frames; the exposure image and its trace stay intact below it. */
+export function ExposureViewCanvasOverlay({ transforms, processingViewport = false }: {
+  transforms?: StreamTransforms; processingViewport?: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const frames = useAppSelector(s => s.image.exposureViewFrames);
+  const roi = useAppSelector(s => s.scan.roi);
+  const specs = useAppSelector(s => s.processing.specs);
+  const instances = useAppSelector(s => s.processing.instances);
+  const viewPhase = useAppSelector(s => s.exposure.viewPhase);
+  const viewActive = viewPhase === "queued" || viewPhase === "scanning";
+  const scanBounds = useMemo(() => {
+    const regions = exposureViewScanRegions(specs, instances, roi).regions;
+    return effectiveScanRegions(regions, roi.scan_zoom, roi).filter((bounds): bounds is NonNullable<typeof bounds> => bounds !== null);
+  }, [specs, instances, roi]);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = 640; canvas.height = 640;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.clearRect(0, 0, 640, 640);
+    const field = imageWorldBounds(roi);
+    const viewport = viewportBounds(roi);
+    const worldWidth = field.x_end - field.x_origin, worldHeight = field.y_end - field.y_origin;
+    if ((!frames.length && !viewActive) || !worldWidth || !worldHeight) return;
+    const projectX = (x: number) => processingViewport ? worldToCanvasX(x, field, viewport) : (x - field.x_origin) / worldWidth * 640;
+    const projectY = (y: number) => processingViewport ? worldToCanvasY(y, field, viewport) : (y - field.y_origin) / worldHeight * 640;
+    for (const frame of frames) {
+      let low = 65535, high = 0;
+      for (const value of frame.pixels) { if (value < low) low = value; if (value > high) high = value; }
+      const span = Math.max(1, high - low);
+      const scratch = document.createElement("canvas");
+      scratch.width = scratch.height = frame.resolution;
+      const scratchContext = scratch.getContext("2d");
+      if (!scratchContext) continue;
+      const image = scratchContext.createImageData(frame.resolution, frame.resolution);
+      for (let i = 0; i < frame.pixels.length; i++) {
+        const gray = Math.max(0, Math.min(255, Math.round((frame.pixels[i] - low) * 255 / span)));
+        const offset = i * 4;
+        image.data[offset] = image.data[offset + 1] = image.data[offset + 2] = gray;
+        image.data[offset + 3] = 220;
+      }
+      scratchContext.putImageData(image, 0, 0);
+      const x = projectX(frame.bounds.x_start);
+      const y = projectY(frame.bounds.y_start);
+      const width = projectX(frame.bounds.x_end) - x;
+      const height = projectY(frame.bounds.y_end) - y;
+      context.drawImage(scratch, x, y, width, height);
+    }
+    const paths = frames.length ? frames.map(frame => frame.bounds) : scanBounds;
+    context.save();
+    context.strokeStyle = "rgba(34, 211, 238, 0.9)";
+    context.lineWidth = 1;
+    for (const bounds of paths) {
+      const x0 = projectX(bounds.x_start);
+      const y0 = projectY(bounds.y_start);
+      const width = projectX(bounds.x_end) - x0;
+      const height = projectY(bounds.y_end) - y0;
+      context.beginPath();
+      context.rect(x0, y0, width, height);
+      context.stroke();
+    }
+    context.restore();
+    if (!processingViewport && transforms) orientCanvas(canvas, transforms);
+  }, [frames, roi, transforms, viewActive, scanBounds, processingViewport]);
+  if (!frames.length && !viewActive) return null;
+  return <canvas ref={canvasRef} className="exposure-view-canvas" width={640} height={640}
+    aria-label="View scan overlay for pattern ROIs" />;
+}
+
 export function ExposureLatticeMessage() {
   const { t } = useTranslation();
   const progress = useAppSelector(selectExposurePreview);
-  const { error, viewPhase, viewError } = useAppSelector(s => s.exposure);
+  const { error, viewPhase, viewError, viewReceivedSamples, viewReceivedChunks, viewExpectedSamples } = useAppSelector(s => s.exposure);
   const steps = progress.filter(n => n.exposure);
+  const viewing = viewPhase === "queued" || viewPhase === "scanning";
   const node = steps.find(n => n.status === "current") ?? [...steps].reverse().find(n => n.status !== "upcoming") ?? steps[0];
   const errorMessage = error && (
     <div className="exposure-lattice-message exposure-lattice-message--error" role="alert">
@@ -98,19 +176,26 @@ export function ExposureLatticeMessage() {
     </div>
   );
   const viewMessage = viewPhase !== "idle" && (
-    <div className={`exposure-lattice-message${viewPhase === "error" ? " exposure-lattice-message--error" : ""}`}
+    <div className={`exposure-lattice-message exposure-lattice-message--view${viewPhase === "error" ? " exposure-lattice-message--error" : ""}`}
       role={viewPhase === "error" ? "alert" : "status"}>
       <span>{t(`processing.exposure.viewStatus.${viewPhase}` as TranslationKey)}</span>
+      {viewPhase === "scanning" && viewExpectedSamples > 0 && <span className="exposure-lattice-message__data">
+        {viewReceivedSamples >= viewExpectedSamples
+          ? t("processing.exposure.viewFinishing", {samples: viewExpectedSamples.toLocaleString()})
+          : viewReceivedChunks
+          ? t("processing.exposure.viewData", {samples: viewReceivedSamples.toLocaleString(), expected: viewExpectedSamples.toLocaleString(), chunks: viewReceivedChunks.toLocaleString()})
+          : t("processing.exposure.viewWaitingData", {expected: viewExpectedSamples.toLocaleString()})}
+      </span>}
       {viewError && <span>{viewError}</span>}
     </div>
   );
-  if (!node?.exposure) return <>{errorMessage}{viewMessage}</>;
+  if (!node?.exposure || viewing) return <>{errorMessage}{viewMessage}</>;
   const e = node.exposure, p = e.plan;
   const index = steps.indexOf(node)+1;
   return <>
     {errorMessage}
     {viewMessage}
-    <div className="exposure-lattice-message" role="status" aria-live="polite">
+    <div className="exposure-lattice-message exposure-lattice-message--pattern" role="status" aria-live="polite">
     <strong>{t("canvas.scanParams.exposureLattice")} · {node.pattern} · {node.caption} · {t(`processing.exposure.status.${node.status}` as TranslationKey)}</strong>
     <span>{e.beamCurrentPA} pA · Ø {(p.spotDiameterUM*1000).toFixed(1)} nm · {t("processing.exposure.pitch")} {(p.spacingUM*1000).toFixed(2)} nm · OL {p.overlapPct}% · {e.dwellUS} µs · {p.lattice.axis.toUpperCase()} · {p.countExact ? "" : "≈"}{p.count.toLocaleString()} {t("processing.exposure.spots")} · {p.passes} {t("processing.exposure.passes")}</span>
     {e.requestedDepthUM !== undefined && <span>Material {e.material ?? "—"} · Depth {e.requestedDepthUM.toFixed(3)} µm · Layer {e.incrementUM?.toFixed(3) ?? "—"} µm · Sr {e.removalRate ? `${e.removalRate.toPrecision(4)} µm³/nC` : "not calibrated"}</span>}

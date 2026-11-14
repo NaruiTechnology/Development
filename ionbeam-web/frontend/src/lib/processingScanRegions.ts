@@ -32,3 +32,33 @@ export function processingScanRegions(specs: readonly Pick<PatternSpec, "key">[]
   }
   return { keys, regions };
 }
+
+/** Regions acquired by a View scan: enabled pattern bounds plus any saved Scan-tab ROI areas. */
+export function exposureViewScanRegions(specs: readonly Pick<PatternSpec, "key">[],
+  instances: Record<string, { roi: PatternRoi | null; enabled?: boolean }>,
+  field: ROIState,
+): { keys: string[]; regions: ROIRequest[] } {
+  const pattern = processingScanRegions(specs, instances, field);
+  const keys = [...pattern.keys];
+  const regions = [...pattern.regions];
+  const scanROIs = field.roi_scan_enabled ? field.scan_regions : [];
+  const selected = field.selection ? [field.selection] : [];
+  const extras = [...scanROIs, ...selected];
+  const seen = new Set(regions.map(regionKey));
+  for (const [index, region] of extras.entries()) {
+    const key = regionKey(region);
+    if (!validRegion(region) || seen.has(key)) continue;
+    seen.add(key);
+    keys.push(`scan-roi-${index + 1}`);
+    regions.push(region);
+  }
+  return { keys, regions };
+}
+
+function validRegion(region: ROIRequest): boolean {
+  return Object.values(region).every(Number.isFinite) && region.x_end > region.x_start && region.y_end > region.y_start;
+}
+
+function regionKey(region: ROIRequest): string {
+  return `${region.x_start},${region.x_end},${region.y_start},${region.y_end}`;
+}

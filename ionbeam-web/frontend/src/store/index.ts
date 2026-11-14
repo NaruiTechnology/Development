@@ -63,6 +63,7 @@ export const store = configureStore({
           "image/seedVectorRegions",
           "image/setLiveVectorCustomPoints",
           "image/resetRaster",
+          "image/appendExposureViewFrame",
           "image/appendRaster",
           "image/setupVector",
           "image/appendVectorSamples",

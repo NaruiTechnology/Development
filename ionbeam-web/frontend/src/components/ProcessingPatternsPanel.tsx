@@ -79,7 +79,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
             {exposureActive && <LoadingSpinner inline size={18} className="patterns-card__spinner"
               ariaLabel={t("processing.exposure.status.current")} />}
           </span>
-          <ExposureControls disabled={exposureDisabled} showView={false} />
+          <ExposureControls disabled={exposureDisabled} />
         </div>
         <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
           {specs.map((spec) => {
@@ -118,6 +118,8 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
   const { specs, instances, activeKey } = processing;
   const field = useAppSelector(s => s.scan.roi);
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
+  const exposure = useAppSelector(s => s.exposure);
+  const viewLocked = exposure.viewPhase === "queued" || exposure.viewPhase === "scanning" || exposure.phase === "paused";
   const { tr } = useTr();
   const [limitMessage, setLimitMessage] = useState("");
   const setEnabled = (key: string, enabled: boolean) => {
@@ -150,7 +152,7 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
   const ordered = [...promoteWithinGroup(enabledSpecs), ...promoteWithinGroup(disabledSpecs)];
   return <>{limitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{limitMessage}</p>}{ordered.map((spec) => (
       <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key}
-        disabled={disabled || !instances[spec.key]?.roi} enableDisabled={enableDisabled || !instances[spec.key]?.roi}
+        disabled={disabled || viewLocked || !instances[spec.key]?.roi} enableDisabled={enableDisabled || viewLocked || !instances[spec.key]?.roi}
         onEnabledChange={setEnabled}
       />
     ))}</>;
@@ -166,7 +168,11 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onEnabl
   const workflows = useAppSelector(s => s.processing.workflows);
   const materials = useAppSelector(s => s.processing.materials);
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
-  const exposing = useAppSelector(s => s.exposure.activeStepIds.some(id => id.startsWith(`${spec.key}:`)));
+  const exposureState = useAppSelector(s => s.exposure);
+  const exposing = exposureState.activeStepIds.some(id => id.startsWith(`${spec.key}:`));
+  const activeExposureNode = exposureState.progress.find(node => node.status === "current");
+  const isActiveExposurePattern = activeExposureNode?.id.startsWith(`${spec.key}:`) ?? false;
+  const viewBusy = exposureState.viewPhase === "queued" || exposureState.viewPhase === "scanning";
   const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
   const label = active ? t("processing.collapse") : t("processing.expand");
   if (!instance) return null;
@@ -181,15 +187,20 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onEnabl
       className={`card pattern-card${active ? " pattern-card--active" : ""}${exposing ? " pattern-card--exposing" : ""}`} data-pattern={spec.key}>
       <div className="card__header">
         <span className="card__title">{caption}</span>
-        <label className="checkbox vacuum-switch app-switch pattern-card__enable">
-          <input type="checkbox" checked={Boolean(instance.roi) && instance.enabled !== false} disabled={enableDisabled}
-            aria-label={`${caption}: ${t("processing.enable")}`}
-            onChange={(event) => {
-              onEnabledChange(spec.key, event.target.checked);
-            }} />
-          <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-          <span>{t("processing.enable")}</span>
-        </label>
+        <span className="pattern-card__header-actions">
+          {viewBusy && isActiveExposurePattern && <span className="pattern-card__pause-indicator" title="Exposure paused for View scan" aria-label="Exposure paused">
+            <Icon name="pause" />
+          </span>}
+          <label className="checkbox vacuum-switch app-switch pattern-card__enable">
+            <input type="checkbox" checked={Boolean(instance.roi) && instance.enabled !== false} disabled={enableDisabled}
+              aria-label={`${caption}: ${t("processing.enable")}`}
+              onChange={(event) => {
+                onEnabledChange(spec.key, event.target.checked);
+              }} />
+            <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+            <span>{t("processing.enable")}</span>
+          </label>
+        </span>
         <button
           type="button"
           className="card__collapse-btn"
@@ -197,7 +208,7 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onEnabl
           aria-label={`${caption}: ${label}`}
           data-tooltip={`${caption}: ${label}`}
           data-styled-tooltip="true"
-          disabled={false}
+          disabled={disabled}
           onClick={() => dispatch(selectPattern(active ? null : spec.key))}
         >
           <Icon name="chevronDown" />

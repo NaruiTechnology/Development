@@ -24,7 +24,7 @@ import {
 import { Header } from "./components/Header";
 import { ImagePanelLayoutControls } from "./components/ImagePanelLayoutControls";
 import { ProcessingImagePanel } from "./components/ProcessingImagePanel";
-import { ExposureLatticeMessage } from "./components/ExposureLatticeOverlay";
+import { ExposureLatticeMessage, ExposureViewCanvasOverlay } from "./components/ExposureLatticeOverlay";
 import { controlCanvasKind } from "./lib/controlCanvasKind";
 import { HelpPopover } from "./components/HelpPopover";
 import type { SignedInUser } from "./components/AuthDialog";
@@ -701,6 +701,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   // stops one stream and starts the next. Keep the panel in its live-scan state
   // across that gap so wedge borders and enable/disable colors do not change.
   const exposureRunning = useAppSelector(s => exposureBusy(s.exposure.phase));
+  const exposureViewActive = useAppSelector(s => s.exposure.viewPhase === "queued" || s.exposure.viewPhase === "scanning");
   const pixelWorkflowRunning = useAppSelector(s => s.processing.workflowProgress.some(step => step.threshold !== null) &&
     s.processing.workflowProgress.some(step => step.status === "current"));
   const workflowRunning = exposureRunning || pixelWorkflowRunning;
@@ -1597,8 +1598,11 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
       grayScaleSkipped={displayedROIGrayScaleSkipped}
       processingPreview={activeTopTab === "processing" ? scanSubTab : null}
       hideSelectionOverlay={activeTopTab === "processing"}
+      hideLevelWedge={activeTopTab === "processing" && exposureViewActive}
       renderCanvasOverlay={activeTopTab === "processing"
-        ? (api) => <PatternOverlay disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} api={api} />
+        ? (api) => exposureViewActive
+          ? <ExposureViewCanvasOverlay processingViewport />
+          : <PatternOverlay disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} api={api} />
         : undefined}
     />
   );
@@ -2143,9 +2147,13 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
             <div className="card__body">
               <WorkspaceView workspace="processing" active={activeTopTab === "processing" && !adcView}>
                 <ProcessingImagePanel headerHost={processingHeaderHost}>
-                  {roiCanvas}
+                  <div className="processing-image-panel__content">
+                    {roiCanvas}
+                    <div className="processing-image-panel__messages">
+                      <ExposureLatticeMessage />
+                    </div>
+                  </div>
                 </ProcessingImagePanel>
-                <ExposureLatticeMessage />
               </WorkspaceView>
               <WorkspaceView workspace="scan" active={activeTopTab !== "processing"}>
                 {adcView ? (

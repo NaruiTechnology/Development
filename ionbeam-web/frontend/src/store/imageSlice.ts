@@ -24,6 +24,8 @@ export type VectorPattern = "default" | "custom";
 export type VectorSource = "vector" | "roi";
 
 interface ImageState {
+  /** Temporary raster frames from the in-flight Exposure View scan, keyed to pattern ROI world bounds. */
+  exposureViewFrames: Array<{ key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array }>;
   // ---------- raster -----------------------------------------------------
   resolution: number;
   /** Index of the next raster pixel to be written (the beam position). */
@@ -102,6 +104,7 @@ const RES = 512;
 const VEC_EDGE = 2048;
 
 const initialState: ImageState = {
+  exposureViewFrames: [],
   resolution: RES,
   cursor: 0,
   filled: 0,
@@ -173,6 +176,12 @@ const slice = createSlice({
   name: "image",
   initialState,
   reducers: {
+    clearExposureViewFrames(state) { state.exposureViewFrames = []; },
+    appendExposureViewFrame(state, a: PayloadAction<{ key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array }>) {
+      const index = state.exposureViewFrames.findIndex(frame => frame.key === a.payload.key);
+      if (index < 0) state.exposureViewFrames.push(a.payload);
+      else state.exposureViewFrames[index] = a.payload;
+    },
     bumpRevision(state) {
       state.revision++;
     },
@@ -636,6 +645,8 @@ const slice = createSlice({
 
 export const {
   bumpRevision,
+  clearExposureViewFrames,
+  appendExposureViewFrame,
   resetRaster,
   appendRaster,
   queueLiveScanDisplay,

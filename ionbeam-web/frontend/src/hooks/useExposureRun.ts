@@ -8,13 +8,32 @@ import { ExposureStream, exposureJson } from "../lib/exposureStream";
 import { prepareExposureSequence, exposureRounds, exposureSegments, totalExposureSpots, MAX_EXPOSURE_SPOTS } from "../lib/exposureSequence";
 import { selectPattern } from "../store/processingSlice";
 import { exposurePreparing, exposurePrepared, exposureStepStarted, exposureStepCompleted,
-  exposureSamplesReceived, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposurePaused, exposureResumed } from "../store/exposureSlice";
+  exposureSamplesReceived, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
+  exposureViewSamplesReceived, exposurePaused, exposureResumed } from "../store/exposureSlice";
 import type { RasterRequest, VectorRequest } from "../types/api";
 import { decodeScanSamples } from "../lib/scanSamples";
 import { rasterRequestWithBitmapSelection } from "../lib/bitmapVector";
 import { prepareScanAssets } from "../lib/scanAssets";
 import { scansUseHardware } from "../lib/takeoverTiming";
-import { resetRaster, setupVector } from "../store/imageSlice";
+import { exposureViewScanRegions } from "../lib/processingScanRegions";
+import { effectiveScanRegions } from "../lib/scanRegions";
+import { appendExposureViewFrame, clearExposureViewFrames } from "../store/imageSlice";
+
+const FULL_DAC_ROI = { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
+
+/** Match Scan + ROI Parallel: one raster request carries each region in parallel_rois. */
+function combineRasterRegions(requests: RasterRequest[]): RasterRequest {
+  const bitmaps = requests.map(request => request.simulation_bitmap);
+  return {
+    ...requests[0],
+    roi: null,
+    parallel_rois: requests.map(request => request.roi ?? FULL_DAC_ROI),
+    simulation_bitmap: null,
+    parallel_simulation_bitmaps: bitmaps.every(Boolean)
+      ? bitmaps as NonNullable<RasterRequest["simulation_bitmap"]>[]
+      : null,
+  };
+}
 
 /** Exposure owns the beam session. View borrows it for one frame between passes. */
 export function useExposureRun() {
@@ -23,10 +42,19 @@ export function useExposureRun() {
   const state = useAppSelector(s => s.exposure);
   const running = useRef(false), cancelled = useRef(false);
   const socket = useRef<ExposureStream | null>(null), auth = useRef<AbortController | null>(null);
+  const viewSocket = useRef<ExposureStream | null>(null);
+  const resumeAfterView = useRef(false);
+  const handledViewRequestId = useRef(state.viewRequestId);
   const pendingStop = useRef<Promise<void> | null>(null), stopError = useRef<string | null>(null);
 
   const viewPending = useRef(false);
   const resumeWaiter = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (state.viewRequestId === handledViewRequestId.current) return;
+    handledViewRequestId.current = state.viewRequestId;
+    void view();
+  }, [state.viewRequestId]);
 
   /** Hold the beam session between steps until Resume (or Stop) is pressed. */
   function waitForResume(stepId: string): Promise<void> {
@@ -42,10 +70,11 @@ export function useExposureRun() {
     resumeWaiter.current?.();
   }
 
-  async function runRequest(request: VectorRequest | RasterRequest, viewFrame?: {pixels: Uint16Array; cursor: number}, exposureStepId?: string): Promise<void> {
+  async function runRequest(request: VectorRequest | RasterRequest, viewFrames?: Array<{pixels: Uint16Array; cursor: number}>, exposureStepId?: string,
+    stream?: ExposureStream, onViewChunk?: () => void): Promise<void> {
     if (cancelled.current) throw new Error("Exposure stopped");
-    socket.current ??= new ExposureStream(store.getState().status.defaults?.exposure_session_stream === true,
-      () => resumeWaiter.current?.(), Number(store.getState().status.defaults?.adc?.adcHalfPeriod ?? 3));
+    const activeSocket = stream ?? (socket.current ??= new ExposureStream(store.getState().status.defaults?.exposure_session_stream === true,
+      () => resumeWaiter.current?.(), Number(store.getState().status.defaults?.adc?.adcHalfPeriod ?? 3)));
     let pendingSamples = 0;
     let sampleTimer: ReturnType<typeof setTimeout> | undefined;
     const flush = () => {
@@ -54,20 +83,27 @@ export function useExposureRun() {
       pendingSamples = 0;
     };
     try {
-      await socket.current.run(request, buffer => {
-        if (viewFrame) {
+      await activeSocket.run(request, buffer => {
+        if (viewFrames?.length) {
           const pixels = decodeScanSamples(buffer, request.output_mode);
-          if (viewFrame.cursor + pixels.length > viewFrame.pixels.length)
-            throw new Error("Invalid full-field View sample count");
-          viewFrame.pixels.set(pixels, viewFrame.cursor);
-          viewFrame.cursor += pixels.length;
+          const regionCount = viewFrames.length;
+          for (const pixel of pixels) {
+            const regionIndex = viewFrames[viewFrames[0].cursor % regionCount];
+            const localIndex = Math.floor(viewFrames[0].cursor / regionCount);
+            if (!regionIndex || localIndex >= regionIndex.pixels.length)
+              throw new Error("Invalid parallel View sample count");
+            regionIndex.pixels[localIndex] = pixel;
+            viewFrames[0].cursor++;
+          }
+          dispatch(exposureViewSamplesReceived(pixels.length));
+          onViewChunk?.();
         } else {
           pendingSamples += buffer.byteLength / 2;
           sampleTimer ??= setTimeout(flush, 50);
         }
       });
-      if (viewFrame && viewFrame.cursor !== viewFrame.pixels.length)
-        throw new Error("Full-field View ended with an incomplete frame");
+      if (viewFrames?.length && viewFrames[0].cursor !== viewFrames[0].pixels.length * viewFrames.length)
+        throw new Error("Parallel View ended with an incomplete frame");
     } finally { flush(); }
   }
 
@@ -98,13 +134,14 @@ export function useExposureRun() {
       }
       if (current.phase !== "running") return;
       viewPending.current = true;
+      resumeAfterView.current = true;
       dispatch(exposureViewChanged({phase: "queued"}));
       return;
     }
     const release = claimWorkspaceRun(workspace, "exposure");
     if (!release) return;
     running.current = true; cancelled.current = false; pendingStop.current = null; stopError.current = null;
-    viewPending.current = true;
+    viewPending.current = true; resumeAfterView.current = false;
     dispatch(exposureViewChanged({phase: "queued"}));
     try {
       await checkAccount();
@@ -117,20 +154,30 @@ export function useExposureRun() {
       if (cancelled.current) dispatch(exposureViewChanged({phase: stopError.current ? "error" : "stopped",
         error: stopError.current ?? undefined}));
       socket.current?.close(); socket.current = null;
-      auth.current = null; running.current = false; viewPending.current = false; release();
+      auth.current = null; running.current = false; viewPending.current = false; resumeAfterView.current = false; release();
     }
   }
 
   async function runQueuedView() {
     if (!viewPending.current || cancelled.current) return;
     viewPending.current = false;
-    dispatch(exposureViewChanged({phase: "scanning"}));
+    const pauseAfter = resumeAfterView.current;
     try {
       const snapshot = store.getState();
+      const activeNode = snapshot.exposure.progress.find(node => node.status === "current");
+      if (pauseAfter && snapshot.exposure.phase === "running" && activeNode)
+        dispatch(exposurePaused(activeNode.id));
+      dispatch(exposureViewChanged({phase: "scanning"}));
+      dispatch(clearExposureViewFrames());
       const settings = snapshot.scan.raster;
       const resolution = settings.resolution;
       const simulated = !scansUseHardware(snapshot.status.defaults?.is_production, snapshot.status.sessionSimulation);
-      const frame = {pixels: new Uint16Array(resolution * resolution), cursor: 0};
+      const regions = exposureViewScanRegions(snapshot.processing.specs, snapshot.processing.instances, snapshot.scan.roi);
+      if (!regions.regions.length) throw new Error("Draw at least one enabled pattern ROI before requesting View.");
+      const scanBounds = effectiveScanRegions(regions.regions, snapshot.scan.roi.scan_zoom, snapshot.scan.roi)
+        .filter((bounds): bounds is NonNullable<typeof bounds> => bounds !== null);
+      if (!scanBounds.length) throw new Error("The selected pattern ROIs do not intersect the zoomed scan field.");
+      dispatch(exposureViewExpectedSamples(resolution * resolution * scanBounds.length));
       const request: RasterRequest = {
         resolution, dwell: settings.dwell,
         latency_bytes: simulated ? Math.max(settings.latency_bytes, 65536 * Math.max(1, settings.dwell)) : settings.latency_bytes,
@@ -139,22 +186,54 @@ export function useExposureRun() {
         continuous: false, roi: null, parallel_rois: null, preview: true, exposure_view: true,
         ...(snapshot.status.sessionSimulation ? {simulation: snapshot.status.sessionSimulation} : {}),
       };
-      const withBitmap = await rasterRequestWithBitmapSelection(request,
-        {...snapshot.scan.roi, selection: null, scan_zoom: 1},
+      const regionRequests = await Promise.all(scanBounds.map(bounds => rasterRequestWithBitmapSelection(request,
+        {...snapshot.scan.roi, selection: bounds, scan_zoom: 1},
         {isProduction: snapshot.status.defaults?.is_production !== false,
-          allowBitmapSimulation: simulated});
-      const prepared = await prepareScanAssets(withBitmap, {signal: auth.current?.signal, timeoutMs: 15_000});
+          allowBitmapSimulation: simulated})));
       if (cancelled.current) return;
-      await runRequest(prepared, frame);
+      const parallelRequest = combineRasterRegions(regionRequests);
+      const frames = scanBounds.map(() => ({pixels: new Uint16Array(resolution * resolution), cursor: 0}));
+      // Production exposure sessions multiplex raster View frames on the
+      // session that owns the beam. Standalone raster streams are used only
+      // when the backend has no persistent exposure session.
+      const exposureSession = socket.current?.persistent ? socket.current : null;
+      const viewStream = exposureSession ?? new ExposureStream(false, undefined,
+        Number(snapshot.status.defaults?.adc?.adcHalfPeriod ?? 3));
+      if (!exposureSession) viewSocket.current = viewStream;
+      try {
+        const prepared = await prepareScanAssets(parallelRequest,
+          {signal: auth.current?.signal, timeoutMs: 15_000});
+        if (cancelled.current) return;
+        await runRequest(prepared, frames, undefined, viewStream, () => {
+          frames.forEach((frame, index) => dispatch(appendExposureViewFrame({
+            key: regions.keys[index] ?? `roi-${index + 1}`,
+            bounds: scanBounds[index], resolution, pixels: frame.pixels.slice(),
+          })));
+        });
+      } finally {
+        if (!exposureSession) {
+          viewStream.close();
+          if (viewSocket.current === viewStream) viewSocket.current = null;
+        }
+      }
       if (cancelled.current) return;
-      // Both Processing scan modes show this full-field frame without changing their settings.
-      dispatch(resetRaster({resolution, initialFrame: frame.pixels}));
-      dispatch(setupVector({pattern: "default", edge: resolution, scanPath: "horizontal_sawtooth", initialImage: frame.pixels}));
+      frames.forEach((frame, index) => dispatch(appendExposureViewFrame({
+        key: regions.keys[index] ?? `roi-${index + 1}`, bounds: scanBounds[index],
+        resolution, pixels: frame.pixels,
+      })));
       dispatch(exposureViewChanged({phase: "completed"}));
     } catch (error) {
       if (!cancelled.current) dispatch(exposureViewChanged({phase: "error",
         error: error instanceof Error ? error.message : String(error)}));
       if (socket.current?.failed) throw error;
+    } finally {
+      if (pauseAfter) {
+        resumeAfterView.current = false;
+        if (!cancelled.current && store.getState().exposure.phase === "paused") {
+          dispatch(exposureResumed());
+          resumeWaiter.current?.();
+        }
+      }
     }
   }
 
@@ -162,8 +241,10 @@ export function useExposureRun() {
     if (running.current) return;
     const release = claimWorkspaceRun(workspace, "exposure");
     if (!release) return;
-    running.current = true; cancelled.current = false; pendingStop.current = null; stopError.current = null; viewPending.current = false;
+    running.current = true; cancelled.current = false; pendingStop.current = null; stopError.current = null;
+    viewPending.current = false; resumeAfterView.current = false;
     dispatch(exposurePreparing());
+    dispatch(clearExposureViewFrames());
     let failure: string | null = null;
     try {
       await checkAccount();
@@ -217,6 +298,7 @@ export function useExposureRun() {
               ...(snapshot.status.sessionSimulation ? {simulation: snapshot.status.sessionSimulation} : {})},
               undefined, queue.run.entry.node.id);
             if (cancelled.current) break;
+            if (viewPending.current) await runQueuedView();
           }
         }
         if (cancelled.current) break;
@@ -237,17 +319,18 @@ export function useExposureRun() {
       failure ??= stopError.current;
       dispatch(exposureFinished({phase: failure ? "error" : cancelled.current ? "stopped" : "completed", error: failure ?? undefined}));
       socket.current?.close(); socket.current = null;
-      auth.current = null; running.current = false; viewPending.current = false; release();
+      auth.current = null; running.current = false; viewPending.current = false; resumeAfterView.current = false; release();
     }
   }
 
   function stop(): Promise<void> {
     if (!running.current) return Promise.resolve();
     if (pendingStop.current) return pendingStop.current;
-    cancelled.current = true; viewPending.current = false; auth.current?.abort();
+    cancelled.current = true; viewPending.current = false; resumeAfterView.current = false; auth.current?.abort();
     resumeWaiter.current?.();
     if (["preparing", "running", "paused", "stopping"].includes(store.getState().exposure.phase)) dispatch(exposureStopping());
     const ws = socket.current;
+    viewSocket.current?.close(); viewSocket.current = null;
     pendingStop.current = (async () => {
       try {
         if (ws?.persistent) {
