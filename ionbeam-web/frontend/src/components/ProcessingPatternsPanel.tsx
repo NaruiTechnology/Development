@@ -57,7 +57,16 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
 }) {
   const dispatch = useAppDispatch();
   const { t, tr } = useTr();
-  const { status, error, entryErrors, specs, activeKey } = useAppSelector((s) => s.processing);
+  const processing = useAppSelector((s) => s.processing);
+  const { status, error, entryErrors, specs, activeKey } = processing;
+  const field = useAppSelector(s => s.scan.roi);
+  const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
+  const selectedSpotCount = useMemo(() => {
+    if (!processing.lensLookup) return null;
+    try { return totalExposureSpots(prepareExposureSequence(processing, field, simulation)); }
+    catch { return null; }
+  }, [processing, field, simulation]);
+  const countValidationFailed = selectedSpotCount !== null && selectedSpotCount > MAX_EXPOSURE_SPOTS;
   const exposurePhase = useAppSelector(s => s.exposure.phase);
   const exposureActive = ["preparing", "running", "stopping"].includes(exposurePhase);
 
@@ -79,7 +88,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
             {exposureActive && <LoadingSpinner inline size={18} className="patterns-card__spinner"
               ariaLabel={t("processing.exposure.status.current")} />}
           </span>
-          <ExposureControls disabled={exposureDisabled} />
+          <ExposureControls disabled={exposureDisabled || countValidationFailed} />
         </div>
         <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
           {specs.map((spec) => {
