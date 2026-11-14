@@ -8388,14 +8388,14 @@ body {
 .patterns-exposure__view { flex-shrink: 0; font-size: 11px; }
 .patterns-exposure__view--busy { color: var(--c-accent); }
 .patterns-exposure__view-row { display: grid; grid-template-columns: auto minmax(120px, 1fr); align-items: center; gap: 12px; margin-top: 8px; }
-.patterns-exposure__pause { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; color: var(--c-text-muted); font-size: 11px; white-space: nowrap; }
+.patterns-exposure__pause { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; color: var(--c-text); font-size: 11px; white-space: nowrap; }
 .patterns-exposure__pause-shell { min-width: 0; width: 100%; }
 .patterns-exposure__pause-slider { position: relative; width: 100%; height: 54px; padding: 0 4px; }
-.patterns-exposure__pause-track { position: absolute; top: 15px; left: 4px; right: 4px; height: 2px; background: var(--c-border-strong); }
-.patterns-exposure__pause-ticks { position: absolute; right: 4px; bottom: 23px; left: 4px; height: 10px; pointer-events: none; }
-.patterns-exposure__pause-ticks span { position: absolute; bottom: 0; width: 1px; height: 4px; transform: translateX(-50%); background: var(--c-border-strong); opacity: .65; }
-.patterns-exposure__pause-ticks .patterns-exposure__pause-tick--major { height: 8px; opacity: 1; }
-.patterns-exposure__pause-ticks i { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); color: white; font: normal 10px/1 var(--font-mono); }
+.patterns-exposure__pause-track { position: absolute; top: 15px; left: 4px; right: 4px; height: 1px; background: #cbd5e1; }
+.patterns-exposure__pause-ticks { position: absolute; top: 14px; right: 4px; left: 4px; height: 22px; pointer-events: none; }
+.patterns-exposure__pause-ticks span { position: absolute; top: 0; width: 1px; height: 4px; transform: translateX(-50%); background: #cbd5e1; }
+.patterns-exposure__pause-ticks .patterns-exposure__pause-tick--major { height: 8px; }
+.patterns-exposure__pause-ticks i { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); color: white; font: normal 10px/1 var(--font-mono); }
 .patterns-exposure__pause-slider input[type="range"] { position: absolute; top: 1px; left: 4px; width: calc(100% - 8px); height: 22px; margin: 0; appearance: none; background: transparent; pointer-events: none; }
 .patterns-exposure__pause-slider input[type="range"]::-webkit-slider-runnable-track { height: 22px; background: transparent; }
 .patterns-exposure__pause-slider input[type="range"]::-moz-range-track { height: 22px; background: transparent; }

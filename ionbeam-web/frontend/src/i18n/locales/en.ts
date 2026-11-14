@@ -169,7 +169,7 @@ export const en = {
   "processing.exposure.serialRequired": "Cleaning lines require Parallel off.",
   "processing.exposure.view": "View",
   "processing.exposure.viewHelp": "Pause at the next safe exposure segment, scan the pattern ROIs using the selected zoom, then continue exposure.",
-  "processing.exposure.pause": "Pause",
+  "processing.exposure.pause": "Pause (s)",
   "processing.exposure.seconds": "s",
   "processing.exposure.viewStatus.queued": "View queued; waiting for the current exposure segment to finish.",
   "processing.exposure.viewStatus.scanning": "Scanning all pattern ROIs with the selected zoom. Exposure will resume when the scan finishes.",

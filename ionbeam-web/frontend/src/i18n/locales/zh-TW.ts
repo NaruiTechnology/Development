@@ -159,7 +159,7 @@ export const zhTW: Partial<TranslationTable> = {
   "processing.exposure.serialRequired": "清潔線須關閉平行。",
   "processing.exposure.view": "檢視",
   "processing.exposure.viewHelp": "在下一曝光遍次邊界掃描一張全視野影像，隨後繼續曝光。",
-  "processing.exposure.pause": "暫停",
+  "processing.exposure.pause": "暫停（秒）",
   "processing.exposure.seconds": "秒",
   "processing.exposure.viewStatus.queued": "已排程檢視，等待下一曝光遍次邊界。",
   "processing.exposure.viewStatus.scanning": "正在擷取一張全視野影像，完成後繼續曝光。",

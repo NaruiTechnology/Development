@@ -71,13 +71,13 @@ test("multi-million-point preview remains bounded and clipped to a ring",()=>{
 test("completed trace persists; absent samples never fabricate progress",()=>{
   assert.equal(exposureTraceFraction(0,100,false),0);
   assert.equal(exposureTraceFraction(25,100,false),0.25);
-  assert.equal(exposureTraceFraction(250,100,false),1);
+  assert.equal(exposureTraceFraction(250,100,false),0.5);
   assert.equal(exposureTraceFraction(0,100,true),1);
 });
 
 test("preview head wraps on later passes while the footprint stays visible",()=>{
   assert.equal(exposureHeadFraction(0,100),0);
-  assert.equal(exposureHeadFraction(100,100),1);
+  assert.equal(exposureHeadFraction(100,100),0);
   assert.equal(exposureHeadFraction(125,100),0.25);
-  assert.equal(exposureTraceFraction(125,100,false),1);
+  assert.equal(exposureTraceFraction(125,100,false),0.25);
 });

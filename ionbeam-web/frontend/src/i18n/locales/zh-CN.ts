@@ -151,7 +151,7 @@ export const zhCN: Partial<TranslationTable> = {
   "processing.exposure.serialRequired": "清洁线须关闭并行。",
   "processing.exposure.view": "查看",
   "processing.exposure.viewHelp": "在下一个安全曝光分段暂停，按当前缩放扫描图案 ROI，然后继续曝光。",
-  "processing.exposure.pause": "暂停",
+  "processing.exposure.pause": "暂停（秒）",
   "processing.exposure.seconds": "秒",
   "processing.exposure.viewStatus.queued": "查看已排队，等待当前曝光分段结束。",
   "processing.exposure.viewStatus.scanning": "正在按当前缩放扫描所有图案 ROI，扫描完成后将恢复曝光。",

@@ -39,13 +39,13 @@ export function sampleExposureLattice(model: string, shape: PatternRoi, l: Latti
 
 export function exposureTraceFraction(received: number, count: number, completed: boolean): number {
   if (completed) return 1;
-  // Keep the first-pass footprint visible while later passes repeat it.
-  return Math.min(1, Math.max(0, received / Math.max(1, count)));
+  if (!(received > 0 && count > 0)) return 0;
+  // Repaint the trace from the start of the lattice on each pass.
+  return (received % count) / count;
 }
 
-/** The marker wraps on each pass while the accumulated trace remains visible. */
+/** The marker wraps to the beginning of each pass along with the trace. */
 export function exposureHeadFraction(received: number, count: number): number {
   if (!(received > 0 && count > 0)) return 0;
-  const fraction = (received % count) / count;
-  return fraction === 0 ? 1 : fraction;
+  return (received % count) / count;
 }
