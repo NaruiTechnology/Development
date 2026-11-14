@@ -163,6 +163,7 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
     {totalLimitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{totalLimitMessage}</p>}
     {ordered.map((spec) => (
       <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key}
+        countInvalid={Boolean(totalLimitMessage && instances[spec.key]?.enabled && instances[spec.key]?.roi)}
         disabled={disabled || viewLocked || !instances[spec.key]?.roi} enableDisabled={enableDisabled || viewLocked || !instances[spec.key]?.roi}
         onEnabledChange={setEnabled}
       />
@@ -170,8 +171,8 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
   </>;
 }
 
-function PatternCard({ spec, instance, active, disabled, enableDisabled, onEnabledChange }: {
-  spec: PatternSpec; instance: PatternInstance | undefined; active: boolean; disabled: boolean; enableDisabled: boolean;
+function PatternCard({ spec, instance, active, countInvalid = false, disabled, enableDisabled, onEnabledChange }: {
+  spec: PatternSpec; instance: PatternInstance | undefined; active: boolean; countInvalid?: boolean; disabled: boolean; enableDisabled: boolean;
   onEnabledChange: (key: string, enabled: boolean) => void;
 }) {
   const dispatch = useAppDispatch();
@@ -196,7 +197,8 @@ function PatternCard({ spec, instance, active, disabled, enableDisabled, onEnabl
 
   return (
     <div id={`processing-pattern-${encodeURIComponent(spec.key)}`} tabIndex={-1} role="region" aria-label={caption} aria-disabled={disabled}
-      className={`card pattern-card${active ? " pattern-card--active" : ""}${exposing ? " pattern-card--exposing" : ""}`} data-pattern={spec.key}>
+      className={`card pattern-card${active ? " pattern-card--active" : ""}${exposing ? " pattern-card--exposing" : ""}${countInvalid ? " pattern-card--count-invalid" : ""}`} data-pattern={spec.key}
+      aria-invalid={countInvalid || undefined}>
       <div className="card__header">
         <span className="card__title">{caption}</span>
         <span className="pattern-card__header-actions">

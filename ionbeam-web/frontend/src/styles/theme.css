@@ -8096,6 +8096,12 @@ body {
   box-shadow: 0 0 0 1px rgba(136, 211, 255, 0.18);
 }
 
+.pattern-card--count-invalid,
+.pattern-card--active.pattern-card--count-invalid {
+  border-color: var(--c-danger, #ff6b6b);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c-danger, #ff6b6b) 30%, transparent);
+}
+
 .pattern-card--active > .card__header {
   background: color-mix(in srgb, #88d3ff 12%, var(--c-bg-elev));
 }
