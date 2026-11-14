@@ -23,6 +23,9 @@ const FULL_DAC_ROI = { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
 
 /** Match Scan + ROI Parallel: one raster request carries each region in parallel_rois. */
 function combineRasterRegions(requests: RasterRequest[]): RasterRequest {
+  // The raster API requires at least two entries in parallel_rois. A single
+  // pattern ROI uses the regular Scan + ROI request shape instead.
+  if (requests.length === 1) return requests[0];
   const bitmaps = requests.map(request => request.simulation_bitmap);
   return {
     ...requests[0],
@@ -48,6 +51,7 @@ export function useExposureRun() {
   const pendingStop = useRef<Promise<void> | null>(null), stopError = useRef<string | null>(null);
 
   const viewPending = useRef(false);
+  const viewResumeLocked = useRef(false);
   const resumeWaiter = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -65,7 +69,7 @@ export function useExposureRun() {
     });
   }
   function resume() {
-    if (store.getState().exposure.phase !== "paused") return;
+    if (viewResumeLocked.current || store.getState().exposure.phase !== "paused") return;
     dispatch(exposureResumed());
     resumeWaiter.current?.();
   }
@@ -162,6 +166,12 @@ export function useExposureRun() {
     if (!viewPending.current || cancelled.current) return;
     viewPending.current = false;
     const pauseAfter = resumeAfterView.current;
+    const exposurePhase = store.getState().exposure.phase;
+    const alreadyPaused = exposurePhase === "paused";
+    const holdResumeForView = pauseAfter || alreadyPaused ||
+      (running.current && exposurePhase === "running");
+    let viewCompleted = false;
+    if (holdResumeForView) viewResumeLocked.current = true;
     try {
       const snapshot = store.getState();
       const activeNode = snapshot.exposure.progress.find(node => node.status === "current");
@@ -221,7 +231,12 @@ export function useExposureRun() {
         key: regions.keys[index] ?? `roi-${index + 1}`, bounds: scanBounds[index],
         resolution, pixels: frame.pixels,
       })));
-      dispatch(exposureViewChanged({phase: "completed"}));
+      // Wait only after the raster stream has sent done and all View frames
+      // have been committed. Keep the View phase active so Resume stays locked
+      // and the exposure canvas cannot return before the full hold elapses.
+      if (holdResumeForView && !cancelled.current)
+        await new Promise<void>(resolve => window.setTimeout(resolve, 10_000));
+      viewCompleted = true;
     } catch (error) {
       if (!cancelled.current) dispatch(exposureViewChanged({phase: "error",
         error: error instanceof Error ? error.message : String(error)}));
@@ -229,11 +244,15 @@ export function useExposureRun() {
     } finally {
       if (pauseAfter) {
         resumeAfterView.current = false;
+      }
+      if (pauseAfter) {
         if (!cancelled.current && store.getState().exposure.phase === "paused") {
           dispatch(exposureResumed());
           resumeWaiter.current?.();
         }
       }
+      viewResumeLocked.current = false;
+      if (viewCompleted) dispatch(exposureViewChanged({phase: "completed"}));
     }
   }
 
@@ -259,6 +278,7 @@ export function useExposureRun() {
       }
       if (cancelled.current) return;
       const plannedEntries = prepareExposureSequence(snapshot.processing, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
+      const autoViewPerPass = plannedEntries.some(entry => (entry.request.lattice?.passes ?? 1) > 1);
       const totalSpots = totalExposureSpots(plannedEntries);
       if (totalSpots > MAX_EXPOSURE_SPOTS)
         throw new Error(t("processing.exposure.totalLimit", {count: totalSpots.toLocaleString(), limit: MAX_EXPOSURE_SPOTS.toLocaleString()}));
@@ -304,9 +324,14 @@ export function useExposureRun() {
         if (cancelled.current) break;
         const finished = queues.filter(({run}) => run.final && !skipped.has(run.entry.node.id)).map(({run}) => run.entry.node);
         for (const node of finished) dispatch(exposureStepCompleted(node.id));
-        // Per-step "after" actions (Stair cut recipe): View, or View then wait for Resume.
+        // A multi-pass run gets one View scan at each completed pass boundary.
+        // Per-step "after" actions (Stair cut recipe) share the same scan so a
+        // pass that also requests View is never scanned twice.
         const wantsView = finished.some(n => n.exposure?.after === "view" || n.exposure?.after === "viewPause");
-        if (wantsView && !viewPending.current) { viewPending.current = true; dispatch(exposureViewChanged({phase: "queued"})); }
+        if ((autoViewPerPass || wantsView) && !viewPending.current) {
+          viewPending.current = true;
+          dispatch(exposureViewChanged({phase: "queued"}));
+        }
         // A requested raster can use the instrument only between rounds.
         await runQueuedView();
         const pauseNode = finished.find(n => n.exposure?.after === "viewPause");

@@ -165,7 +165,7 @@ export function ExposureViewCanvasOverlay({ transforms, processingViewport = fal
 export function ExposureLatticeMessage() {
   const { t } = useTranslation();
   const progress = useAppSelector(selectExposurePreview);
-  const { error, viewPhase, viewError, viewReceivedSamples, viewReceivedChunks, viewExpectedSamples } = useAppSelector(s => s.exposure);
+  const { error, viewPhase, viewError } = useAppSelector(s => s.exposure);
   const steps = progress.filter(n => n.exposure);
   const viewing = viewPhase === "queued" || viewPhase === "scanning";
   const node = steps.find(n => n.status === "current") ?? [...steps].reverse().find(n => n.status !== "upcoming") ?? steps[0];
@@ -175,17 +175,12 @@ export function ExposureLatticeMessage() {
       <span>{error}</span>
     </div>
   );
-  const viewMessage = viewPhase !== "idle" && (
+  // Exposure-lattice keeps its canvas status focused on the lattice workflow.
+  // Successful one-time View phases are drawn on the canvas and need no message pane.
+  const viewMessage = viewPhase === "error" && (
     <div className={`exposure-lattice-message exposure-lattice-message--view${viewPhase === "error" ? " exposure-lattice-message--error" : ""}`}
       role={viewPhase === "error" ? "alert" : "status"}>
       <span>{t(`processing.exposure.viewStatus.${viewPhase}` as TranslationKey)}</span>
-      {viewPhase === "scanning" && viewExpectedSamples > 0 && <span className="exposure-lattice-message__data">
-        {viewReceivedSamples >= viewExpectedSamples
-          ? t("processing.exposure.viewFinishing", {samples: viewExpectedSamples.toLocaleString()})
-          : viewReceivedChunks
-          ? t("processing.exposure.viewData", {samples: viewReceivedSamples.toLocaleString(), expected: viewExpectedSamples.toLocaleString(), chunks: viewReceivedChunks.toLocaleString()})
-          : t("processing.exposure.viewWaitingData", {expected: viewExpectedSamples.toLocaleString()})}
-      </span>}
       {viewError && <span>{viewError}</span>}
     </div>
   );

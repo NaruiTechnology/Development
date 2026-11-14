@@ -110,8 +110,9 @@ export function* exposureSegments(lattice: LatticeRequest): Generator<LatticeReq
   }
   const cells = Math.max(1, Math.round(width / lattice.pitch_x))
     * Math.max(1, Math.round(height / (lattice.pitch_y ?? lattice.pitch_x)));
-  // At most 100 ms of programmed dwell, with a bounded host encoding workload.
-  const size = Math.max(1, Math.min(131072, Math.floor(800000 / (lattice.dwell + 1))));
+  // At most 50 ms of programmed dwell, so a queued one-time View reaches its
+  // next safe boundary sooner, with a bounded host encoding workload.
+  const size = Math.max(1, Math.min(131072, Math.floor(400000 / (lattice.dwell + 1))));
   for (let start = 0; start < cells; start += size)
     yield {...lattice, cell_start: start, cell_end: Math.min(cells, start + size)};
 }
