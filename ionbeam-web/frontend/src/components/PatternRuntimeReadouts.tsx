@@ -53,12 +53,13 @@ export function PatternRuntimeReadouts({spec, roi, parameters, stairSteps, defau
       const unit = readout.unit === "world" ? unitLabel(field.scale_unit) : readout.unit;
       const value = readout.source === "elapsed" ? measured ? formatPatternTime(elapsed)
         : plannedExposure ? formatPatternTime(plannedExposure.beamOnS * 1000) : "—"
-        : readout.source === "spotCount" ? spotCount === null ? "—" : spotCount.toLocaleString()
+        : readout.source === "spotCount" ? spotCount === null ? "—"
+          : `${plannedExposure && !plannedExposure.spotCountExact ? "≈" : ""}${spotCount.toLocaleString()}`
         : offset ? (readout.source === "centerX" ? offset.x : offset.y).toFixed(2) : "—";
       const caption = tr(`processing.readout.${readout.name}`, readout.label);
       return <div className="pattern-card__result" key={readout.name}
         title={readout.source === "spotCount" ? plannedExposure !== null || exposureCount
-          ? "Planned beam spots in the exposure lattice, updated from the current pattern and recipe. Repeated passes are not accumulated; this is not a measured exposure counter."
+          ? `Planned beam spots in the exposure lattice${plannedExposure && !plannedExposure.spotCountExact ? " (estimated from pattern area)" : ""}, updated from the current pattern and recipe. Repeated passes are not accumulated; this is not a measured exposure counter.`
           : "Unblanked spots in the prepared workflow, summed across steps. Repeated passes are not accumulated; this is not a measured exposure counter."
           : readout.source === "elapsed" && !measured && plannedExposure
             ? "Estimated beam-on time from the current lattice plan. Settling and blanking overhead are excluded."

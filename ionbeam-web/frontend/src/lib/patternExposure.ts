@@ -120,16 +120,17 @@ export function plannedPatternExposureMetrics(spec: PatternSpec, shape: PatternR
   lookup: LensLookup, fov: Pick<ROIState, "x_origin" | "x_end" | "y_origin" | "y_end" | "scanGeometry">,
   options: {simulation?: boolean; stairOverrides?: ReadonlyArray<StairStepOverride | null | undefined>; defaultMaterial?: string;
     materialRemovalRates?: Readonly<Record<string, number>>} = {}):
-  {spotCount: number; beamOnS: number} {
+  {spotCount: number; spotCountExact: boolean; beamOnS: number} {
   const stair = spec.model === "StairCutModel";
   const base = stair ? null : preparePatternExposure(spec, shape, parameters, lookup, fov);
   const steps = stair ? stairExposureSteps(shape, parameters, options.stairOverrides, options.defaultMaterial, options.materialRemovalRates)
     : options.simulation ? simulationExposureSteps(spec, shape, parameters, base!.plan.spacingUM)
     : [{shape, parameters}];
-  return steps.reduce((total, step) => {
+  return steps.reduce<{spotCount: number; spotCountExact: boolean; beamOnS: number}>((total, step) => {
     const plan = stair || options.simulation
       ? preparePatternExposure(spec, step.shape, step.parameters, lookup, fov).plan
       : base!.plan;
-    return {spotCount: total.spotCount + plan.count, beamOnS: total.beamOnS + plan.beamOnS};
-  }, {spotCount: 0, beamOnS: 0});
+    return {spotCount: total.spotCount + plan.count, spotCountExact: total.spotCountExact && plan.countExact,
+      beamOnS: total.beamOnS + plan.beamOnS};
+  }, {spotCount: 0, spotCountExact: true, beamOnS: 0});
 }

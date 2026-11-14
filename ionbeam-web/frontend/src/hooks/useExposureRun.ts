@@ -235,7 +235,8 @@ export function useExposureRun() {
       // have been committed. Keep the View phase active so Resume stays locked
       // and the exposure canvas cannot return before the full hold elapses.
       if (holdResumeForView && !cancelled.current)
-        await new Promise<void>(resolve => window.setTimeout(resolve, 10_000));
+        await new Promise<void>(resolve => window.setTimeout(
+          resolve, store.getState().exposure.viewPauseSeconds * 1_000));
       viewCompleted = true;
     } catch (error) {
       if (!cancelled.current) dispatch(exposureViewChanged({phase: "error",

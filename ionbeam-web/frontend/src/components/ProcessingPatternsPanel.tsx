@@ -6,7 +6,7 @@
  * Picking an icon arms drawing on the image canvas (PatternOverlay); picking it again disarms.
  * The active icon also controls which pattern card is expanded, keeping both selections aligned.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { materialTargetGrayLevel } from "../lib/processingWorkflows";
@@ -122,6 +122,14 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
   const viewLocked = exposure.viewPhase === "queued" || exposure.viewPhase === "scanning" || exposure.phase === "paused";
   const { tr } = useTr();
   const [limitMessage, setLimitMessage] = useState("");
+  const selectedSpotCount = useMemo(() => {
+    if (!processing.lensLookup) return null;
+    try { return totalExposureSpots(prepareExposureSequence(processing, field, simulation)); }
+    catch { return null; }
+  }, [processing, field, simulation]);
+  const totalLimitMessage = selectedSpotCount !== null && selectedSpotCount > MAX_EXPOSURE_SPOTS
+    ? tr("processing.exposure.totalLimit", `Count validation failed: enabled patterns require ${selectedSpotCount.toLocaleString()} spots including passes; the maximum is ${MAX_EXPOSURE_SPOTS.toLocaleString()}. Select a smaller ROI area before starting.`)
+    : "";
   const setEnabled = (key: string, enabled: boolean) => {
     if (enabled && processing.lensLookup) {
       const instance = instances[key];
@@ -150,12 +158,16 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
     return index > 0 ? [group[index], ...group.slice(0, index), ...group.slice(index + 1)] : group;
   };
   const ordered = [...promoteWithinGroup(enabledSpecs), ...promoteWithinGroup(disabledSpecs)];
-  return <>{limitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{limitMessage}</p>}{ordered.map((spec) => (
+  return <>
+    {limitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{limitMessage}</p>}
+    {totalLimitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{totalLimitMessage}</p>}
+    {ordered.map((spec) => (
       <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key}
         disabled={disabled || viewLocked || !instances[spec.key]?.roi} enableDisabled={enableDisabled || viewLocked || !instances[spec.key]?.roi}
         onEnabledChange={setEnabled}
       />
-    ))}</>;
+    ))}
+  </>;
 }
 
 function PatternCard({ spec, instance, active, disabled, enableDisabled, onEnabledChange }: {
