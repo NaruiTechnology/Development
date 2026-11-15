@@ -199,7 +199,8 @@ function PatternInstanceCards({typeKey, specs, instances, activeKey, countInvali
   useEffect(() => { if (activeSpec) setSelectedKey(activeSpec.key); }, [activeSpec?.key]);
   const caption = tr(`processing.pattern.${typeKey}`, sorted[0].caption);
   const select = (key: string) => { setSelectedKey(key); dispatch(selectPattern(key)); };
-  const card = <PatternCard key={selected.key} spec={selected} instance={instances[selected.key]} active={activeKey === selected.key}
+  const card = <PatternCard key={selected.key} spec={selected} instance={instances[selected.key]}
+    active={activeKey === selected.key && Boolean(instances[selected.key]?.roi)}
     indexed={specs.length > 1} countInvalid={Boolean(countInvalid && instances[selected.key]?.enabled && instances[selected.key]?.roi)}
     disabled={disabled || !instances[selected.key]?.roi} enableDisabled={enableDisabled || !instances[selected.key]?.roi}
     onEnabledChange={onEnabledChange} />;

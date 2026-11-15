@@ -58,7 +58,8 @@ export interface ProcessingState {
   activeKey: string | null;
   /** Order in which pattern ROIs were first committed; exposure follows this order. */
   roiCreationOrder: string[];
-  roiHistory: Array<{ key: string; roi: PatternRoi | null; orderIndex: number; createdInstance?: boolean }>;
+  roiHistory: Array<{ key: string; roi: PatternRoi | null; orderIndex: number; createdInstance?: boolean;
+    removedInstance?: PatternInstance; removedSpec?: PatternSpec; specIndex?: number }>;
 }
 
 const initialState: ProcessingState = { lensLookup: null, workflows: [DEFAULT_WORKFLOW], materials: [], stairReceipes: {}, workflowProgress: [], status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiCreationOrder: [], roiHistory: [] };
@@ -259,7 +260,17 @@ const slice = createSlice({
     },
     undoPatternRoi(s) {
       const previous = s.roiHistory.pop();
-      if (!previous || !s.instances[previous.key]) return;
+      if (!previous) return;
+      if (previous.removedInstance && previous.removedSpec) {
+        s.instances[previous.key] = previous.removedInstance;
+        s.specs.splice(Math.min(previous.specIndex ?? s.specs.length, s.specs.length), 0, previous.removedSpec);
+        const index = previous.orderIndex >= 0 ? Math.min(previous.orderIndex, s.roiCreationOrder.length) : s.roiCreationOrder.length;
+        s.roiCreationOrder.splice(index, 0, previous.key);
+        s.activeKey = previous.key;
+        s.workflowProgress = [];
+        return;
+      }
+      if (!s.instances[previous.key]) return;
       if (previous.createdInstance) {
         const typeKey = s.instances[previous.key].typeKey;
         delete s.instances[previous.key];
@@ -289,13 +300,34 @@ const slice = createSlice({
     clearPatternRoi(s, a: PayloadAction<string>) {
       const inst = s.instances[a.payload];
       if (inst?.roi) {
-        s.roiHistory.push({ key: a.payload, roi: inst.roi, orderIndex: s.roiCreationOrder.indexOf(a.payload) });
+        const orderIndex = s.roiCreationOrder.indexOf(a.payload);
+        const specIndex = s.specs.findIndex(item => item.key === a.payload);
+        const spec = s.specs[specIndex];
+        const hasSiblingRoi = s.specs.some(item => item.key !== a.payload
+          && s.instances[item.key]?.typeKey === inst.typeKey
+          && s.instances[item.key]?.roi);
+        const removeInstance = inst.index > 1 || hasSiblingRoi;
+        s.roiHistory.push(removeInstance && spec
+          ? { key: a.payload, roi: inst.roi, orderIndex, removedInstance: { ...inst }, removedSpec: { ...spec }, specIndex }
+          : { key: a.payload, roi: inst.roi, orderIndex });
         if (s.roiHistory.length > 100) s.roiHistory.shift();
-        inst.roi = null;
         s.roiCreationOrder = s.roiCreationOrder.filter(key => key !== a.payload);
-        inst.AvgGray = null;
-        inst.enabled = false;
+        if (removeInstance) {
+          delete s.instances[a.payload];
+          s.specs = s.specs.filter(item => item.key !== a.payload);
+        } else {
+          inst.roi = null;
+          inst.AvgGray = null;
+          inst.enabled = false;
+        }
         s.workflowProgress = [];
+        if (s.activeKey === a.payload) {
+          const typeKey = inst.typeKey;
+          const siblings = s.specs.filter(spec => spec.key !== a.payload
+            && s.instances[spec.key]?.typeKey === typeKey);
+          const remaining = siblings.find(spec => s.instances[spec.key]?.roi) ?? siblings[0];
+          s.activeKey = remaining?.key ?? null;
+        }
       }
     },
   },
