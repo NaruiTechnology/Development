@@ -81,3 +81,25 @@ test("preview head wraps on later passes while the footprint stays visible",()=>
   assert.equal(exposureHeadFraction(125,100),0.25);
   assert.equal(exposureTraceFraction(125,100,false),0.25);
 });
+
+test("production Run plans one serial lattice row per cleaning line, same as simulation", async () => {
+  const { prepareExposureSequence, exposureRuns } = await import("../.test-dist/lib/exposureSequence.js");
+  const spec = { key: "clean", caption: "Cleaning line", model: "CleaningLineModel", roi: "rect" };
+  const field = { x_origin: 0, x_end: 50, y_origin: 0, y_end: 50 };
+  const cleanRoi = { x_start: 10, x_end: 18, y_start: 10, y_end: 16 };
+  for (const orientation of ["horizontal", "vertical"]) {
+    const queues = [true, false].map(simulation => prepareExposureSequence({ lensLookup: lens, specs: [spec], materials: [],
+      roiCreationOrder: ["clean"], instances: { clean: { enabled: true, roi: cleanRoi,
+        parameters: { ...parameters, orientation, spacing: 0.2, passes: 2 } } } }, field, simulation));
+    const [sim, prod] = queues;
+    assert.equal(prod.length, orientation === "horizontal" ? 30 : 40, "one step per line, not one solid lattice");
+    assert.deepEqual(prod.map(e => e.request.lattice), sim.map(e => e.request.lattice), "production matches simulation");
+    for (const e of prod) {
+      assert.equal(orientation === "horizontal" ? e.node.exposure.plan.lattice.ny : e.node.exposure.plan.lattice.nx, 1);
+      assert.equal(e.node.exposure.lineSpacingUM, 0.2);
+    }
+    // Serial: all passes of line N finish before line N+1 starts.
+    const order = [...exposureRuns(prod.slice(0, 3), false)].map(run => run.entry.node.id);
+    assert.deepEqual(order, [0, 0, 1, 1, 2, 2].map(i => `clean:${i}:exposure`));
+  }
+});

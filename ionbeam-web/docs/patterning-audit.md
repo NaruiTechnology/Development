@@ -20,7 +20,7 @@ These additions define shapes in the existing execution framework. They do not i
 | Outline Box | OpenBoxModel uses a border mask of configured lineWidth for planned exposure, spot count, time, and gray sampling | Exposure and readouts omit the interior; the lattice service receives a frame shape. |
 | Line | New LineModel, drag endpoints, finite-width polygon mask | Manual drawing gesture implemented. Strip width is an explicit application extension; execution remains the shared acquisition/Spot workflow, not a calibrated line-milling recipe. |
 | Regular Cross Section | StairCutModel splits the ROI into five strips by default, with direction and editable step count; per-step recipe table (depth, material, Sr, dwell, overlap, passes) drives a sequential nested-box exposure in simulation and production | Depth is a requested label unless a step has a calibrated Sr. Per-step View / View + pause with Resume is available; per-step beam current remains open; see `exposure-planning.md`. |
-| Cleaning Cross Section | CleaningLineModel previews parallel lines with explicit spacing/orientation | No advancing-face executor. Manual requires serial milling, material-overlap-derived spacing, and half the filled-box time estimate; none is implemented. Default acquisition can run parallel. Selected workflows run sequentially for all shapes, which is not a cleaning-specific serial rule. |
+| Cleaning Cross Section | CleaningLineModel plans one serial single-row lattice per cleaning line (explicit spacing/orientation) in production and simulation | Serial advancing lines are planned and rendered; no calibrated depth/EPD. Manual requires serial milling, material-overlap-derived spacing, and half the filled-box time estimate; none is implemented. Default acquisition can run parallel. Selected workflows run sequentially for all shapes, which is not a cleaning-specific serial rule. |
 | Circle | CircleModel validates a solid disk; drawing is centre-to-radius drag | Solid mask agrees with the filled glyph in the manual, but UI shows only an outline. The text says start/stop drag without defining the centre convention; centre-to-radius is an application choice. |
 | Polygon | New PolygonModel, exactly four clicks | Manual drawing gesture and filled shape mask implemented. No depth/dose-controlled polygon milling. |
 | Ring / Free hand | Existing additional tools | Not specified in this excerpt; retained. |
@@ -55,7 +55,7 @@ Validation result: the four new web tests, all 11 native pattern tests, all five
 Simulation exposure visualization now expands StairCut into overlapping box steps and
 CleaningLine into serial single-row steps, with sampled colored traces and gray requested-depth
 bands on the canvas. The bottom panel reports the frozen exposure settings. Production Run
-keeps the existing single lattice. See `exposure-planning.md` for reference interpretation,
+uses the same serial per-line (Cleaning line) and per-step (Stair cut) queues. See `exposure-planning.md` for reference interpretation,
 line-spacing override, preview limitations, and validation.
 
 

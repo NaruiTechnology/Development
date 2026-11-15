@@ -97,30 +97,40 @@ export function stairExposureSteps(shape: PatternRoi, parameters: PatternParamet
   return out;
 }
 
-/** Simulation choreography for Cleaning line; Stair cut delegates to `stairExposureSteps`.
- * Never changes production exposure recipes or calibrated depth. */
+/** Hard bound on cleaning lines per pattern (manual: at most 1000 lines in a cleaning cross section). */
+export const MAX_CLEANING_LINES = 1000;
+
+/** Cleaning line: one serial single-row lattice per cleaning line, advancing across the ROI by the saved
+ * line spacing (parallel to the long edge for `orientation`). Production and simulation share this
+ * expansion so the planning lattice, spot counts and time estimate always describe what Run exposes.
+ * Throws before any request starts when the spacing is invalid or yields no or too many lines. */
+export function cleaningExposureSteps(shape: PatternRoi, parameters: PatternParameters, spotPitchUM: number): PatternExposureStep[] {
+  const r = patternBounds(shape), vertical = parameters.orientation === "vertical";
+  const spacing = Number(parameters.spacing);
+  if (!(spacing > 0) || !Number.isFinite(spacing)) throw new Error("Clean line spacing must be positive.");
+  const origin = vertical ? r.x_start : r.y_start, limit = vertical ? r.x_end : r.y_end;
+  const length = limit - origin;
+  const count = Math.max(0, Math.ceil(length / spacing - 0.5 - 1e-9));
+  if (!count) throw new Error("No cleaning lines fit inside the pattern; reduce line spacing.");
+  if (count > MAX_CLEANING_LINES) throw new Error(`Cleaning line supports up to ${MAX_CLEANING_LINES} lines; increase line spacing.`);
+  // A single lattice row centred on each cleaning line, with no neighbouring-line overlap.
+  const width = Math.min(spotPitchUM, spacing, length);
+  return Array.from({ length: count }, (_, i) => {
+    const center = origin + (i + 0.5) * spacing;
+    const half = Math.min(width / 2, center - origin, limit - center);
+    return { shape: vertical ? { ...r, x_start: center - half, x_end: center + half }
+      : { ...r, y_start: center - half, y_end: center + half },
+      parameters: { ...parameters, axis: vertical ? "y" : "x" }, caption: `Line ${i + 1} / ${count}` };
+  });
+}
+
+/** Step expansion for patterns whose Run is a queue of lattices. Stair cut and Cleaning line expand in
+ * production and simulation alike; `simulation` no longer changes the geometry of any pattern.
+ * Never changes calibrated depth. */
 export function simulationExposureSteps(spec: PatternSpec, shape: PatternRoi, parameters: PatternParameters,
   spacingUM: number, stairOverrides?: ReadonlyArray<StairStepOverride | null | undefined>): PatternExposureStep[] {
   if (spec.model === "StairCutModel") return stairExposureSteps(shape, parameters, stairOverrides);
-  if (spec.model === "CleaningLineModel") {
-    const r = patternBounds(shape), vertical = parameters.orientation === "vertical";
-    const spacing = Number(parameters.spacing);
-    if (!(spacing > 0) || !Number.isFinite(spacing)) throw new Error("Clean line spacing must be positive.");
-    const length = vertical ? r.x_end - r.x_start : r.y_end - r.y_start;
-    const count = Math.max(0, Math.ceil(length / spacing - 0.5 - 1e-9));
-    if (!count) throw new Error("No cleaning lines fit inside the pattern; reduce line spacing.");
-    if (count > 1000) throw new Error("Simulation supports up to 1000 cleaning steps; increase line spacing.");
-    // A single lattice row centred on each cleaning line, with no neighbouring-line overlap.
-    const width = Math.min(spacingUM, spacing, length);
-    return Array.from({ length: count }, (_, i) => {
-      const center = (vertical ? r.x_start : r.y_start) + (i + 0.5) * spacing;
-      const half = Math.min(width / 2, center - (vertical ? r.x_start : r.y_start),
-        (vertical ? r.x_end : r.y_end) - center);
-      return { shape: vertical ? { ...r, x_start: center - half, x_end: center + half }
-        : { ...r, y_start: center - half, y_end: center + half },
-        parameters: { ...parameters, axis: vertical ? "y" : "x" }, caption: `Line ${i + 1} / ${count}` };
-    });
-  }
+  if (spec.model === "CleaningLineModel") return cleaningExposureSteps(shape, parameters, spacingUM);
   return [{ shape, parameters, caption: "Pattern exposure" }];
 }
 
@@ -130,13 +140,14 @@ export function plannedPatternExposureMetrics(spec: PatternSpec, shape: PatternR
   options: {simulation?: boolean; stairOverrides?: ReadonlyArray<StairStepOverride | null | undefined>; defaultMaterial?: string;
     materialRemovalRates?: Readonly<Record<string, number>>} = {}):
   {spotCount: number; spotCountExact: boolean; beamOnS: number} {
-  const stair = spec.model === "StairCutModel";
+  const stair = spec.model === "StairCutModel", cleaning = spec.model === "CleaningLineModel";
   const base = stair ? null : preparePatternExposure(spec, shape, parameters, lookup, fov);
   const steps = stair ? stairExposureSteps(shape, parameters, options.stairOverrides, options.defaultMaterial, options.materialRemovalRates)
+    : cleaning ? cleaningExposureSteps(shape, parameters, base!.plan.spacingUM)
     : options.simulation ? simulationExposureSteps(spec, shape, parameters, base!.plan.spacingUM)
     : [{shape, parameters}];
   return steps.reduce<{spotCount: number; spotCountExact: boolean; beamOnS: number}>((total, step) => {
-    const plan = stair || options.simulation
+    const plan = stair || cleaning || options.simulation
       ? preparePatternExposure(spec, step.shape, step.parameters, lookup, fov).plan
       : base!.plan;
     return {spotCount: total.spotCount + plan.count, spotCountExact: total.spotCountExact && plan.countExact,

@@ -1,4 +1,4 @@
-import { preparePatternExposure, simulationExposureSteps, stairExposureSteps } from "./patternExposure.js";
+import { cleaningExposureSteps, preparePatternExposure, simulationExposureSteps, stairExposureSteps } from "./patternExposure.js";
 import type { ProcessingState } from "../store/processingSlice";
 import type { ROIState } from "../store/scanSlice";
 import type { LatticeRequest, VectorRequest } from "../types/api";
@@ -26,19 +26,21 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
   for (const spec of specs) {
     const instance = patterns.instances[spec.key];
     if (!instance?.enabled || !instance.roi) continue;
-    const stair = spec.model === "StairCutModel";
+    const stair = spec.model === "StairCutModel", cleaning = spec.model === "CleaningLineModel";
     const materialRemovalRates = Object.fromEntries(patterns.materials
       .filter(material => material.removalRateUM3PerNC !== undefined)
       .map(material => [material.name, material.removalRateUM3PerNC!]));
     const selectedMaterial = instance.material || patterns.materials[0]?.name;
     const selectedRemovalRate = selectedMaterial ? materialRemovalRates[selectedMaterial] : undefined;
     const base = stair ? null : preparePatternExposure(spec, instance.roi, instance.parameters, patterns.lensLookup, field);
-    // Stair cut is a per-step sequence in production too; Cleaning line stays simulation-only.
+    // Stair cut (per-step recipe) and Cleaning line (serial one-row-per-line queue) are step sequences in
+    // production and simulation alike, so the planning lattice always matches what Run exposes.
     const steps = stair ? stairExposureSteps(instance.roi, instance.parameters, instance.stairSteps, patterns.materials[0]?.name, materialRemovalRates)
+      : cleaning ? cleaningExposureSteps(instance.roi, instance.parameters, base!.plan.spacingUM)
       : simulation ? simulationExposureSteps(spec, instance.roi, instance.parameters, base!.plan.spacingUM)
       : [{ shape: instance.roi, parameters: instance.parameters, caption: "Pattern exposure", requestedDepthUM: undefined, depthBand: undefined }];
     for (const [index, step] of steps.entries()) {
-      const p = stair || simulation ? preparePatternExposure(spec, step.shape, step.parameters, patterns.lensLookup, field) : base!;
+      const p = stair || cleaning || simulation ? preparePatternExposure(spec, step.shape, step.parameters, patterns.lensLookup, field) : base!;
       const stepId = step.recipeStepIndex === undefined ? index : step.recipeStepIndex - 1;
       entries.push({ key: spec.key, node: {
         id: `${spec.key}:${stepId}:exposure`, pattern: spec.caption, caption: step.caption, action: "Exposure lattice",
@@ -47,7 +49,7 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
           beamCurrentPA: p.beamCurrentPA, requestedDepthUM: step.requestedDepthUM, depthBand: step.depthBand,
           material: step.material ?? selectedMaterial, incrementUM: step.incrementUM,
           removalRate: step.removalRate ?? selectedRemovalRate, after: step.after, recipeStepIndex: step.recipeStepIndex,
-          lineSpacingUM: simulation && spec.model === "CleaningLineModel" ? Number(instance.parameters.spacing) : undefined, simulation },
+          lineSpacingUM: cleaning ? Number(instance.parameters.spacing) : undefined, simulation },
       }, request: {
         pattern: "lattice", lattice: p.lattice, points: null, continuous: false, pre_process: false,
         scan_path: p.lattice.axis === "y" ? "vertical_serpentine" : "horizontal_triangle",

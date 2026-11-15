@@ -70,9 +70,11 @@ line before advancing to the next. The saved Line spacing remains an explicit ov
 of the reference's overlap-derived line advance, and is reported separately from spot
 pitch. Up to 1000 cleaning lines are supported; an excessive or empty sequence fails
 before any request starts. Along-line pitch still comes from beam diameter and overlap.
-Production Run keeps a single lattice for every pattern except Stair cut, which now runs the
-same per-step sequence as simulation (see "Stair cut per-step recipe"); Cleaning line production
-milling semantics and calibrated depth remain open.
+Production Run keeps a single lattice for every pattern except Stair cut (see "Stair cut per-step
+recipe") and Cleaning line, which both run the same step sequence as simulation. `cleaningExposureSteps`
+(`patternExposure.ts`) is shared by Run, the card spot/time readouts and the canvas planning lattice, so
+production no longer plans one solid lattice over the whole ROI for a cleaning line. Calibrated depth for
+cleaning lines remains open.
 
 The ROI preview and image canvas draw a separate SVG exposure layer. Cyan marks the
 planned spot path; each step has its own colored accumulated trace, and a white marker
