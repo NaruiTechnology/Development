@@ -1,0 +1,58 @@
+[
+    {
+    "SMProcess": {
+        "model": "StairRecipeDefaults",
+        "caption": "Semiconductor Manufacturing Process",
+        "stepDefaults": {
+            "dwellUS": 1,
+            "overlapPercent": 50,
+            "passes": 1,
+            "after": "none"
+        },
+        "nodes": [
+            {"name": "28nm", "steps": [
+                {"enabled": true, "depthUM": 0.2, "material": "Si", "removalRateUM3PerNC": 0.27},
+                {"enabled": true, "depthUM": 0.4, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 0.6, "material": "Au", "removalRateUM3PerNC": 1.5},
+                {"enabled": true, "depthUM": 0.8, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 1.0, "material": "Si", "removalRateUM3PerNC": 0.27}
+            ]},
+            {"name": "14nm", "steps": [
+                {"enabled": true, "depthUM": 0.2, "material": "Si", "removalRateUM3PerNC": 0.27},
+                {"enabled": true, "depthUM": 0.4, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 0.6, "material": "Au", "removalRateUM3PerNC": 1.5},
+                {"enabled": true, "depthUM": 0.8, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 1.0, "material": "Si", "removalRateUM3PerNC": 0.27}
+            ]},
+            {"name": "7nm", "steps": [
+                {"enabled": true, "depthUM": 0.2, "material": "Si", "removalRateUM3PerNC": 0.27},
+                {"enabled": true, "depthUM": 0.4, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 0.6, "material": "Au", "removalRateUM3PerNC": 1.5},
+                {"enabled": true, "depthUM": 0.8, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 1.0, "material": "Si", "removalRateUM3PerNC": 0.27}
+            ]},
+            {"name": "5nm", "steps": [
+                {"enabled": true, "depthUM": 0.2, "material": "Si", "removalRateUM3PerNC": 0.27},
+                {"enabled": true, "depthUM": 0.4, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 0.6, "material": "Au", "removalRateUM3PerNC": 1.5},
+                {"enabled": true, "depthUM": 0.8, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 1.0, "material": "Si", "removalRateUM3PerNC": 0.27}
+            ]},
+            {"name": "2nm", "steps": [
+                {"enabled": true, "depthUM": 0.2, "material": "Si", "removalRateUM3PerNC": 0.27},
+                {"enabled": true, "depthUM": 0.4, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 0.6, "material": "Au", "removalRateUM3PerNC": 1.5},
+                {"enabled": true, "depthUM": 0.8, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 1.0, "material": "Si", "removalRateUM3PerNC": 0.27}
+            ]},
+            {"name": "1nm", "steps": [
+                {"enabled": true, "depthUM": 0.2, "material": "Si", "removalRateUM3PerNC": 0.27},
+                {"enabled": true, "depthUM": 0.4, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 0.6, "material": "Au", "removalRateUM3PerNC": 1.5},
+                {"enabled": true, "depthUM": 0.8, "material": "SiO2", "removalRateUM3PerNC": 0.24},
+                {"enabled": true, "depthUM": 1.0, "material": "Si", "removalRateUM3PerNC": 0.27}
+            ]}
+        ]
+    }
+    }
+]

@@ -28,6 +28,8 @@ export interface WorkflowProgress {
     depthBand?: PatternRoi;
     /** Stair cut step: layer material label, depth this step adds (um), calibrated Sr (um^3/nC). */
     material?: string; incrementUM?: number; removalRate?: number;
+    /** Original recipe row number; remains stable when earlier rows are disabled. */
+    recipeStepIndex?: number;
     /** Stair cut: View (and optionally wait for Resume) after this step completes. */
     after?: "view" | "viewPause";
     lineSpacingUM?: number;

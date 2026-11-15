@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -37,10 +38,37 @@ class PatternSpec:
 
 
 @dataclass
+class StairRecipeStep:
+    enabled: bool
+    depth_um: float
+    material: str
+    removal_rate_um3_per_nc: float
+    dwell_us: float
+    overlap_percent: float
+    passes: int
+    after: str
+
+
+@dataclass
+class StairRecipeNode:
+    name: str
+    steps: list[StairRecipeStep] = field(default_factory=list)
+
+
+@dataclass
+class StairRecipeCollection:
+    model: str
+    caption: str
+    step_defaults: dict
+    nodes: list[StairRecipeNode] = field(default_factory=list)
+
+
+@dataclass
 class ProcessingConfig:
     header: dict = field(default_factory=dict)
     specs: list = field(default_factory=list)       # every well-formed entry, skipped or not
     errors: list = field(default_factory=list)      # human-readable problems with single entries
+    stair_recipes: dict[str, StairRecipeCollection] = field(default_factory=dict)
     path: Optional[Path] = None
 
     @property
@@ -82,10 +110,65 @@ def _readouts(key, raw):
     return raw
 
 
+def _stair_recipes(raw) -> dict[str, StairRecipeCollection]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, list):
+        raise PatternConfigError("processing StairReceipes must be a list")
+    output = {}
+    for entry in raw:
+        if not isinstance(entry, dict) or len(entry) != 1:
+            raise PatternConfigError("StairReceipes entries must contain exactly one collection name")
+        name, body = next(iter(entry.items()))
+        if name in output or not isinstance(body, dict) or body.get("model") != "StairRecipeDefaults":
+            raise PatternConfigError(f"invalid StairReceipes collection: {name}")
+        defaults = body.get("stepDefaults")
+        nodes_raw = body.get("nodes")
+        if not isinstance(defaults, dict) or not isinstance(nodes_raw, list):
+            raise PatternConfigError(f"invalid StairReceipes defaults or nodes: {name}")
+        try:
+            dwell = float(defaults["dwellUS"])
+            overlap = float(defaults["overlapPercent"])
+            raw_passes = defaults["passes"]
+            if isinstance(raw_passes, bool) or not isinstance(raw_passes, int):
+                raise ValueError("passes must be an integer")
+            passes = raw_passes
+            after = defaults["after"]
+            if not all(math.isfinite(n) for n in (dwell, overlap)) or dwell <= 0 or not 0 <= overlap < 100 or passes < 1 or after not in ("none", "view", "viewPause"):
+                raise ValueError("out of range")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise PatternConfigError(f"invalid StairReceipes step defaults: {name}") from exc
+        seen_nodes = set()
+        nodes = []
+        for node in nodes_raw:
+            if not isinstance(node, dict) or not isinstance(node.get("name"), str) or node["name"] in seen_nodes or not isinstance(node.get("steps"), list):
+                raise PatternConfigError(f"invalid or duplicate StairReceipes node: {name}")
+            seen_nodes.add(node["name"])
+            steps = []
+            for step in node["steps"]:
+                if not isinstance(step, dict) or not isinstance(step.get("enabled"), bool) or not isinstance(step.get("material"), str):
+                    raise PatternConfigError(f"invalid StairReceipes step in {name}.{node['name']}")
+                try:
+                    depth = float(step["depthUM"])
+                    removal_rate = float(step["removalRateUM3PerNC"])
+                    if not math.isfinite(depth) or not math.isfinite(removal_rate) or depth < 0 or removal_rate < 0:
+                        raise ValueError("out of range")
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise PatternConfigError(f"invalid StairReceipes step values in {name}.{node['name']}") from exc
+                steps.append(StairRecipeStep(step["enabled"], depth, step["material"], removal_rate,
+                                             dwell, overlap, passes, after))
+            nodes.append(StairRecipeNode(node["name"], steps))
+        output[name] = StairRecipeCollection("StairRecipeDefaults", str(body.get("caption", name)),
+                                             {"dwellUS": dwell, "overlapPercent": overlap,
+                                              "passes": passes, "after": after}, nodes)
+    return output
+
+
 def parse_config(data) -> ProcessingConfig:
     if not isinstance(data, dict) or not isinstance(data.get("Patterns"), list):
         raise PatternConfigError("processing patterns file needs a top-level 'Patterns' list")
-    cfg = ProcessingConfig(header=data.get("Header") if isinstance(data.get("Header"), dict) else {})
+    cfg = ProcessingConfig(header=data.get("Header") if isinstance(data.get("Header"), dict) else {},
+                           stair_recipes=_stair_recipes(data.get("StairReceipes")))
     seen = set()
     for i, entry in enumerate(data["Patterns"]):
         try:
@@ -126,6 +209,13 @@ def load_config(path) -> ProcessingConfig:
         raise PatternConfigError(f"cannot read {path}: {e}") from e
     except json.JSONDecodeError as e:
         raise PatternConfigError(f"{path} is not valid JSON: {e}") from e
+    reference = data.get("StairReceipes") if isinstance(data, dict) else None
+    if isinstance(reference, dict) and isinstance(reference.get("$ref"), str):
+        recipe_path = (path.parent / reference["$ref"]).resolve()
+        try:
+            data["StairReceipes"] = json.loads(recipe_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            raise PatternConfigError(f"cannot load StairReceipes reference {recipe_path}: {e}") from e
     cfg = parse_config(data)
     cfg.path = path
     return cfg

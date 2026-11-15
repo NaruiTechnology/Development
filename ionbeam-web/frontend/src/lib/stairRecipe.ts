@@ -33,6 +33,17 @@ export const STAIR_AFTER_VALUES: ReadonlyArray<StairAfter> = ["none", "view", "v
 
 export type StairStepOverride = Partial<StairStep>;
 
+/** Configured semiconductor process recipe defaults served from processingPatterns.json. */
+export interface StairRecipeDefaults {
+  enabled: boolean; depthUM: number; material: string; removalRateUM3PerNC: number;
+  dwellUS: number; overlapPercent: number; passes: number; after: StairAfter;
+}
+export interface StairRecipeCollection {
+  model: "StairRecipeDefaults"; caption: string;
+  stepDefaults: { dwellUS: number; overlapPercent: number; passes: number; after: StairAfter };
+  nodes: { name: string; steps: StairRecipeDefaults[] }[];
+}
+
 export const STAIR_STEP_FIELDS = ["enabled", "depth", "dwell", "overlap", "passes", "material", "removalRate", "after"] as const;
 export const MAX_STAIR_STEPS = 50;
 
@@ -41,24 +52,24 @@ export function stairStepCount(params: PatternParameters): number {
 }
 
 /** The step a card-level parameter set implies, i.e. today's behaviour (even depth split). */
-export function defaultStairStep(params: PatternParameters, index: number): StairStep {
+export function defaultStairStep(params: PatternParameters, index: number, preset?: StairRecipeDefaults): StairStep {
   const n = stairStepCount(params);
   return {
     enabled: true,
-    depth: Number(params.depth ?? 1) * (index + 1) / n,
-    dwell: Number(params.dwell ?? 1),
-    overlap: Number(params.overlap ?? 50),
-    passes: Math.max(1, Math.round(Number(params.passes ?? 1))),
-    material: "",
-    removalRate: 0,
-    after: "none",
+    depth: preset?.depthUM ?? Number(params.depth ?? 1) * (index + 1) / n,
+    dwell: preset?.dwellUS ?? Number(params.dwell ?? 1),
+    overlap: preset?.overlapPercent ?? Number(params.overlap ?? 50),
+    passes: preset?.passes ?? Math.max(1, Math.round(Number(params.passes ?? 1))),
+    material: preset?.material ?? "",
+    removalRate: preset?.removalRateUM3PerNC ?? 0,
+    after: preset?.after ?? "none",
   };
 }
 
 /** Defaults merged with the operator's overrides, one entry per step. */
-export function resolveStairSteps(params: PatternParameters, overrides?: ReadonlyArray<StairStepOverride | null | undefined>): StairStep[] {
+export function resolveStairSteps(params: PatternParameters, overrides?: ReadonlyArray<StairStepOverride | null | undefined>, presets?: ReadonlyArray<StairRecipeDefaults>): StairStep[] {
   const n = stairStepCount(params);
-  return Array.from({ length: n }, (_, i) => ({ ...defaultStairStep(params, i), ...(overrides?.[i] ?? {}) }));
+  return Array.from({ length: n }, (_, i) => ({ ...defaultStairStep(params, i, presets?.[i]), ...(overrides?.[i] ?? {}) }));
 }
 
 /** Depth this step adds on top of the previous enabled-or-not step (steps nest, so depths accumulate). */

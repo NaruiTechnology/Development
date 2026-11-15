@@ -35,6 +35,14 @@ export function preparePatternExposure(spec: PatternSpec, shape: PatternRoi, par
   const widthUM = Math.abs(fov.x_end - fov.x_origin), heightUM = Math.abs(fov.y_end - fov.y_origin);
   const plan = planExposure(spec, shape, { beamCurrentPA, spotDiameterUM: spot.spotSizeUM, overlapPct, dwellUS, dose, passes },
     { axis, fieldWidthUM: widthUM, parameters });
+  const configuredLoops = Number(parameters.loops ?? 1);
+  const loops = Number.isFinite(configuredLoops) ? Math.min(10000, Math.max(1, Math.round(configuredLoops))) : 1;
+  // Stair Cut's card-level Loops repeat each recipe step independently of recipe row count.
+  if (loops > 1) {
+    plan.passes *= loops;
+    plan.deliveredDose = plan.dosePerPass * plan.passes;
+    plan.beamOnS = plan.count * dwellUS * 1e-6 * plan.passes;
+  }
   const map: DacMap = fov.scanGeometry?.enabled
     ? { linear: false, toDac: (x, y) => {
         const [dx, dy] = transform(fov.scanGeometry!.inverse, [x, y]);
@@ -50,6 +58,7 @@ export interface PatternExposureStep {
   shape: PatternRoi;
   parameters: PatternParameters;
   caption: string;
+  recipeStepIndex?: number;
   requestedDepthUM?: number;
   depthBand?: RectRoi;
   /** Stair cut only: layer material label, depth this step adds, calibrated Sr (um^3/nC). */
@@ -80,7 +89,7 @@ export function stairExposureSteps(shape: PatternRoi, parameters: PatternParamet
     const box = { x_start: Math.min(...remaining.map(r => r.x_start)), x_end: Math.max(...remaining.map(r => r.x_end)),
       y_start: Math.min(...remaining.map(r => r.y_start)), y_end: Math.max(...remaining.map(r => r.y_end)) };
     out.push({ shape: box, depthBand: strip, parameters: stairStepParameters(parameters, recipe, i),
-      caption: `Step ${i + 1} / ${strips.length}`, requestedDepthUM: recipe[i].depth,
+      caption: `Step ${i + 1} / ${strips.length}`, recipeStepIndex: i + 1, requestedDepthUM: recipe[i].depth,
       material: recipe[i].material || undefined, incrementUM: stairIncrementUM(recipe, i),
       removalRate: recipe[i].removalRate > 0 ? recipe[i].removalRate : undefined,
       after: recipe[i].after === "none" ? undefined : recipe[i].after });

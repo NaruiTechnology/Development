@@ -39,13 +39,14 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
       : [{ shape: instance.roi, parameters: instance.parameters, caption: "Pattern exposure", requestedDepthUM: undefined, depthBand: undefined }];
     for (const [index, step] of steps.entries()) {
       const p = stair || simulation ? preparePatternExposure(spec, step.shape, step.parameters, patterns.lensLookup, field) : base!;
+      const stepId = step.recipeStepIndex === undefined ? index : step.recipeStepIndex - 1;
       entries.push({ key: spec.key, node: {
-        id: `${spec.key}:${index}:exposure`, pattern: spec.caption, caption: step.caption, action: "Exposure lattice",
+        id: `${spec.key}:${stepId}:exposure`, pattern: spec.caption, caption: step.caption, action: "Exposure lattice",
         status: "upcoming", threshold: null, spot: p.plan.count, total: p.plan.count,
         exposure: { shape: step.shape, model: spec.model, parameters: step.parameters, plan: p.plan, dwellUS: Number(step.parameters.dwell),
           beamCurrentPA: p.beamCurrentPA, requestedDepthUM: step.requestedDepthUM, depthBand: step.depthBand,
           material: step.material ?? selectedMaterial, incrementUM: step.incrementUM,
-          removalRate: step.removalRate ?? selectedRemovalRate, after: step.after,
+          removalRate: step.removalRate ?? selectedRemovalRate, after: step.after, recipeStepIndex: step.recipeStepIndex,
           lineSpacingUM: simulation && spec.model === "CleaningLineModel" ? Number(instance.parameters.spacing) : undefined, simulation },
       }, request: {
         pattern: "lattice", lattice: p.lattice, points: null, continuous: false, pre_process: false,

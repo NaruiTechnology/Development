@@ -27,11 +27,11 @@ import { useAppDispatch, useAppSelector } from "../store";
 import { fetchProcessingPatterns, setPatternMaterial, setPatternWorkflow, selectPattern, setPatternEnabled, setPatternParameter, type PatternInstance } from "../store/processingSlice";
 import { Icon } from "./Icon";
 import { NumberStepperField } from "./NumberStepperField";
-import { StairStepsTable } from "./StairStepsTable";
+import { StairRecipeCard } from "./StepRecipe";
 import { PatternIcon } from "./PatternIcon";
 import { PatternRuntimeReadouts } from "./PatternRuntimeReadouts";
-import { VectorScanPathPreview } from "./VectorScanPathPreview";
 import { ProcessingWorkflowPanel } from "./ProcessingWorkflowPanel";
+import { VectorScanPathPreview } from "./VectorScanPathPreview";
 import { unitLabel } from "./ROIEditor";
 import { prepareExposureSequence, totalExposureSpots, MAX_EXPOSURE_SPOTS } from "../lib/exposureSequence";
 
@@ -191,6 +191,7 @@ function PatternCard({ spec, instance, active, countInvalid = false, disabled, e
   const materials = useAppSelector(s => s.processing.materials);
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
   const exposureState = useAppSelector(s => s.exposure);
+  const [parametersOpen, setParametersOpen] = useState(false);
   const viewBusy = exposureState.viewPhase === "queued" || exposureState.viewPhase === "scanning";
   const exposing = exposureState.activeStepIds.some(id => id.startsWith(`${spec.key}:`));
   const activeExposureNode = exposureState.progress.find(node => node.status === "current")
@@ -203,6 +204,7 @@ function PatternCard({ spec, instance, active, countInvalid = false, disabled, e
   if (!instance) return null;
   const selectedMaterial = materials.find(material => material.name === instance.material);
   const materialBrightness = selectedMaterial?.brightness;
+  const parametersId = `pattern-parameters-${encodeURIComponent(spec.key)}`;
   const targetGrayLevel = instance.AvgGray !== null && materialBrightness !== undefined
     ? materialTargetGrayLevel(instance.AvgGray, materialBrightness)
     : null;
@@ -271,8 +273,46 @@ function PatternCard({ spec, instance, active, countInvalid = false, disabled, e
         )}
         </details>
         <ProcessingWorkflowPanel patternKey={spec.key} />
+        <section className="pattern-parameters-card">
+          <div className="pattern-parameters-card__header" onClick={event => {
+            const target = event.target as HTMLElement;
+            if (target.closest("button, input, select, label, fieldset")) return;
+            setParametersOpen(open => !open);
+          }}>
+            <span className="pattern-parameters-card__title">{t("processing.parameters")}</span>
+            <div className="pattern-parameters-card__controls">
+            {[...spec.parameters.filter(p => p.name === "direction"), ...spec.parameters.filter(p => p.name === "loops" || p.name === "passes")].map(p => (
+              <div className={p.name === "direction" ? "pattern-parameters-card__choice" : `pattern-parameters-card__step${p.name === "loops" ? " pattern-parameters-card__step--loops" : ""}`} key={p.name}>
+                <ParameterField spec={p} label={tr(`processing.param.common.${p.name}`, tr(`processing.param.${spec.key}.${p.name}`, p.label))}
+                  value={instance.parameters[p.name]} unit={p.unit === "world" ? unit : p.unit === "us" ? "µs" : p.unit === "um" ? "µm" : p.unit}
+                  pattern={spec} roi={instance.roi} disabled={disabled}
+                  onChange={value => dispatch(setPatternParameter({ key: spec.key, name: p.name, value }))} />
+              </div>
+            ))}
+            <fieldset className="pattern-axis-field pattern-card__axis pattern-parameters-card__direction" disabled={disabled}>
+              <legend>{t("processing.exposureAxis")}</legend>
+              {(["x", "y"] as const).map((axis) => {
+                const path = axis === "x" ? "horizontal_triangle" : "vertical_serpentine";
+                const label = t(axis === "x" ? "processing.exposureAxis.x" : "processing.exposureAxis.y");
+                return <label className="pattern-axis-option" key={axis}>
+                  <input type="radio" name={`pattern-axis-${spec.key}`} value={axis}
+                    checked={String(instance.parameters.axis ?? "x") === axis}
+                    onChange={() => dispatch(setPatternParameter({ key: spec.key, name: "axis", value: axis }))} />
+                  <VectorScanPathPreview path={path} label={label} />
+                  <span>{label}</span>
+                </label>;
+              })}
+            </fieldset>
+            </div>
+            <button type="button" className="pattern-parameters-card__toggle" aria-expanded={parametersOpen}
+              aria-label={t(parametersOpen ? "processing.collapse" : "processing.expand")}
+              aria-controls={parametersId} onClick={() => setParametersOpen(open => !open)}>
+              <span className="pattern-parameters-card__chevron" aria-hidden="true"><Icon name="chevronDown" /></span>
+            </button>
+          </div>
+          <div className="pattern-parameters-card__body" id={parametersId} hidden={!parametersOpen}>
         <div className="pattern-card__parameters">
-        {spec.parameters.filter((p) => p.name !== "axis").map((p) => (
+        {spec.parameters.filter((p) => p.name !== "axis" && p.name !== "steps" && p.name !== "loops" && p.name !== "passes" && p.name !== "direction").map((p) => (
           <ParameterField
             key={p.name}
             spec={p}
@@ -305,22 +345,10 @@ function PatternCard({ spec, instance, active, countInvalid = false, disabled, e
             </div>
           </>
         )}
-        <fieldset className="pattern-axis-field pattern-card__axis" disabled={disabled}>
-          <legend>{t("processing.exposureAxis")}</legend>
-          {(["x", "y"] as const).map((axis) => {
-            const path = axis === "x" ? "horizontal_triangle" : "vertical_serpentine";
-            const label = t(axis === "x" ? "processing.exposureAxis.x" : "processing.exposureAxis.y");
-            return <label className="pattern-axis-option" key={axis}>
-              <input type="radio" name={`pattern-axis-${spec.key}`} value={axis}
-                checked={String(instance.parameters.axis ?? "x") === axis}
-                onChange={() => dispatch(setPatternParameter({ key: spec.key, name: "axis", value: axis }))} />
-              <VectorScanPathPreview path={path} label={label} />
-              <span>{label}</span>
-            </label>;
-          })}
-        </fieldset>
         </div>
-        {spec.model === "StairCutModel" && <StairStepsTable patternKey={spec.key} caption={caption} instance={instance} disabled={disabled} />}
+          </div>
+        </section>
+        {spec.model === "StairCutModel" && <StairRecipeCard patternKey={spec.key} caption={caption} instance={instance} disabled={disabled} />}
         <PatternRuntimeReadouts spec={spec} roi={instance.roi} parameters={instance.parameters}
           stairSteps={instance.stairSteps} defaultMaterial={materials[0]?.name} simulation={simulation} />
         <p className="pattern-card__readout">{roiReadout(spec, instance.roi, unit)}{`\nAvgGray: ${instance.AvgGray == null ? "—" : instance.AvgGray.toFixed(2)}`}</p>
@@ -388,7 +416,6 @@ function ParameterField({
   return (
     <NumberStepperField
       label={<>{label}{unit && <span className="pattern-card__unit"> ({unit})</span>}</>}
-      className={spec.name === "passes" ? "pattern-parameter--passes" : undefined}
       value={text}
       disabled={disabled}
       step={spec.step}

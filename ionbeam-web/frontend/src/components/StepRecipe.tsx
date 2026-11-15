@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../store";
-import { setStairStepField, setStairSteps, type PatternInstance } from "../store/processingSlice";
+import { setStairRecipeNode, setStairStepField, setStairSteps, type PatternInstance } from "../store/processingSlice";
 import { useTranslation, type TranslationKey } from "../i18n";
+import { Icon } from "./Icon";
 import {
   defaultStairStep, parseStairStepsImport, resolveStairSteps, stairStepsError, stairStepsToCsv,
   STAIR_AFTER_VALUES, type StairAfter, type StairStep, type StairStepOverride,
@@ -29,8 +30,36 @@ function Cell({ label, value, placeholder, disabled, integer, title, onCommit }:
   );
 }
 
-/** Per-step recipe for Stair cut: each step may remove a different layer, so it has its own parameters. */
-export function StairStepsTable({ patternKey, caption, instance, disabled }: {
+/** Collapsible recipe card with configured process nodes in its header selector. */
+export function StairRecipeCard({ patternKey, caption, instance, disabled }: {
+  patternKey: string; caption: string; instance: PatternInstance; disabled: boolean;
+}) {
+  const dispatch = useAppDispatch();
+  const { t } = useTranslation();
+  const collection = useAppSelector(state => state.processing.stairReceipes.SMProcess);
+  const selectedNodeName = instance.stairRecipeNode ?? collection?.nodes[0]?.name ?? "";
+  return (
+    <details className="stair-recipe-card" data-stair-recipe={patternKey}>
+      <summary className="stair-recipe-card__header">
+        <span className="stair-recipe-card__title">{t("processing.stair.steps" as TranslationKey)}</span>
+        <span className="stair-recipe-card__source">{t("processing.stair.technologyNode" as TranslationKey)}</span>
+        <select className="select stair-recipe-card__select" aria-label={`${caption}: SMProcess recipe`}
+          value={selectedNodeName} disabled={disabled || !collection?.nodes.length}
+          onClick={event => event.stopPropagation()}
+          onChange={event => dispatch(setStairRecipeNode({ key: patternKey, nodeName: event.target.value }))}>
+          {collection?.nodes.map(node => <option key={node.name} value={node.name}>{node.name}</option>)}
+        </select>
+        <span className="stair-recipe-card__chevron" aria-hidden="true"><Icon name="chevronDown" /></span>
+      </summary>
+      <div className="stair-recipe-card__body">
+        <StepRecipe patternKey={patternKey} caption={caption} instance={instance} disabled={disabled} />
+      </div>
+    </details>
+  );
+}
+
+/** Editable step recipe body, separated from the card header and process selector. */
+export function StepRecipe({ patternKey, caption, instance, disabled }: {
   patternKey: string; caption: string; instance: PatternInstance; disabled: boolean;
 }) {
   const dispatch = useAppDispatch();
@@ -41,7 +70,10 @@ export function StairStepsTable({ patternKey, caption, instance, disabled }: {
   const [message, setMessage] = useState<string | null>(null);
   const overrides: ReadonlyArray<StairStepOverride | undefined> = instance.stairSteps ?? [];
   const defaultMaterial = materials[0]?.name ?? "";
-  const resolved = resolveStairSteps(instance.parameters, overrides).map(step => ({
+  const collectionDefaults = useAppSelector(state => state.processing.stairReceipes.SMProcess);
+  const presetSteps = (collectionDefaults?.nodes.find(node => node.name === instance.stairRecipeNode)
+    ?? collectionDefaults?.nodes[0])?.steps;
+  const resolved = resolveStairSteps(instance.parameters, overrides, presetSteps).map(step => ({
     ...step,
     material: step.material || defaultMaterial,
   }));
@@ -57,7 +89,7 @@ export function StairStepsTable({ patternKey, caption, instance, disabled }: {
       : overrides[index]?.[field];
     return <Cell label={`${caption} ${tr("processing.stair.step", "Step")} ${index + 1}: ${label}`}
       title={field === "removalRate" ? material?.removalRateSource : undefined} value={value}
-      placeholder={field === "removalRate" ? 0 : defaultStairStep(instance.parameters, index)[field]} disabled={disabled} integer={integer}
+      placeholder={field === "removalRate" ? 0 : defaultStairStep(instance.parameters, index, presetSteps?.[index])[field]} disabled={disabled} integer={integer}
       onCommit={v => set(index, field, v)} />
   };
 

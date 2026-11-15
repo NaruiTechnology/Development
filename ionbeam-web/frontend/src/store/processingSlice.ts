@@ -20,7 +20,7 @@ import {
   type PatternRoi,
   type PatternSpec,
 } from "../lib/processingPatterns";
-import { MAX_STAIR_STEPS, STAIR_STEP_FIELDS, type StairStepOverride } from "../lib/stairRecipe";
+import { MAX_STAIR_STEPS, STAIR_STEP_FIELDS, type StairRecipeCollection, type StairStepOverride } from "../lib/stairRecipe";
 
 /** One live instance per catalogue entry: the parameter values and the ROI the operator drew. */
 export interface PatternInstance {
@@ -34,6 +34,8 @@ export interface PatternInstance {
   roi: PatternRoi | null;
   /** Stair cut only: sparse per-step overrides of the card-level parameters (index = step - 1). */
   stairSteps?: StairStepOverride[];
+  /** Selected named recipe node; defaults to the first configured SMProcess node. */
+  stairRecipeNode?: string;
 }
 
 export interface ProcessingState {
@@ -41,6 +43,7 @@ export interface ProcessingState {
   workflows: WorkflowSpec[];
   materials: { name: string; caption?: string; brightness: number; grayValueRange?: [number, number] | null;
     removalRateUM3PerNC?: number; removalRateSource?: string }[];
+  stairReceipes: Record<string, StairRecipeCollection>;
   workflowProgress: WorkflowProgress[];
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
@@ -54,7 +57,7 @@ export interface ProcessingState {
   roiHistory: Array<{ key: string; roi: PatternRoi | null; orderIndex: number }>;
 }
 
-const initialState: ProcessingState = { lensLookup: null, workflows: [DEFAULT_WORKFLOW], materials: [], workflowProgress: [], status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiCreationOrder: [], roiHistory: [] };
+const initialState: ProcessingState = { lensLookup: null, workflows: [DEFAULT_WORKFLOW], materials: [], stairReceipes: {}, workflowProgress: [], status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiCreationOrder: [], roiHistory: [] };
 
 interface PatternsResponse {
   lensLookup?: unknown;
@@ -64,6 +67,7 @@ interface PatternsResponse {
   workflows?: WorkflowSpec[];
   materials?: { name: string; caption?: string; brightness: number; grayValueRange?: [number, number] | null;
     removalRateUM3PerNC?: number; removalRateSource?: string }[];
+  stairReceipes?: Record<string, StairRecipeCollection>;
   errors?: string[];
 }
 
@@ -175,6 +179,18 @@ const slice = createSlice({
       if (steps) inst.stairSteps = steps; else delete inst.stairSteps;
       s.workflowProgress = [];
     },
+    setStairRecipeNode(s, a: PayloadAction<{ key: string; nodeName: string }>) {
+      const inst = s.instances[a.payload.key];
+      const spec = s.specs.find(p => p.key === a.payload.key);
+      const node = s.stairReceipes.SMProcess?.nodes.find(item => item.name === a.payload.nodeName);
+      if (!inst || spec?.model !== "StairCutModel" || !node || node.steps.length > MAX_STAIR_STEPS) return;
+      inst.stairRecipeNode = node.name;
+      inst.parameters.steps = Math.max(2, node.steps.length);
+      inst.stairSteps = node.steps.map(step => ({ enabled: step.enabled, depth: step.depthUM, material: step.material,
+        removalRate: step.removalRateUM3PerNC, dwell: step.dwellUS, overlap: step.overlapPercent,
+        passes: step.passes, after: step.after }));
+      s.workflowProgress = [];
+    },
     setPatternRoi(s, a: PayloadAction<{ key: string; roi: PatternRoi; preview?: boolean }>) {
       const spec = s.specs.find((p) => p.key === a.payload.key);
       const inst = s.instances[a.payload.key];
@@ -255,6 +271,7 @@ const slice = createSlice({
       s.specs = specs;
       s.workflows = [DEFAULT_WORKFLOW, ...(a.payload.workflows ?? []).filter(w => w.name !== "default")];
       s.materials = a.payload.materials ?? [];
+      s.stairReceipes = a.payload.stairReceipes ?? {};
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
       s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ? { ...s.instances[p.key], parameters: { ...defaultParameters(p.parameters), ...s.instances[p.key].parameters } } : { workflow: "default", workflowEnabled: true, material: "", AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
@@ -278,5 +295,5 @@ const slice = createSlice({
   },
 });
 
-export const { setPatternWorkflow, setPatternMaterial, setWorkflowProgress, updateWorkflowStep, undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setStairStepField, setStairSteps, setPatternRoi, clearPatternRoi } = slice.actions;
+export const { setPatternWorkflow, setPatternMaterial, setWorkflowProgress, updateWorkflowStep, undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setStairStepField, setStairSteps, setStairRecipeNode, setPatternRoi, clearPatternRoi } = slice.actions;
 export default slice.reducer;

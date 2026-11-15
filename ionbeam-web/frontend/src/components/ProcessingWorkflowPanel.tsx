@@ -89,20 +89,23 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
     {!nodes.length && <p>{selectedWorkflow && selectedWorkflow.steps.length === 0
       ? "This workflow has no steps configured."
       : "Enable a pattern and draw its ROI to preview the workflow."}</p>}
-    <ol className="processing-workflow__tree" aria-label="Workflow steps, left to right">{nodes.map((node, i) => <li key={node.id}
+    <ol className="processing-workflow__tree" aria-label="Workflow steps, left to right">{nodes.map((node, i) => {
+      const stepNumber = node.exposure?.recipeStepIndex ?? i + 1;
+      return <li key={node.id}
       ref={node.status === "current" ? currentNodeRef : undefined}
       className={`processing-workflow__node processing-workflow__node--${node.status}`} aria-current={node.status === "current" ? "step" : undefined}>
       <span className="processing-workflow__number" title={`${node.caption}: ${node.status}`}
-        aria-label={`Step ${i + 1}: ${node.caption}, ${node.status}`}>{String(i + 1).padStart(2, "0")}</span>
+        aria-label={`Step ${stepNumber}: ${node.caption}, ${node.status}`}>{String(stepNumber).padStart(2, "0")}</span>
       {passLabel(node) && <span className={`processing-workflow__pass${i === nodes.length - 1 ? " processing-workflow__pass--last" : ""}`}
         title={`${passLabel(node)} completed`} aria-label={passLabel(node)!}>{passLabel(node)}</span>}
       {node.startedAt !== undefined && <time className={`processing-workflow__duration${i === nodes.length - 1 ? " processing-workflow__duration--last" : ""}`}
-        aria-label={`Step ${i + 1} time spent: ${formatWorkflowElapsed(workflowElapsedMs(node, now))}`}
-        title={`Step ${i + 1} time spent`}>{formatWorkflowElapsed(workflowElapsedMs(node, now))}</time>}
+        aria-label={`Step ${stepNumber} time spent: ${formatWorkflowElapsed(workflowElapsedMs(node, now))}`}
+        title={`Step ${stepNumber} time spent`}>{formatWorkflowElapsed(workflowElapsedMs(node, now))}</time>}
       {i === nodes.length - 1 && <span className="processing-workflow__end" role="img"
         aria-label={`Workflow end: ${completed === nodes.length ? "completed" : "not reached"}`}
         title={`Workflow end: ${completed === nodes.length ? "completed" : "not reached"}`}
         data-completed={completed === nodes.length} />}
-    </li>)}</ol>
+    </li>;
+    })}</ol>
   </section>;
 }

@@ -10,6 +10,7 @@
  * is a ConfigError.
  */
 import fs from "node:fs";
+import path from "node:path";
 
 import { ConfigError } from "./configManager";
 
@@ -54,6 +55,52 @@ export interface WorkflowSpec {
     caption: string; mode: "scan" | "spot";
     selection?: "dark" | "bright"; thresholdMaterial?: string; thresholdSource?: "fullScaleAverage" | "selectedMaterial" | "roiAverage";
   }[] }[];
+}
+
+export interface StairRecipeDefaults {
+  enabled: boolean; depthUM: number; material: string; removalRateUM3PerNC: number;
+  dwellUS: number; overlapPercent: number; passes: number; after: "none" | "view" | "viewPause";
+}
+export interface ProcessingCollection {
+  model: "StairRecipeDefaults"; caption: string;
+  stepDefaults: { dwellUS: number; overlapPercent: number; passes: number; after: "none" | "view" | "viewPause" };
+  nodes: { name: string; steps: StairRecipeDefaults[] }[];
+}
+
+function parseStairReceipes(raw: unknown): Record<string, ProcessingCollection> {
+  if (raw === undefined) return {};
+  if (!Array.isArray(raw)) throw new ConfigError("Processing StairReceipes must be an array", 500);
+  const output: Record<string, ProcessingCollection> = {};
+  for (const entry of raw) {
+    if (!isObject(entry) || Object.keys(entry).length !== 1) throw new ConfigError("Processing collection entries need exactly one name", 500);
+    const [name, value] = Object.entries(entry)[0];
+    if (output[name] || !isObject(value) || value.model !== "StairRecipeDefaults" || !Array.isArray(value.nodes) || !isObject(value.stepDefaults))
+      throw new ConfigError(`Invalid processing collection: ${name}`, 500);
+    const defaults = value.stepDefaults;
+    const validAfter = (v: unknown): v is StairRecipeDefaults["after"] => ["none", "view", "viewPause"].includes(String(v));
+    const after = defaults.after;
+    if (![defaults.dwellUS, defaults.overlapPercent, defaults.passes].every(v => typeof v === "number" && Number.isFinite(v)) || !validAfter(after))
+      throw new ConfigError(`Invalid processing collection defaults: ${name}`, 500);
+    const nodeNames = new Set<string>();
+    const nodes = value.nodes.map(node => {
+      if (!isObject(node) || typeof node.name !== "string" || nodeNames.has(node.name) || !Array.isArray(node.steps))
+        throw new ConfigError(`Invalid or duplicate node in processing collection: ${name}`, 500);
+      nodeNames.add(node.name);
+      const steps = node.steps.map(step => {
+        if (!isObject(step) || typeof step.enabled !== "boolean" || typeof step.material !== "string" ||
+          ![step.depthUM, step.removalRateUM3PerNC].every(v => typeof v === "number" && Number.isFinite(v) && v >= 0))
+          throw new ConfigError(`Invalid step in processing collection ${name}.${node.name}`, 500);
+        return { enabled: step.enabled, depthUM: step.depthUM as number, material: step.material,
+          removalRateUM3PerNC: step.removalRateUM3PerNC as number, dwellUS: defaults.dwellUS as number,
+          overlapPercent: defaults.overlapPercent as number, passes: defaults.passes as number, after };
+      });
+      return { name: node.name, steps };
+    });
+    output[name] = { model: "StairRecipeDefaults", caption: String(value.caption ?? name),
+      stepDefaults: { dwellUS: defaults.dwellUS as number, overlapPercent: defaults.overlapPercent as number,
+        passes: defaults.passes as number, after }, nodes };
+  }
+  return output;
 }
 
 function parseWorkflows(data: Record<string, unknown>): Pick<ProcessingPatternsConfig, "materials" | "workflows"> {
@@ -123,6 +170,7 @@ export interface ProcessingPatternsConfig {
   materials: { name: string; caption: string; brightness: number; grayValueRange: [number, number] | null;
     removalRateUM3PerNC?: number; removalRateSource?: string }[];
   workflows: WorkflowSpec[];
+  stairReceipes: Record<string, ProcessingCollection>;
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -184,7 +232,7 @@ export function parseProcessingPatterns(data: unknown): ProcessingPatternsConfig
   if (lookup !== undefined && (!isObject(lookup) || lookup.schemaVersion !== 1 || !Array.isArray(lookup.rows) || !lookup.rows.length || !isObject(lookup.source))) {
     throw new ConfigError("Invalid LensLookup reference table", 500);
   }
-  const out: ProcessingPatternsConfig = { lensLookup: isObject(lookup) ? lookup : null, header: isObject(data.Header) ? data.Header : {}, patterns: [], errors: [], ...parseWorkflows(data) };
+  const out: ProcessingPatternsConfig = { lensLookup: isObject(lookup) ? lookup : null, header: isObject(data.Header) ? data.Header : {}, patterns: [], errors: [], ...parseWorkflows(data), stairReceipes: parseStairReceipes(data.StairReceipes) };
   const seen = new Set<string>();
   data.Patterns.forEach((entry, i) => {
     try {
@@ -219,7 +267,15 @@ export function readProcessingPatterns(file: string): ProcessingPatternsConfig {
     throw new ConfigError(`cannot read ${file}: ${err instanceof Error ? err.message : String(err)}`, 500);
   }
   try {
-    return parseProcessingPatterns(JSON.parse(text));
+    const data: unknown = JSON.parse(text);
+    if (isObject(data) && isObject(data.StairReceipes) && typeof data.StairReceipes.$ref === "string") {
+      const reference = path.resolve(path.dirname(file), data.StairReceipes.$ref);
+      let recipes: unknown;
+      try { recipes = JSON.parse(fs.readFileSync(reference, "utf8")); }
+      catch (err) { throw new ConfigError(`cannot read StairReceipes reference ${reference}: ${err instanceof Error ? err.message : String(err)}`, 500); }
+      return parseProcessingPatterns({ ...data, StairReceipes: recipes });
+    }
+    return parseProcessingPatterns(data);
   } catch (err) {
     if (err instanceof SyntaxError) throw new ConfigError(`${file} is not valid JSON: ${err.message}`, 500);
     throw err;
