@@ -34,12 +34,12 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
                 onClick={() => void start()}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>}
         </div>
         <div className="patterns-exposure__view-row">
-          {showView && <label className={`checkbox vacuum-switch app-switch patterns-exposure__view${viewBusy ? " patterns-exposure__view--busy" : ""}`}>
+          {showView && <label className={`checkbox vacuum-switch app-switch patterns-exposure__view${viewBusy ? " patterns-exposure__view--busy" : ""}`}
+            title={t("processing.exposure.viewHelp")}>
             <input type="checkbox" role="switch" checked={viewBusy}
               disabled={!defaultsReady || scanBusy || otherBusy || state.phase !== "running" || viewBusy}
               aria-label={t("processing.exposure.view")}
               aria-busy={viewBusy}
-              title={t("processing.exposure.viewHelp")}
               onChange={event => { if (event.target.checked) void view(); }} />
             <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
             <Icon name="eye" />

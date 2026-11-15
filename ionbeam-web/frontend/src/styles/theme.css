@@ -8429,7 +8429,7 @@ body {
 .patterns-exposure__controls { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .patterns-exposure__controls > * { flex-shrink: 0; white-space: nowrap; }
 .patterns-exposure__controls > .checkbox:first-child { margin-right: auto; }
-.patterns-exposure__view { flex-shrink: 0; font-size: 11px; }
+.patterns-exposure__view { flex-shrink: 0; font-size: 11px; pointer-events: auto; }
 .patterns-exposure__view .icon { width: 24px; height: 24px; color: dimgray; }
 .patterns-exposure__view--busy { color: var(--c-accent); }
 .patterns-exposure__view--busy .icon { color: lawngreen; }
