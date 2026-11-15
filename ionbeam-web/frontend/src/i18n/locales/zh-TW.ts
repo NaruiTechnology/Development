@@ -156,6 +156,7 @@ export const zhTW: Partial<TranslationTable> = {
   "processing.exposure.card": "曝光",
   "processing.exposure.parallelLabel": "曝光平行",
   "processing.exposure.parallelHelp": "使用單束在各圖形間交替曝光分段；清潔線須關閉平行。",
+  "processing.exposure.viewZoomHelp": "單次檢視掃描使用此縮放倍率平行掃描所有 ROI 區域，不受「平行」開關狀態影響。",
   "processing.exposure.serialRequired": "清潔線須關閉平行。",
   "processing.exposure.view": "檢視",
   "processing.exposure.viewHelp": "設為 0 秒時會略過自動檢視掃描，曝光不中斷地繼續。點擊「檢視」開關仍可手動要求單次掃描。設為大於 0 時，自動掃描後會暫停所選秒數。",

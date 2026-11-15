@@ -1,4 +1,5 @@
 import { createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { clampScanZoom } from "../lib/scanRegions";
 import type { WorkflowProgress } from "../lib/processingWorkflows";
 import { clearPatternRoi, setPatternEnabled, setPatternMaterial, setPatternParameter, setPatternRoi,
   setStairStepField, setStairSteps, type ProcessingState } from "./processingSlice";
@@ -10,6 +11,7 @@ export type ExposureViewPhase = "idle" | "queued" | "scanning" | "completed" | "
 export interface ExposureState {
   parallel: boolean;
   viewPauseSeconds: number;
+  viewZoom: number;
   phase: ExposurePhase;
   progress: WorkflowProgress[];
   retainedPreview: WorkflowProgress[];
@@ -25,7 +27,7 @@ export interface ExposureState {
   viewExpectedSamples: number;
 }
 const initialState: ExposureState = {
-  parallel: false, viewPauseSeconds: 0, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
+  parallel: false, viewPauseSeconds: 0, viewZoom: 1, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
   viewPhase: "idle", viewError: null, viewRequestId: 0,
   viewReceivedSamples: 0, viewReceivedChunks: 0, viewExpectedSamples: 0,
 };
@@ -38,6 +40,9 @@ export const selectExposurePreview = createSelector(
 );
 const slice = createSlice({ name: "exposure", initialState, reducers: {
   setExposureParallel(s, a: PayloadAction<boolean>) { if (!exposureBusy(s.phase)) s.parallel = a.payload; },
+  setExposureViewZoom(s, a: PayloadAction<number>) {
+    if (s.viewPhase !== "queued" && s.viewPhase !== "scanning") s.viewZoom = clampScanZoom(a.payload);
+  },
   setExposureViewPauseSeconds(s, a: PayloadAction<number>) {
     s.viewPauseSeconds = Math.max(0, Math.min(15, Math.round(a.payload)));
   },
@@ -142,7 +147,7 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
     }
   });
 } });
-export const { setExposureParallel, setExposureViewPauseSeconds, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
+export const { setExposureViewZoom, setExposureParallel, setExposureViewPauseSeconds, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
   exposureStepCompleted, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
   exposureViewSamplesReceived, requestExposureView,
   exposurePaused, exposureResumed } = slice.actions;

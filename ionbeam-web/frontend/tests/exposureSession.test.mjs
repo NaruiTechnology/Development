@@ -10,7 +10,7 @@ test("exposure hook shares a session across segments, View and passes; failures 
   const previous = {window: globalThis.window, WebSocket: globalThis.WebSocket, fetch: globalThis.fetch};
   let stored = JSON.stringify({session_token: "signed-in"}), authChecks = 0;
   globalThis.window = {location: {hostname: "example.test", protocol: "http:", host: "example.test"},
-    localStorage: {getItem: () => stored, setItem() {}}, setInterval, clearInterval,
+    localStorage: {getItem: () => stored, setItem() {}}, setInterval, clearInterval, setTimeout, clearTimeout,
     addEventListener() {}, removeEventListener() {}};
   globalThis.fetch = async url => {
     assert.match(String(url), /current-account/);
@@ -36,6 +36,8 @@ test("exposure hook shares a session across segments, View and passes; failures 
     const {useExposureRun} = await vite.ssrLoadModule("/src/hooks/useExposureRun.ts");
     const processing = await vite.ssrLoadModule("/src/store/processingSlice.ts");
     const scan = await vite.ssrLoadModule("/src/store/scanSlice.ts");
+    const exposure = await vite.ssrLoadModule("/src/store/exposureSlice.ts");
+    const {worldSelectionToDacROI} = await vite.ssrLoadModule("/src/lib/roiDac.ts");
     const lensLookup = JSON.parse(readFileSync(new URL("../../../GlasgowDataIO/Json/processingPatterns.json", import.meta.url))).LensLookup;
     store.dispatch({type: "status/defaults/fulfilled", payload: {
       is_production: false, exposure_cell_ranges: true, exposure_session_stream: true, raster: {}, vector: {}}});
@@ -46,12 +48,23 @@ test("exposure hook shares a session across segments, View and passes; failures 
       }))}], lensLookup}, "session"));
     store.dispatch(processing.setPatternRoi({key: "box", roi: {x_start: 0.1, x_end: 0.9, y_start: 0.1, y_end: 0.9}}));
     store.dispatch(scan.updateRaster({resolution: 2}));
+    store.dispatch(scan.updateROI({scan_zoom: 8,
+      selection: {x_start: 0.2, x_end: 0.4, y_start: 0.2, y_end: 0.4}}));
+    store.dispatch(exposure.setExposureViewZoom(2));
+    assert.equal(store.getState().exposure.parallel, false);
+
     let controls;
     function Harness() { controls = useExposureRun(); return null; }
     await act(async () => { renderer = create(React.createElement(Provider, {store}, React.createElement(Harness))); });
     let completion;
-    await act(async () => { completion = controls.start(); });
-    assert.equal(sockets.length, 1);
+    async function startRun() {
+      const count = sockets.length;
+      await act(async () => { completion = controls.start(); });
+      for (let i = 0; i < 100 && sockets.length === count && !store.getState().exposure.error; i++)
+        await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+    }
+    await startRun();
+    assert.equal(sockets.length, 1, store.getState().exposure.error ?? "exposure opens a session");
     assert.match(sockets[0].url, /\/ws\/exposure\/session/);
     const socket = sockets[0];
     stored = null;
@@ -59,7 +72,25 @@ test("exposure hook shares a session across segments, View and passes; failures 
     for (let i = 0; i < 100 && socket.requests.at(-1).kind === "vector"; i++)
       await act(async () => socket.done());
     assert.equal(socket.requests.at(-1).kind, "raster");
+    const viewRequest = socket.requests.at(-1).request;
+    const field = store.getState().scan.roi;
+    assert.equal(viewRequest.roi, null);
+    assert.deepEqual(viewRequest.parallel_rois, [
+      worldSelectionToDacROI({x_start: 0.3, x_end: 0.7, y_start: 0.3, y_end: 0.7}, field),
+      worldSelectionToDacROI({x_start: 0.25, x_end: 0.35, y_start: 0.25, y_end: 0.35}, field),
+    ], "View uses its own Zoom for every ROI with exposure Parallel off");
+    assert.equal(viewRequest.continuous, false);
+    assert.equal(store.getState().exposure.viewExpectedSamples, 8);
+    await act(async () => { socket.onmessage({data: new ArrayBuffer(8)}); });
+    const displayBounds = [
+      {x_start: 0.1, x_end: 0.9, y_start: 0.1, y_end: 0.9},
+      {x_start: 0.2, x_end: 0.4, y_start: 0.2, y_end: 0.4},
+    ];
+    assert.deepEqual(store.getState().image.exposureViewFrames.map(frame => frame.bounds), displayBounds,
+      "streaming zoomed samples fill the original ROIs rather than shrinking on screen");
     await act(async () => { socket.onmessage({data: new ArrayBuffer(8)}); socket.done(); });
+    assert.deepEqual(store.getState().image.exposureViewFrames.map(frame => frame.bounds), displayBounds,
+      "completed zoomed frames retain the original display bounds");
     assert.equal(store.getState().exposure.viewPhase, "completed");
     for (let i = 0; i < 100 && store.getState().exposure.phase === "running"; i++)
       await act(async () => socket.done());
@@ -70,7 +101,7 @@ test("exposure hook shares a session across segments, View and passes; failures 
     assert.ok(socket.requests.filter(request => request.kind === "vector").length >= 2);
 
     stored = JSON.stringify({session_token: "new-sign-in"});
-    await act(async () => { completion = controls.start(); });
+    await startRun();
     const failed = sockets.at(-1), requestsBeforeFailure = failed.requests.length;
     await act(async () => failed.onmessage({data: JSON.stringify({event: "error", detail: "USB timeout"})}));
     await completion;
@@ -79,7 +110,7 @@ test("exposure hook shares a session across segments, View and passes; failures 
     assert.equal(failed.requests.length, requestsBeforeFailure);
     assert.equal(sockets.length, 2, "failure never opens a replacement session");
     assert.equal(stored, JSON.stringify({session_token: "new-sign-in"}), "a transport error preserves sign-in");
-    await act(async () => { completion = controls.start(); });
+    await startRun();
     const stopped = sockets.at(-1);
     await act(async () => { await controls.stop(); });
     await completion;

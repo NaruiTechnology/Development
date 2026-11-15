@@ -166,6 +166,7 @@ export const en = {
   "processing.exposure.card": "Exposure",
   "processing.exposure.parallelLabel": "Exposure Parallel",
   "processing.exposure.parallelHelp": "Alternate bounded exposure segments between patterns on one beam. Cleaning lines require Parallel off.",
+  "processing.exposure.viewZoomHelp": "The one-time View scan uses this zoom to scan all ROI areas in parallel, regardless of the Parallel switch setting.",
   "processing.exposure.serialRequired": "Cleaning lines require Parallel off.",
   "processing.exposure.view": "View",
   "processing.exposure.viewHelp": "At 0 seconds, automatic View scans are skipped and exposure continues uninterrupted. Click the View switch to request a one-time scan. Above 0, automatic scans pause for the selected hold time.",

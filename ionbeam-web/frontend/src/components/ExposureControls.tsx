@@ -2,7 +2,9 @@ import { useTranslation } from "../i18n";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useExposureRun } from "../hooks/useExposureRun";
 import { useOtherWorkspaceBusy } from "../hooks/useScanWorkspace";
-import { exposureBusy, setExposureParallel, setExposureViewPauseSeconds } from "../store/exposureSlice";
+import { exposureBusy, setExposureParallel, setExposureViewZoom, setExposureViewPauseSeconds } from "../store/exposureSlice";
+import { NumberStepperInput } from "./NumberStepperField";
+import { MAX_SCAN_ZOOM } from "../lib/scanRegions";
 import { Icon } from "./Icon";
 
 export function ExposureControls({disabled = false, showView = true}: {disabled?: boolean; showView?: boolean}) {
@@ -23,6 +25,17 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
               checked={state.parallel} disabled={busy || disabled} onChange={e => dispatch(setExposureParallel(e.target.checked))} />
             <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
             <span>{t("scan.parallel")}</span>
+          </label>
+          <label className="patterns-exposure__zoom"
+            title={t("processing.exposure.viewZoomHelp")}>
+            <Icon name="zoomIn" />
+            <NumberStepperInput value={state.viewZoom} min={1} max={MAX_SCAN_ZOOM} step={1}
+              inputMode="numeric" ariaLabel={t("scan.zoom")} disabled={disabled || viewBusy}
+              onValueChange={value => {
+                const zoom = Number(value);
+                if (Number.isInteger(zoom) && zoom >= 1 && zoom <= MAX_SCAN_ZOOM)
+                  dispatch(setExposureViewZoom(zoom));
+              }} />
           </label>
           <button type="button" className="btn btn--stop" disabled={!busy || state.phase === "stopping"}
             onClick={() => void stop()}><Icon name="hand" />{t("scan.stop")}</button>

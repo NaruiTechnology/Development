@@ -148,6 +148,7 @@ export const zhCN: Partial<TranslationTable> = {
   "processing.exposure.card": "曝光",
   "processing.exposure.parallelLabel": "曝光并行",
   "processing.exposure.parallelHelp": "使用单束在各图形间交替曝光分段；清洁线须关闭并行。",
+  "processing.exposure.viewZoomHelp": "单次查看扫描使用此缩放倍率并行扫描所有 ROI 区域，不受“并行”开关状态影响。",
   "processing.exposure.serialRequired": "清洁线须关闭并行。",
   "processing.exposure.view": "查看",
   "processing.exposure.viewHelp": "设为 0 秒时跳过自动查看扫描，曝光连续进行。点击“查看”开关仍可请求一次扫描。设为大于 0 的值时，自动扫描会暂停所选时长。",

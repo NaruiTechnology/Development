@@ -6,7 +6,6 @@ import { imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from
 import { patternBounds } from "../lib/processingPatterns";
 import { sampleExposureLattice, exposureTraceFraction, exposureHeadFraction } from "../lib/exposurePreview";
 import { orientCanvas } from "../lib/canvasOrientation";
-import { effectiveScanRegions } from "../lib/scanRegions";
 import { exposureViewScanRegions } from "../lib/processingScanRegions";
 import type { WorkflowProgress } from "../lib/processingWorkflows";
 import type { StreamTransforms } from "../store/scanSlice";
@@ -102,10 +101,8 @@ export function ExposureViewCanvasOverlay({ transforms, processingViewport = fal
   const instances = useAppSelector(s => s.processing.instances);
   const viewPhase = useAppSelector(s => s.exposure.viewPhase);
   const viewActive = viewPhase === "queued" || viewPhase === "scanning";
-  const scanBounds = useMemo(() => {
-    const regions = exposureViewScanRegions(specs, instances, roi).regions;
-    return effectiveScanRegions(regions, roi.scan_zoom, roi).filter((bounds): bounds is NonNullable<typeof bounds> => bounds !== null);
-  }, [specs, instances, roi]);
+  const scanBounds = useMemo(() => exposureViewScanRegions(specs, instances, roi).regions,
+    [specs, instances, roi]);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;

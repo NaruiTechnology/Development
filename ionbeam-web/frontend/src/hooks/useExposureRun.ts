@@ -184,7 +184,10 @@ export function useExposureRun() {
       const simulated = !scansUseHardware(snapshot.status.defaults?.is_production, snapshot.status.sessionSimulation);
       const regions = exposureViewScanRegions(snapshot.processing.specs, snapshot.processing.instances, snapshot.scan.roi);
       if (!regions.regions.length) throw new Error("Draw at least one enabled pattern ROI before requesting View.");
-      const scanBounds = effectiveScanRegions(regions.regions, snapshot.scan.roi.scan_zoom, snapshot.scan.roi)
+      // Acquire the zoomed centre of each ROI, then expand its samples across
+      // the original ROI for display, just like the regular ROI scan.
+      const displayBounds = regions.regions;
+      const scanBounds = effectiveScanRegions(regions.regions, snapshot.exposure.viewZoom, snapshot.scan.roi)
         .filter((bounds): bounds is NonNullable<typeof bounds> => bounds !== null);
       if (!scanBounds.length) throw new Error("The selected pattern ROIs do not intersect the zoomed scan field.");
       dispatch(exposureViewExpectedSamples(resolution * resolution * scanBounds.length));
@@ -217,7 +220,7 @@ export function useExposureRun() {
         await runRequest(prepared, frames, undefined, viewStream, () => {
           frames.forEach((frame, index) => dispatch(appendExposureViewFrame({
             key: regions.keys[index] ?? `roi-${index + 1}`,
-            bounds: scanBounds[index], resolution, pixels: frame.pixels.slice(),
+            bounds: displayBounds[index], resolution, pixels: frame.pixels.slice(),
           })));
         });
       } finally {
@@ -228,7 +231,7 @@ export function useExposureRun() {
       }
       if (cancelled.current) return;
       frames.forEach((frame, index) => dispatch(appendExposureViewFrame({
-        key: regions.keys[index] ?? `roi-${index + 1}`, bounds: scanBounds[index],
+        key: regions.keys[index] ?? `roi-${index + 1}`, bounds: displayBounds[index],
         resolution, pixels: frame.pixels,
       })));
       // Wait only after the raster stream has sent done and all View frames
