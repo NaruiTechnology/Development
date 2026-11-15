@@ -27,7 +27,7 @@ test("pattern mouse selects, moves within bounds, resizes all corners, cancels a
     store.dispatch(updateROI({ x_origin: 0, x_end: 640, y_origin: 0, y_end: 640 }));
     const initial = { x_start: 100, x_end: 200, y_start: 100, y_end: 200 };
     store.dispatch(actions.setPatternRoi({ key: "box", roi: initial }));
-    const api = { pointFromClient: (x,y) => ({x,y}), toWorld: p => p };
+    const api = { sampleGrayAtClient: () => null, pointFromClient: (x,y) => ({x,y}), toWorld: p => p };
     await act(async () => { renderer = create(React.createElement(Provider, {store},
       React.createElement(PatternOverlay, {disabled: false, api}))); });
     const overlay = () => renderer.root.findByProps({"data-testid": "pattern-overlay"});

@@ -8491,3 +8491,14 @@ body {
 .pattern-image-guided__note { margin: 6px 0; color: var(--c-text-muted); font-size: 0.75rem; }
 
 .exposure-lattice-progress { margin-top: 10px; flex-shrink: 0; }
+
+.pattern-instance-group { margin-bottom: 12px; min-width: 0; }
+.pattern-instance-group__heading { padding: 8px 12px; color: var(--c-text); font-size: 12px; }
+.pattern-instance-tabs { display: flex; gap: 0; overflow-x: auto; margin: 0; padding: 0; }
+.pattern-instance-tabs [role="tab"] { width: 64px; min-width: 64px; height: calc(2lh + 4px); flex-shrink: 0; margin: 0; padding: 0; border: 1px solid var(--c-border); border-radius: 5px 5px 0 0; background: var(--c-bg); color: var(--c-text-muted); cursor: pointer; }
+.pattern-instance-tabs [aria-selected="true"] { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-bg-elev); }
+.pattern-instance-tabs [role="tab"]:disabled { cursor: default; }
+.pattern-instance-group .pattern-card { margin-bottom: 0; }
+
+.pattern-instance-tabs [role="tab"] { color: white; font-weight: 700; }
+.pattern-card__instance-index { color: white; font-weight: 700; }

@@ -1,7 +1,7 @@
 import { createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { clampScanZoom } from "../lib/scanRegions";
 import type { WorkflowProgress } from "../lib/processingWorkflows";
-import { clearPatternRoi, setPatternEnabled, setPatternMaterial, setPatternParameter, setPatternRoi,
+import { createPatternRoi, clearPatternRoi, setPatternEnabled, setPatternMaterial, setPatternParameter, setPatternRoi,
   setStairStepField, setStairSteps, type ProcessingState } from "./processingSlice";
 
 export type ExposurePhase = "idle" | "preparing" | "running" | "paused" | "stopping" | "completed" | "stopped" | "error";
@@ -136,7 +136,7 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
     s.retainedPreview = s.retainedPreview.filter(node => !belongsToPattern(node));
     s.activeStepIds = s.activeStepIds.filter(id => !id.startsWith(`${action.payload.key}:`));
   });
-  builder.addMatcher(action => [setPatternParameter.type, setPatternRoi.type, setPatternMaterial.type,
+  builder.addMatcher(action => [createPatternRoi.type, setPatternParameter.type, setPatternRoi.type, setPatternMaterial.type,
     setStairStepField.type, setStairSteps.type, "processing/undoPatternRoi", setPatternEnabled.type].includes(action.type), s => {
     if (!exposureBusy(s.phase) && (s.progress.length || s.retainedPreview.length)) {
       // A recipe edit makes the last run's path and depth bands stale. Drop it so

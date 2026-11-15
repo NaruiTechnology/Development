@@ -41,6 +41,6 @@ test("expanded editing card moves first without changing catalogue/execution ord
   assert.deepEqual(order(),["circle","box","polygon"]);
   assert.equal(card("circle").findByProps({className:"pattern-card__body"}).props.hidden,false,"reordering preserves expanded card state");
   await act(async()=>store.dispatch(actions.clearPatternRoi("circle")));
-  assert.deepEqual(order(),baseline,"clearing the expanded shape restores order");
+  assert.deepEqual(order(),["box","polygon","circle"],"clearing a shape places its disabled card after enabled cards");
  }finally{if(renderer)await act(async()=>renderer.unmount());await vite.close();globalThis.window=originalWindow;}
 });

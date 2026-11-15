@@ -22,8 +22,12 @@ import {
 } from "../lib/processingPatterns";
 import { MAX_STAIR_STEPS, STAIR_STEP_FIELDS, type StairRecipeCollection, type StairStepOverride } from "../lib/stairRecipe";
 
-/** One live instance per catalogue entry: the parameter values and the ROI the operator drew. */
+/** Independently editable ROI instance of a catalogue pattern type. */
 export interface PatternInstance {
+  /** Catalogue key shared by instances of the same pattern type. */
+  typeKey: string;
+  /** Stable, 1-based creation index within this pattern type. */
+  index: number;
   workflow: string;
   workflowEnabled: boolean;
   /** Selected entry in the Materials catalogue, used for image guidance and Sr readouts. */
@@ -54,7 +58,7 @@ export interface ProcessingState {
   activeKey: string | null;
   /** Order in which pattern ROIs were first committed; exposure follows this order. */
   roiCreationOrder: string[];
-  roiHistory: Array<{ key: string; roi: PatternRoi | null; orderIndex: number }>;
+  roiHistory: Array<{ key: string; roi: PatternRoi | null; orderIndex: number; createdInstance?: boolean }>;
 }
 
 const initialState: ProcessingState = { lensLookup: null, workflows: [DEFAULT_WORKFLOW], materials: [], stairReceipes: {}, workflowProgress: [], status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiCreationOrder: [], roiHistory: [] };
@@ -191,6 +195,38 @@ const slice = createSlice({
         passes: step.passes, after: step.after }));
       s.workflowProgress = [];
     },
+    /** Drawing creates another instance; geometry edits continue to use setPatternRoi. */
+    createPatternRoi(s, a: PayloadAction<{ key: string; roi: PatternRoi }>) {
+      const source = s.instances[a.payload.key];
+      const sourceSpec = s.specs.find(spec => spec.key === a.payload.key);
+      if (!source || !sourceSpec) return;
+      let roi: PatternRoi;
+      try {
+        roi = MODEL_REGISTRY[sourceSpec.model].validateRoi(a.payload.roi);
+        if (sourceSpec.model === "LineModel") roi = lineRoi(...lineEndpoints(roi as PolygonRoi), Number(source.parameters.lineWidth ?? 0.5));
+      } catch { return; }
+      const typeKey = source.typeKey ?? sourceSpec.key;
+      let key = sourceSpec.key;
+      const createdInstance = source.roi !== null;
+      if (createdInstance) {
+        let index = Math.max(...Object.values(s.instances).filter(inst => inst.typeKey === typeKey).map(inst => inst.index), 1) + 1;
+        while (s.instances[`${typeKey}~${index}`]) index++;
+        key = `${typeKey}~${index}`;
+        s.specs.push({...sourceSpec, key});
+        s.instances[key] = {...source, typeKey, index, parameters: {...source.parameters}, roi: null,
+          AvgGray: null, stairSteps: source.stairSteps?.map(row => ({...row}))};
+      }
+      const instance = s.instances[key];
+      s.roiHistory.push({key, roi: null, orderIndex: -1, createdInstance});
+      if (s.roiHistory.length > 100) s.roiHistory.shift();
+      instance.roi = roi;
+      instance.enabled = true;
+      instance.AvgGray = null;
+      syncPatternGeometry(sourceSpec, roi, instance.parameters);
+      if (!s.roiCreationOrder.includes(key)) s.roiCreationOrder.push(key);
+      s.activeKey = key;
+      s.workflowProgress = [];
+    },
     setPatternRoi(s, a: PayloadAction<{ key: string; roi: PatternRoi; preview?: boolean }>) {
       const spec = s.specs.find((p) => p.key === a.payload.key);
       const inst = s.instances[a.payload.key];
@@ -224,6 +260,15 @@ const slice = createSlice({
     undoPatternRoi(s) {
       const previous = s.roiHistory.pop();
       if (!previous || !s.instances[previous.key]) return;
+      if (previous.createdInstance) {
+        const typeKey = s.instances[previous.key].typeKey;
+        delete s.instances[previous.key];
+        s.specs = s.specs.filter(spec => spec.key !== previous.key);
+        s.roiCreationOrder = s.roiCreationOrder.filter(key => key !== previous.key);
+        s.activeKey = [...s.specs].reverse().find(spec => s.instances[spec.key]?.typeKey === typeKey)?.key ?? null;
+        s.workflowProgress = [];
+        return;
+      }
       s.instances[previous.key].roi = previous.roi;
       s.roiCreationOrder = s.roiCreationOrder.filter(key => key !== previous.key);
       if (previous.roi) {
@@ -268,16 +313,28 @@ const slice = createSlice({
         try { s.lensLookup = parseLensLookup(a.payload.lensLookup); }
         catch (e) { errors.push(`LensLookup: ${e instanceof Error ? e.message : String(e)}`); }
       }
-      s.specs = specs;
+      // Rebuild runtime specs from the catalogue while retaining every ROI instance.
+      const previousInstances = s.instances;
+      const runtimeSpecs = specs.flatMap(spec => [spec, ...Object.entries(previousInstances)
+        .filter(([key, instance]) => key !== spec.key && instance.typeKey === spec.key)
+        .sort(([, a], [, b]) => a.index - b.index)
+        .map(([key]) => ({...spec, key}))]);
+      s.specs = runtimeSpecs;
       s.workflows = [DEFAULT_WORKFLOW, ...(a.payload.workflows ?? []).filter(w => w.name !== "default")];
       s.materials = a.payload.materials ?? [];
       s.stairReceipes = a.payload.stairReceipes ?? {};
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
-      s.instances = Object.fromEntries(specs.map((p) => [p.key, s.instances[p.key] ? { ...s.instances[p.key], parameters: { ...defaultParameters(p.parameters), ...s.instances[p.key].parameters } } : { workflow: "default", workflowEnabled: true, material: "", AvgGray: null, enabled: false, parameters: defaultParameters(p.parameters), roi: null }]));
+      s.instances = Object.fromEntries(runtimeSpecs.map(p => {
+        const previous = previousInstances[p.key];
+        return [p.key, previous ? {...previous, typeKey: previous.typeKey ?? p.key, index: previous.index ?? 1,
+          parameters: {...defaultParameters(p.parameters), ...previous.parameters}}
+          : {typeKey: p.key, index: 1, workflow: "default", workflowEnabled: true, material: "", AvgGray: null,
+            enabled: false, parameters: defaultParameters(p.parameters), roi: null}];
+      }));
       s.roiCreationOrder = s.roiCreationOrder.filter(key => Boolean(s.instances[key]?.roi));
-      for (const spec of specs) if (s.instances[spec.key]?.roi && !s.roiCreationOrder.includes(spec.key)) s.roiCreationOrder.push(spec.key);
-      for (const spec of specs) {
+      for (const spec of runtimeSpecs) if (s.instances[spec.key]?.roi && !s.roiCreationOrder.includes(spec.key)) s.roiCreationOrder.push(spec.key);
+      for (const spec of runtimeSpecs) {
         const inst = s.instances[spec.key];
         if (inst.roi) syncPatternGeometry(spec, inst.roi, inst.parameters);
       }
@@ -295,5 +352,5 @@ const slice = createSlice({
   },
 });
 
-export const { setPatternWorkflow, setPatternMaterial, setWorkflowProgress, updateWorkflowStep, undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setStairStepField, setStairSteps, setStairRecipeNode, setPatternRoi, clearPatternRoi } = slice.actions;
+export const { setPatternWorkflow, setPatternMaterial, setWorkflowProgress, updateWorkflowStep, undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setStairStepField, setStairSteps, setStairRecipeNode, createPatternRoi, setPatternRoi, clearPatternRoi } = slice.actions;
 export default slice.reducer;

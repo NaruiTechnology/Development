@@ -91,20 +91,20 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
           <ExposureControls disabled={exposureDisabled || countValidationFailed} />
         </div>
         <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
-          {specs.map((spec) => {
+          {specs.filter(spec => (processing.instances[spec.key]?.typeKey ?? spec.key) === spec.key).map((spec) => {
             const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
             return (
               <button
                 key={spec.key}
                 type="button"
                 className="pattern-strip__btn"
-                aria-pressed={activeKey === spec.key}
-                aria-controls={`processing-pattern-${encodeURIComponent(spec.key)}`}
+                aria-pressed={Boolean(activeKey && processing.instances[activeKey]?.typeKey === spec.key)}
+                aria-controls={`processing-pattern-${encodeURIComponent(activeKey && processing.instances[activeKey]?.typeKey === spec.key ? activeKey : spec.key)}`}
                 data-tooltip={caption}
                 data-styled-tooltip="true"
                 aria-label={caption}
                 disabled={disabled}
-                onClick={() => dispatch(selectPattern(activeKey === spec.key ? null : spec.key))}
+                onClick={() => dispatch(selectPattern(activeKey && processing.instances[activeKey]?.typeKey === spec.key ? null : spec.key))}
               >
                 <PatternIcon name={spec.icon} />
               </button>
@@ -167,21 +167,70 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
     return index > 0 ? [group[index], ...group.slice(0, index), ...group.slice(index + 1)] : group;
   };
   const ordered = [...promoteWithinGroup(enabledSpecs), ...promoteWithinGroup(disabledSpecs)];
+  const groups = new Map<string, PatternSpec[]>();
+  for (const spec of ordered) {
+    const typeKey = instances[spec.key]?.typeKey ?? spec.key;
+    const group = groups.get(typeKey) ?? [];
+    group.push(spec);
+    groups.set(typeKey, group);
+  }
   return <>
     {limitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{limitMessage}</p>}
     {totalLimitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{totalLimitMessage}</p>}
-    {ordered.map((spec) => (
-      <PatternCard key={spec.key} spec={spec} instance={instances[spec.key]} active={activeKey === spec.key}
-        countInvalid={Boolean(totalLimitMessage && instances[spec.key]?.enabled && instances[spec.key]?.roi)}
-        disabled={disabled || viewLocked || !instances[spec.key]?.roi} enableDisabled={enableDisabled || viewLocked || !instances[spec.key]?.roi}
-        onEnabledChange={setEnabled}
-      />
-    ))}
+    {[...groups.entries()].map(([typeKey, group]) => <PatternInstanceCards key={typeKey}
+      typeKey={typeKey} specs={group} instances={instances} activeKey={activeKey}
+      countInvalid={Boolean(totalLimitMessage)} disabled={disabled || viewLocked}
+      enableDisabled={enableDisabled || viewLocked} onEnabledChange={setEnabled} />)}
   </>;
 }
 
-function PatternCard({ spec, instance, active, countInvalid = false, disabled, enableDisabled, onEnabledChange }: {
-  spec: PatternSpec; instance: PatternInstance | undefined; active: boolean; countInvalid?: boolean; disabled: boolean; enableDisabled: boolean;
+/** A single card becomes a numbered tab group as soon as its type has multiple ROIs. */
+function PatternInstanceCards({typeKey, specs, instances, activeKey, countInvalid, disabled, enableDisabled, onEnabledChange}: {
+  typeKey: string; specs: PatternSpec[]; instances: Record<string, PatternInstance>; activeKey: string | null;
+  countInvalid: boolean; disabled: boolean; enableDisabled: boolean;
+  onEnabledChange: (key: string, enabled: boolean) => void;
+}) {
+  const dispatch = useAppDispatch();
+  const {tr} = useTr();
+  const [selectedKey, setSelectedKey] = useState(specs[0].key);
+  const sorted = [...specs].sort((a, b) => instances[a.key].index - instances[b.key].index);
+  const activeSpec = specs.find(spec => spec.key === activeKey);
+  const selected = activeSpec ?? specs.find(spec => spec.key === selectedKey) ?? sorted[0];
+  useEffect(() => { if (activeSpec) setSelectedKey(activeSpec.key); }, [activeSpec?.key]);
+  const caption = tr(`processing.pattern.${typeKey}`, sorted[0].caption);
+  const select = (key: string) => { setSelectedKey(key); dispatch(selectPattern(key)); };
+  const card = <PatternCard key={selected.key} spec={selected} instance={instances[selected.key]} active={activeKey === selected.key}
+    indexed={specs.length > 1} countInvalid={Boolean(countInvalid && instances[selected.key]?.enabled && instances[selected.key]?.roi)}
+    disabled={disabled || !instances[selected.key]?.roi} enableDisabled={enableDisabled || !instances[selected.key]?.roi}
+    onEnabledChange={onEnabledChange} />;
+  if (specs.length === 1) return card;
+  return <section className="pattern-instance-group" aria-label={caption}>
+    <div className="pattern-instance-group__heading">{caption}</div>
+    <div className="pattern-instance-tabs" role="tablist" aria-label={caption}>
+      {sorted.map((spec, i) => <button key={spec.key} type="button" role="tab"
+        id={`pattern-instance-tab-${encodeURIComponent(spec.key)}`}
+        aria-controls={`pattern-instance-panel-${encodeURIComponent(spec.key)}`}
+        aria-selected={selected.key === spec.key} tabIndex={selected.key === spec.key ? 0 : -1}
+        disabled={disabled} onClick={() => select(spec.key)}
+        onKeyDown={event => {
+          const next = event.key === "ArrowRight" ? (i + 1) % sorted.length
+            : event.key === "ArrowLeft" ? (i + sorted.length - 1) % sorted.length
+            : event.key === "Home" ? 0 : event.key === "End" ? sorted.length - 1 : -1;
+          if (next < 0) return;
+          event.preventDefault();
+          select(sorted[next].key);
+          (event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next])?.focus();
+        }}>{instances[spec.key].index}</button>)}
+    </div>
+    <div role="tabpanel" id={`pattern-instance-panel-${encodeURIComponent(selected.key)}`}
+      aria-labelledby={`pattern-instance-tab-${encodeURIComponent(selected.key)}`}>
+      {card}
+    </div>
+  </section>;
+}
+
+function PatternCard({ spec, instance, active, indexed = false, countInvalid = false, disabled, enableDisabled, onEnabledChange }: {
+  spec: PatternSpec; instance: PatternInstance | undefined; active: boolean; indexed?: boolean; countInvalid?: boolean; disabled: boolean; enableDisabled: boolean;
   onEnabledChange: (key: string, enabled: boolean) => void;
 }) {
   const dispatch = useAppDispatch();
@@ -199,7 +248,8 @@ function PatternCard({ spec, instance, active, countInvalid = false, disabled, e
       .filter(node => node.status === "completed" && node.finishedAt !== undefined)
       .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))[0] : undefined);
   const isActiveExposurePattern = activeExposureNode?.id.startsWith(`${spec.key}:`) ?? false;
-  const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
+  const typeCaption = tr(`processing.pattern.${instance?.typeKey ?? spec.key}`, spec.caption);
+  const caption = indexed ? `${typeCaption} - ${instance?.index}` : typeCaption;
   const label = active ? t("processing.collapse") : t("processing.expand");
   if (!instance) return null;
   const selectedMaterial = materials.find(material => material.name === instance.material);
@@ -214,7 +264,7 @@ function PatternCard({ spec, instance, active, countInvalid = false, disabled, e
       className={`card pattern-card${active ? " pattern-card--active" : ""}${exposing ? " pattern-card--exposing" : ""}${countInvalid ? " pattern-card--count-invalid" : ""}`} data-pattern={spec.key}
       aria-invalid={countInvalid || undefined}>
       <div className="card__header">
-        <span className="card__title">{caption}</span>
+        <span className="card__title">{indexed ? <>{typeCaption} - <strong className="pattern-card__instance-index">{instance.index}</strong></> : caption}</span>
         <span className="pattern-card__header-actions">
           {viewBusy && isActiveExposurePattern && <span className="pattern-card__pause-indicator pattern-card__pause-indicator--blink" title="Exposure paused for View scan" aria-label="Exposure paused">
             <Icon name="pause" />

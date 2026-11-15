@@ -23,7 +23,7 @@ import { resolveStairSteps, type StairStepOverride } from "../lib/stairRecipe";
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { useAppDispatch, useAppSelector, useWorkspaceActive } from "../store";
 import { useTranslation } from "../i18n";
-import { undoPatternRoi, commitPatternRoiEdit, clearPatternRoi, selectPattern, setPatternEnabled, setPatternRoi } from "../store/processingSlice";
+import { undoPatternRoi, createPatternRoi, commitPatternRoiEdit, clearPatternRoi, selectPattern, setPatternEnabled, setPatternRoi } from "../store/processingSlice";
 
 const DRAG_THRESHOLD = 8;           // canvas px, same as the rectangle ROI tool
 const ACTIVE_COLOR = "#ffd400";
@@ -125,7 +125,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   }, [disabled, dispatch, workspaceActive]);
 
   function commit(roiValue: PatternRoi) {
-    if (active) dispatch(setPatternRoi({ key: active.key, roi: roiValue }));
+    if (active) dispatch(createPatternRoi({ key: active.key, roi: roiValue }));
   }
 
   function worldDistance(a: Pt, b: Pt) {
@@ -350,7 +350,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
           <g key={spec.key} data-pattern-key={spec.key} style={{ cursor: disabled ? "default" : "grab" }}>
             <Shape spec={spec} params={inst.parameters} roi={inst.roi} active={spec.key === activeKey}
               stairSteps={inst.stairSteps} materials={materials} defaultMaterial={materials[0]?.name} cx={cx} cy={cy} sx={sx} sy={sy} />
-            <ScanAxisCue roi={inst.roi} axis={inst.parameters.axis === "y" ? "y" : "x"} cx={cx} cy={cy} sx={sx} sy={sy} />
+            <ScanAxisCue roi={inst.roi} index={inst.index} axis={inst.parameters.axis === "y" ? "y" : "x"} cx={cx} cy={cy} sx={sx} sy={sy} />
             {spec.key === activeKey && (() => {
               const box = patternBounds(inst.roi);
               const x = Math.min(cx(box.x_start), cx(box.x_end));
@@ -528,8 +528,8 @@ function Shape({ spec, params, roi, active, draft = false, stairSteps, materials
 }
 
 /** Small axis glyph makes the selected fast scan direction visible before a run starts. */
-function ScanAxisCue({roi, axis, cx, cy, sx, sy}: {
-  roi: PatternRoi; axis: "x" | "y"; cx: (x: number) => number; cy: (y: number) => number; sx: number; sy: number;
+function ScanAxisCue({roi, index, axis, cx, cy, sx, sy}: {
+  roi: PatternRoi; index: number; axis: "x" | "y"; cx: (x: number) => number; cy: (y: number) => number; sx: number; sy: number;
 }) {
   const b = patternBounds(roi), mx = (b.x_start + b.x_end) / 2, my = (b.y_start + b.y_end) / 2;
   const size = Math.max(14, Math.min(24, Math.min((b.x_end - b.x_start) * sx, (b.y_end - b.y_start) * sy) * 0.35));
@@ -539,7 +539,7 @@ function ScanAxisCue({roi, axis, cx, cy, sx, sy}: {
       <VectorScanPathGlyph path={axis === "x" ? "horizontal_triangle" : "vertical_serpentine"} />
     </svg>
     <text x={cx(mx)} y={cy(my) - size / 2 - 3} textAnchor="middle" fontSize={8}
-      fill="white" stroke="#111827" strokeWidth={2} paintOrder="stroke">{axis.toUpperCase()}</text>
+      fill="white" stroke="#111827" strokeWidth={2} paintOrder="stroke">{index} · {axis.toUpperCase()}</text>
   </g>;
 }
 

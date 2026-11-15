@@ -282,7 +282,6 @@ export function useExposureRun() {
       }
       if (cancelled.current) return;
       const plannedEntries = prepareExposureSequence(snapshot.processing, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
-      const autoViewPerPass = plannedEntries.some(entry => (entry.request.lattice?.passes ?? 1) > 1);
       const totalSpots = totalExposureSpots(plannedEntries);
       if (totalSpots > MAX_EXPOSURE_SPOTS)
         throw new Error(t("processing.exposure.totalLimit", {count: totalSpots.toLocaleString(), limit: MAX_EXPOSURE_SPOTS.toLocaleString()}));
@@ -328,12 +327,12 @@ export function useExposureRun() {
         if (cancelled.current) break;
         const finished = queues.filter(({run}) => run.final && !skipped.has(run.entry.node.id)).map(({run}) => run.entry.node);
         for (const node of finished) dispatch(exposureStepCompleted(node.id));
-        // A multi-pass run gets one View scan at each completed pass boundary.
-        // Per-step "after" actions (Stair cut recipe) share the same scan so a
-        // pass that also requests View is never scanned twice.
-        const wantsView = finished.some(n => n.exposure?.after === "view" || n.exposure?.after === "viewPause");
+        // A positive hold requests one View at every completed exposure pass,
+        // including single-pass ROI instances. Parallel patterns share a View
+        // at the round boundary; skipped patterns alone never request one.
         const automaticViewEnabled = store.getState().exposure.viewPauseSeconds > 0;
-        if ((automaticViewEnabled && (autoViewPerPass || wantsView)) && !viewPending.current) {
+        const exposedRound = queues.some(({run}) => !skipped.has(run.entry.node.id));
+        if (automaticViewEnabled && exposedRound && !viewPending.current) {
           viewPending.current = true;
           dispatch(exposureViewChanged({phase: "queued"}));
         }

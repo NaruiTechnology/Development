@@ -43,7 +43,7 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
       const p = stair || cleaning || simulation ? preparePatternExposure(spec, step.shape, step.parameters, patterns.lensLookup, field) : base!;
       const stepId = step.recipeStepIndex === undefined ? index : step.recipeStepIndex - 1;
       entries.push({ key: spec.key, node: {
-        id: `${spec.key}:${stepId}:exposure`, pattern: spec.caption, caption: step.caption, action: "Exposure lattice",
+        id: `${spec.key}:${stepId}:exposure`, pattern: `${spec.caption} ${instance.index ?? 1}`, caption: step.caption, action: "Exposure lattice",
         status: "upcoming", threshold: null, spot: p.plan.count, total: p.plan.count,
         exposure: { shape: step.shape, model: spec.model, parameters: step.parameters, plan: p.plan, dwellUS: Number(step.parameters.dwell),
           beamCurrentPA: p.beamCurrentPA, requestedDepthUM: step.requestedDepthUM, depthBand: step.depthBand,
