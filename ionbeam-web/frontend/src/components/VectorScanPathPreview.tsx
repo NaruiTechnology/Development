@@ -11,10 +11,17 @@ export function VectorScanPathPreview({ path, label }: { path: VectorScanPath; l
   return (
     <div className="vector-scan-path-preview" role="img" aria-label={label}>
       <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-        <rect x="5" y="5" width="90" height="90" rx="5" className="vector-scan-path-preview__frame" />
-        <polyline points={PATH_POINTS[path]} className="vector-scan-path-preview__line" />
-        <circle cx="10" cy="10" r="3" className="vector-scan-path-preview__start" />
+        <VectorScanPathGlyph path={path} />
       </svg>
     </div>
   );
+}
+
+/** Shared geometry for the Direction selector and ROI direction markers. */
+export function VectorScanPathGlyph({ path }: { path: VectorScanPath }) {
+  return <>
+        <rect x="5" y="5" width="90" height="90" rx="5" className="vector-scan-path-preview__frame" />
+        <polyline points={PATH_POINTS[path]} className="vector-scan-path-preview__line" />
+        <circle cx="10" cy="10" r="3" className="vector-scan-path-preview__start" />
+  </>;
 }

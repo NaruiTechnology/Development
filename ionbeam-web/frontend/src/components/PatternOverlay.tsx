@@ -14,6 +14,7 @@
  * circle whatever the image aspect and survives zoom.
  */
 import { useDeferredValue, memo, useEffect, useReducer, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { VectorScanPathGlyph } from "./VectorScanPathPreview";
 import { ExposureLatticeGeometry } from "./ExposureLatticeOverlay";
 import { createPortal } from "react-dom";
 
@@ -531,18 +532,14 @@ function ScanAxisCue({roi, axis, cx, cy, sx, sy}: {
   roi: PatternRoi; axis: "x" | "y"; cx: (x: number) => number; cy: (y: number) => number; sx: number; sy: number;
 }) {
   const b = patternBounds(roi), mx = (b.x_start + b.x_end) / 2, my = (b.y_start + b.y_end) / 2;
-  const span = Math.max(4, Math.min(10, Math.min((b.x_end - b.x_start) * sx, (b.y_end - b.y_start) * sy) * 0.18));
-  const horizontal = axis === "x";
-  const x1 = cx(mx) - (horizontal ? span : 0), x2 = cx(mx) + (horizontal ? span : 0);
-  const y1 = cy(my) - (horizontal ? 0 : span), y2 = cy(my) + (horizontal ? 0 : span);
-  const color = "#22d3ee";
-  return <g pointerEvents="none" opacity={0.95}>
-    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#0b1220" strokeWidth={4} />
-    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={1.8} />
-    {horizontal ? <><path d={`M${x1 + 4},${y1 - 3}L${x1},${y1}L${x1 + 4},${y1 + 3}M${x2 - 4},${y2 - 3}L${x2},${y2}L${x2 - 4},${y2 + 3}`} fill="none" stroke={color} strokeWidth={1.4} />
-      <text x={cx(mx)} y={cy(my) - 5} textAnchor="middle" fontSize={8} fill="white" stroke="#111827" strokeWidth={2} paintOrder="stroke">X</text></>
-      : <><path d={`M${x1 - 3},${y1 + 4}L${x1},${y1}L${x1 + 3},${y1 + 4}M${x2 - 3},${y2 - 4}L${x2},${y2}L${x2 + 3},${y2 - 4}`} fill="none" stroke={color} strokeWidth={1.4} />
-        <text x={cx(mx) + 5} y={cy(my) + 3} textAnchor="middle" fontSize={8} fill="white" stroke="#111827" strokeWidth={2} paintOrder="stroke">Y</text></>}
+  const size = Math.max(14, Math.min(24, Math.min((b.x_end - b.x_start) * sx, (b.y_end - b.y_start) * sy) * 0.35));
+  return <g className="pattern-roi-axis-cue" pointerEvents="none" opacity={0.95}>
+    <svg x={cx(mx) - size / 2} y={cy(my) - size / 2} width={size} height={size}
+      viewBox="0 0 100 100" aria-hidden="true">
+      <VectorScanPathGlyph path={axis === "x" ? "horizontal_triangle" : "vertical_serpentine"} />
+    </svg>
+    <text x={cx(mx)} y={cy(my) - size / 2 - 3} textAnchor="middle" fontSize={8}
+      fill="white" stroke="#111827" strokeWidth={2} paintOrder="stroke">{axis.toUpperCase()}</text>
   </g>;
 }
 

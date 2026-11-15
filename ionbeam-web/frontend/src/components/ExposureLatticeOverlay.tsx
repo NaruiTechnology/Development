@@ -159,6 +159,27 @@ export function ExposureViewCanvasOverlay({ transforms, processingViewport = fal
     aria-label="View scan overlay for pattern ROIs" />;
 }
 
+/** Sample-weighted progress across every pattern and pass in the exposure run. */
+export function ExposureLatticeProgress() {
+  const { t } = useTranslation();
+  const progress = useAppSelector(s => s.exposure.progress);
+  let total = 0, received = 0;
+  for (const node of progress) {
+    if (!node.exposure) continue;
+    const expected = node.exposure.plan.count * node.exposure.plan.passes;
+    if (!(expected > 0)) continue;
+    total += expected;
+    received += node.status === "completed" ? expected
+      : Math.max(0, Math.min(expected, node.exposure.receivedSamples ?? 0));
+  }
+  const percent = total > 0 ? Math.min(100, received / total * 100) : 0;
+  return <div className="progress exposure-lattice-progress" role="progressbar"
+    aria-label={`${t("canvas.scanParams.exposureLattice")} · ${t("canvas.meta.progress")}`}
+    aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}>
+    <span style={{width: `${percent}%`}} />
+  </div>;
+}
+
 export function ExposureLatticeMessage() {
   const { t } = useTranslation();
   const progress = useAppSelector(selectExposurePreview);

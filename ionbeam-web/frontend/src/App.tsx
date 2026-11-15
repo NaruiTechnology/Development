@@ -24,7 +24,7 @@ import {
 import { Header } from "./components/Header";
 import { ImagePanelLayoutControls } from "./components/ImagePanelLayoutControls";
 import { ProcessingImagePanel } from "./components/ProcessingImagePanel";
-import { ExposureLatticeMessage, ExposureViewCanvasOverlay } from "./components/ExposureLatticeOverlay";
+import { ExposureLatticeMessage, ExposureLatticeProgress, ExposureViewCanvasOverlay } from "./components/ExposureLatticeOverlay";
 import { controlCanvasKind } from "./lib/controlCanvasKind";
 import { HelpPopover } from "./components/HelpPopover";
 import type { SignedInUser } from "./components/AuthDialog";
@@ -2149,6 +2149,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                 <ProcessingImagePanel headerHost={processingHeaderHost}>
                   <div className="processing-image-panel__content">
                     {roiCanvas}
+                    <ExposureLatticeProgress />
                     <div className="processing-image-panel__messages">
                       <ExposureLatticeMessage />
                     </div>
