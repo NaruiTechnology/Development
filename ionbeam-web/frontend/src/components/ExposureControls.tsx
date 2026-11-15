@@ -44,20 +44,19 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
             <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
             <Icon name="eye" />
           </label>}
-          <label className="patterns-exposure__pause">
+          <label className={`patterns-exposure__pause${state.viewPauseSeconds === 0 ? " patterns-exposure__pause--zero" : ""}`}>
             <span>{t("processing.exposure.pause")}</span>
             <div className="patterns-exposure__pause-shell">
               <div className="patterns-exposure__pause-slider">
                 <div className="patterns-exposure__pause-track" />
                 <div className="patterns-exposure__pause-ticks" aria-hidden="true">
-                  {Array.from({length: 13}, (_, index) => {
-                    const value = index + 3;
+                  {Array.from({length: 16}, (_, value) => {
                     const major = value % 3 === 0 || value === 15;
                     return <span key={value} className={major ? "patterns-exposure__pause-tick--major" : ""}
-                      style={{left: `${index / 12 * 100}%`}}>{major && <i>{value}</i>}</span>;
+                      style={{left: `${value / 15 * 100}%`}}>{major && <i>{value}</i>}</span>;
                   })}
                 </div>
-                <input type="range" min={3} max={15} step={1} value={state.viewPauseSeconds}
+                <input type="range" min={0} max={15} step={1} value={state.viewPauseSeconds}
                   aria-label={t("processing.exposure.pause")}
                   aria-valuetext={`${state.viewPauseSeconds} ${t("processing.exposure.seconds")}`}
                   onChange={event => dispatch(setExposureViewPauseSeconds(Number(event.target.value)))} />

@@ -234,7 +234,7 @@ export function useExposureRun() {
       // Wait only after the raster stream has sent done and all View frames
       // have been committed. Keep the View phase active so Resume stays locked
       // and the exposure canvas cannot return before the full hold elapses.
-      if (holdResumeForView && !cancelled.current)
+      if (holdResumeForView && store.getState().exposure.viewPauseSeconds > 0 && !cancelled.current)
         await new Promise<void>(resolve => window.setTimeout(
           resolve, store.getState().exposure.viewPauseSeconds * 1_000));
       viewCompleted = true;
@@ -329,7 +329,8 @@ export function useExposureRun() {
         // Per-step "after" actions (Stair cut recipe) share the same scan so a
         // pass that also requests View is never scanned twice.
         const wantsView = finished.some(n => n.exposure?.after === "view" || n.exposure?.after === "viewPause");
-        if ((autoViewPerPass || wantsView) && !viewPending.current) {
+        const automaticViewEnabled = store.getState().exposure.viewPauseSeconds > 0;
+        if ((automaticViewEnabled && (autoViewPerPass || wantsView)) && !viewPending.current) {
           viewPending.current = true;
           dispatch(exposureViewChanged({phase: "queued"}));
         }

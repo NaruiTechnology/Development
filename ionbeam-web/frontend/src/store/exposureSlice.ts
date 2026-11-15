@@ -25,7 +25,7 @@ export interface ExposureState {
   viewExpectedSamples: number;
 }
 const initialState: ExposureState = {
-  parallel: false, viewPauseSeconds: 5, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
+  parallel: false, viewPauseSeconds: 0, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
   viewPhase: "idle", viewError: null, viewRequestId: 0,
   viewReceivedSamples: 0, viewReceivedChunks: 0, viewExpectedSamples: 0,
 };
@@ -39,7 +39,7 @@ export const selectExposurePreview = createSelector(
 const slice = createSlice({ name: "exposure", initialState, reducers: {
   setExposureParallel(s, a: PayloadAction<boolean>) { if (!exposureBusy(s.phase)) s.parallel = a.payload; },
   setExposureViewPauseSeconds(s, a: PayloadAction<number>) {
-    s.viewPauseSeconds = Math.max(3, Math.min(15, Math.round(a.payload)));
+    s.viewPauseSeconds = Math.max(0, Math.min(15, Math.round(a.payload)));
   },
   exposurePreparing(s) {
     s.phase = "preparing"; s.error = null; s.activeStepIds = []; s.pausedAfterId = null;

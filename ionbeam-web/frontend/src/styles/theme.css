@@ -8434,9 +8434,15 @@ body {
 .patterns-exposure__view--busy { color: var(--c-accent); }
 .patterns-exposure__view--busy .icon { color: lawngreen; }
 .patterns-exposure__view-row { display: grid; grid-template-columns: auto minmax(120px, 1fr); align-items: center; gap: 12px; margin-top: 8px; }
-.patterns-exposure__pause { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; color: var(--c-text); font-size: 11px; white-space: nowrap; }
+.patterns-exposure__pause { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 4px; min-width: 0; color: var(--c-text); font-size: 13px; white-space: nowrap; }
+.patterns-exposure__pause--zero { color: dimgray; }
+.patterns-exposure__pause--zero .patterns-exposure__pause-track,
+.patterns-exposure__pause--zero .patterns-exposure__pause-ticks span,
+.patterns-exposure__pause--zero .patterns-exposure__pause-ticks i { color: dimgray; background: transparent; }
+.patterns-exposure__pause--zero input[type="range"]::-webkit-slider-thumb { border-top-color: dimgray; }
+.patterns-exposure__pause--zero input[type="range"]::-moz-range-thumb { border-top-color: dimgray; }
 .patterns-exposure__pause-shell { min-width: 0; width: 100%; }
-.patterns-exposure__pause-slider { position: relative; width: 100%; height: 54px; padding: 0 4px; }
+.patterns-exposure__pause-slider { position: relative; width: 100%; height: 42px; padding: 0 4px; }
 .patterns-exposure__pause-track { position: absolute; top: 15px; left: 4px; right: 4px; height: 1px; background: dimgray; }
 .patterns-exposure__pause-ticks { position: absolute; top: 14px; right: 4px; left: 4px; height: 22px; pointer-events: none; }
 .patterns-exposure__pause-ticks span { position: absolute; top: 0; width: 1px; height: 4px; transform: translateX(-50%); background: dimgray; }
