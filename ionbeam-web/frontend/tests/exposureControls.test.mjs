@@ -73,9 +73,9 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     assert.equal(toggle().props.disabled,true);
     assert.equal(claimWorkspaceRun("scan"),null,"regular scan cannot enter during exposure");
     assert.equal(otherWorkspaceBusy("processing"),true,"other workspace sees exposure ownership");
-    const spotCircles=()=>renderer.root.findByType(ExposureLatticeGeometry).findAllByType("circle");
-    assert.ok(spotCircles().length>0,"the lattice is rendered on the canvas");
-    assert.ok(spotCircles().every(circle=>circle.props.fill==="none" && circle.props.stroke),"planned spots and the running marker are hollow circles");
+    const spotMarks=()=>renderer.root.findByType(ExposureLatticeGeometry).findAll(node=>node.props["data-exposure-spots"]);
+    assert.ok(spotMarks().length>0,"the lattice is rendered on the canvas");
+    assert.ok(spotMarks().every(path=>path.props.fill==="none" && path.props.stroke && path.props.d),"planned spots stay hollow and use batched SVG paths");
     await act(async()=>renderer.update(layout(false)));
     assert.equal(renderer.root.findByProps({hidden:true}).props.hidden,true);
     assert.equal(aborts,0,"hiding Patterns leaves the running exposure connected");
@@ -92,7 +92,7 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     assert.ok(store.getState().exposure.progress.every(n=>n.status==="completed"));
     assert.equal(store.getState().scan,beforeScan,"exposure never modifies scan phase, parameters or counters");
     assert.equal(store.getState().image,beforeImage,"exposure never modifies acquired pixels");
-    assert.ok(spotCircles().every(circle=>circle.props.fill==="none"),"completed spots remain hollow");
+    assert.ok(spotMarks().every(path=>path.props.fill==="none"),"completed spots remain hollow");
     const savedTrace=structuredClone(store.getState().exposure.progress);
     await act(async()=>store.dispatch(scan.streamStarted()));
     await act(async()=>store.dispatch(image.resetVector()));
@@ -112,7 +112,7 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     });
     assert.deepEqual(selectExposurePreview(store.getState()),savedTrace,"recipe edits and disabling a pattern preserve the executed lattice");
     assert.equal(store.getState().exposure.progress.length,0,"edited recipes have fresh readouts");
-    assert.ok(spotCircles().length>0,"retained spots stay on the canvas");
+    assert.ok(spotMarks().length>0,"retained spots stay on the canvas");
     await act(async()=>renderer.update(layout(false)));
     await act(async()=>renderer.update(layout(true)));
     assert.deepEqual(selectExposurePreview(store.getState()),savedTrace,"the retained preview survives tab changes");
@@ -138,10 +138,10 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     assert.equal(store.getState().exposure.progress.length,0);
     assert.equal(store.getState().exposure.retainedPreview.length,0);
     assert.deepEqual(selectExposurePreview(store.getState()),[],"Remove clears the stopped lattice and depth bands");
-    assert.equal(spotCircles().length,0,"cleared exposure geometry disappears from the canvas");
+    assert.equal(spotMarks().length,0,"cleared exposure geometry disappears from the canvas");
     assert.equal(store.getState().image,imageBeforeClear,"Remove preserves the acquired image");
     await act(async()=>store.dispatch(processing.setPatternRoi({key:"stairs",roi:{x_start:0.2,x_end:0.8,y_start:0.2,y_end:0.8}})));
-    assert.equal(spotCircles().length,0,"redrawing the pattern does not resurrect its removed preview");
+    assert.equal(spotMarks().length,0,"redrawing the pattern does not resurrect its removed preview");
 
     assert.equal(store.getState().scan,scanAfterTraceTest);assert.equal(store.getState().image,imageAfterTraceTest);
     const release=claimWorkspaceRun("scan");assert.ok(release);release();
@@ -165,7 +165,7 @@ test("Exposure controls default to serial and leave scan state and pixels intact
     assert.equal(store.getState().scan.phase,"idle");
     await act(async()=>store.dispatch(processing.clearPatternRoi("stairs")));
     assert.equal(store.getState().exposure.progress.length,0,"Remove also clears a preview that has not been retained through an edit");
-    assert.equal(spotCircles().length,0);
+    assert.equal(spotMarks().length,0);
 
     const afterError=claimWorkspaceRun("scan");assert.ok(afterError);afterError();
     // The cleaning-line restriction is visible before opening a stream.

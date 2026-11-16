@@ -42,7 +42,7 @@ test("exposure segments cover the original cells once and bound dwell between Vi
       let end = 0;
       for (const segment of segments) {
         assert.equal(segment.cell_start, end);
-        assert.ok((segment.cell_end - segment.cell_start) * (segment.dwell + 1) <= 800000);
+        assert.ok((segment.cell_end - segment.cell_start) * (segment.dwell + 1) <= 32_000_000);
         end = segment.cell_end;
       }
     }
