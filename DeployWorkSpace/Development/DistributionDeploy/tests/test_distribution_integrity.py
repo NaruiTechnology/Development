@@ -49,6 +49,7 @@ def make_workspace(base):
         "glasgow_service/requirements.txt": DEVELOPMENT / "glasgow_service/requirements.txt",
         "glasgow_service/pyproject.toml": DEVELOPMENT / "glasgow_service/pyproject.toml",
         "glasgow_service/deploy/setup-redis-sentinel.sh": DEVELOPMENT / "glasgow_service/deploy/setup-redis-sentinel.sh",
+        "glasgow_service/deploy/ionbeam-local-services.logrotate.in": DEVELOPMENT / "glasgow_service/deploy/ionbeam-local-services.logrotate.in",
         "glasgow_service/scripts/vacuum_excursion_test.py": DEVELOPMENT / "glasgow_service/scripts/vacuum_excursion_test.py",
         "requirements.txt": DEVELOPMENT / "requirements.txt",
         "IobeamAdmin/Sql/006_equipment_csv_functions.sql": DEVELOPMENT / "IobeamAdmin/Sql/006_equipment_csv_functions.sql",

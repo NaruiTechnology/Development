@@ -58,6 +58,7 @@ SKIP_DIRS = {
 # .env.example, index.html, src/, public/, etc.).
 COPY_TREES = [
     'Scripts',
+    os.path.join('Development', 'glasgow_service', 'deploy'),
     os.path.join('Development', 'ionbeam-web'),
     os.path.join('Development', 'IobeamAdmin'),
     os.path.join(
@@ -171,6 +172,7 @@ REQUIRED_DIST_FILES = (
     'Development/ionbeam-native/ionbeam_native/resources/icons/patternPolygon.svg',
     'Development/Scripts/manage-local-system.sh',
     'Development/Scripts/program-fpga-ram.py',
+    'Development/glasgow_service/deploy/ionbeam-local-services.logrotate.in',
     'Development/ionbeam-web/backend/package.json',
     'Development/IobeamAdmin/Sql/006_equipment_csv_functions.sql',
     'Development/glasgow_service/requirements.txt',
@@ -501,6 +503,12 @@ def validate_packaged_local_system_manager(dist_dir):
     programmer = os.path.join(dist_dir, 'Development', 'Scripts', 'program-fpga-ram.py')
     if not os.path.isfile(programmer):
         raise FileNotFoundError('Distribution is missing FPGA RAM programmer: ' + programmer)
+    logrotate = os.path.join(
+        dist_dir, 'Development', 'glasgow_service', 'deploy',
+        'ionbeam-local-services.logrotate.in')
+    if not os.path.isfile(logrotate):
+        raise FileNotFoundError(
+            'Distribution is missing local log rotation policy: ' + logrotate)
     print('Validated packaged local system manager: '
           'Development/Scripts/manage-local-system.sh')
 
