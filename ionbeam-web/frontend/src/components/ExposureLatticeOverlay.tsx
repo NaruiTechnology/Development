@@ -22,7 +22,7 @@ const ExposureStep = memo(function ExposureStep({ node, index, depthRank, depthC
   const fraction = exposureTraceFraction(e.receivedSamples ?? 0, e.plan.count, node.status === "completed");
   const color = COLORS[index % COLORS.length];
   const circle = "cx" in e.shape && "radius" in e.shape ? e.shape : null;
-  const projectSpot: Project = circle
+  const projectSpot = useMemo<Project>(() => circle
     ? (x, y) => {
       const center = project(circle.cx, circle.cy);
       const xUnit = project(circle.cx + 1, circle.cy);
@@ -30,10 +30,14 @@ const ExposureStep = memo(function ExposureStep({ node, index, depthRank, depthC
       return { x: center.x + (x - circle.cx) * pixelsPerWorldUnit,
         y: center.y + (y - circle.cy) * pixelsPerWorldUnit };
     }
-    : project;
-  const points = spots.map(p => ({ ...projectSpot(p.x, p.y), order: p.order, connect: p.connect }));
-  const path = points.map(p => `${p.connect ? "L" : "M"}${p.x},${p.y}`).join(" ");
+    : project, [circle, project]);
+  const points = useMemo(() => spots.map(p => ({ ...projectSpot(p.x, p.y), order: p.order, connect: p.connect })), [spots, projectSpot]);
+  const path = useMemo(() => points.map(p => `${p.connect ? "L" : "M"}${p.x},${p.y}`).join(" "), [points]);
   const traced = points.filter(p => p.order <= fraction);
+  const activeSpots = points.filter(p => p.order <= fraction)
+    .map(p => `M${p.x - 1},${p.y}a1,1 0 1,0 2,0a1,1 0 1,0 -2,0`).join("");
+  const pendingSpots = points.filter(p => p.order > fraction)
+    .map(p => `M${p.x - 1},${p.y}a1,1 0 1,0 2,0a1,1 0 1,0 -2,0`).join("");
   const headFraction = exposureHeadFraction(e.receivedSamples ?? 0, e.plan.count);
   const headPoints = points.filter(p => p.order <= headFraction);
   const last = headPoints[headPoints.length - 1];
@@ -49,9 +53,10 @@ const ExposureStep = memo(function ExposureStep({ node, index, depthRank, depthC
     <path d={path} fill="none" stroke="#22d3ee" strokeWidth={0.8} opacity={0.5} vectorEffect="non-scaling-stroke" />
     <path d={traced.map(p => `${p.connect ? "L" : "M"}${p.x},${p.y}`).join(" ")}
       fill="none" stroke={color} strokeWidth={0.65} opacity={0.6} vectorEffect="non-scaling-stroke" />
-    {points.map((p,i) => <circle key={i} cx={p.x} cy={p.y} r={1}
-      fill="none" stroke={p.order <= fraction ? color : "#22d3ee"}
-      strokeWidth={0.65} opacity={p.order <= fraction ? 0.95 : 0.5} vectorEffect="non-scaling-stroke" />)}
+    {pendingSpots && <path data-exposure-spots="pending" d={pendingSpots} fill="none" stroke="#22d3ee"
+      strokeWidth={0.65} opacity={0.5} vectorEffect="non-scaling-stroke" />}
+    {activeSpots && <path data-exposure-spots="active" d={activeSpots} fill="none" stroke={color}
+      strokeWidth={0.65} opacity={0.95} vectorEffect="non-scaling-stroke" />}
     {node.status === "current" && last && <circle cx={last.x} cy={last.y} r={3.5}
       fill="none" stroke="white" strokeWidth={1.25} vectorEffect="non-scaling-stroke" />}
     {e.requestedDepthUM !== undefined && <text x={center.x} y={center.y} textAnchor="middle"

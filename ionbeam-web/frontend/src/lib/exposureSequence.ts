@@ -113,9 +113,11 @@ export function* exposureSegments(lattice: LatticeRequest): Generator<LatticeReq
   }
   const cells = Math.max(1, Math.round(width / lattice.pitch_x))
     * Math.max(1, Math.round(height / (lattice.pitch_y ?? lattice.pitch_x)));
-  // At most 50 ms of programmed dwell, so a queued one-time View reaches its
-  // next safe boundary sooner, with a bounded host encoding workload.
-  const size = Math.max(1, Math.min(131072, Math.floor(400000 / (lattice.dwell + 1))));
+  // Bound scan requests so a queued View gets a safe beam boundary, while
+  // keeping request setup from dominating short-dwell lattice exposures.
+  // The service streams and batches points internally, so larger cell ranges
+  // do not require materializing the lattice in the browser or backend.
+  const size = Math.max(1, Math.min(4_194_304, Math.floor(32_000_000 / (lattice.dwell + 1))));
   for (let start = 0; start < cells; start += size)
     yield {...lattice, cell_start: start, cell_end: Math.min(cells, start + size)};
 }
