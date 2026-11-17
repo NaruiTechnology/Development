@@ -52,6 +52,7 @@ import { ROIEditor } from "./components/ROIEditor";
 import { PatternOverlay } from "./components/PatternOverlay";
 import { exposureBusy } from "./store/exposureSlice";
 import { ProcessingPatternCards, ProcessingPatternsPanel } from "./components/ProcessingPatternsPanel";
+import { ExposureReviewPauseToggle } from "./components/ExposureControls";
 import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
 import { SimulationImageCard } from "./components/SimulationImageCard";
@@ -2105,6 +2106,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                       ? "card.adcTimeline"
                       : imagePanelTitleKey
                   )}</span>
+                  {!adcView && activeTopTab === "processing" && <ExposureReviewPauseToggle />}
                   {headerSecondRow && (
                     // The vector View selector (Decimated / Native) is drawn
                     // here by the image canvas, next to the title.

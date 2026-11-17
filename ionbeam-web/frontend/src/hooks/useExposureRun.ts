@@ -162,7 +162,7 @@ export function useExposureRun() {
     }
   }
 
-  async function runQueuedView() {
+  async function runQueuedView(pauseForReview = false, reviewStepId?: string) {
     if (!viewPending.current || cancelled.current) return;
     viewPending.current = false;
     const pauseAfter = resumeAfterView.current;
@@ -238,7 +238,7 @@ export function useExposureRun() {
       // Wait only after the raster stream has sent done and all View frames
       // have been committed. Keep the View phase active so Resume stays locked
       // and the exposure canvas cannot return before the full hold elapses.
-      if (holdResumeForView && store.getState().exposure.viewPauseSeconds > 0 && !cancelled.current)
+      if (!pauseForReview && holdResumeForView && store.getState().exposure.viewPauseSeconds > 0 && !cancelled.current)
         await new Promise<void>(resolve => window.setTimeout(
           resolve, store.getState().exposure.viewPauseSeconds * 1_000));
       viewCompleted = true;
@@ -259,6 +259,8 @@ export function useExposureRun() {
       viewResumeLocked.current = false;
       if (viewCompleted) dispatch(exposureViewChanged({phase: "completed"}));
     }
+    if (pauseForReview && viewCompleted && !cancelled.current)
+      await waitForResume(reviewStepId ?? "view");
   }
 
   async function start() {
@@ -347,11 +349,13 @@ export function useExposureRun() {
         // Parallel patterns share the View at their common round boundary.
         const automaticViewEnabled = store.getState().exposure.viewPauseSeconds > 0;
         const exposedRound = queues.some(({run}) => !skipped.has(run.entry.node.id));
+        let pauseForReview = false;
         if (automaticViewEnabled && exposedRound && !viewPending.current) {
           viewPending.current = true;
+          pauseForReview = store.getState().exposure.pauseAfterView && !upcoming.done;
           dispatch(exposureViewChanged({phase: "queued"}));
         }
-        await runQueuedView();
+        await runQueuedView(pauseForReview, queues[queues.length - 1]?.run.entry.node.id);
         const pauseNode = finished.find(n => n.exposure?.after === "viewPause");
         // Nothing left to expose: pausing after the last step would only delay completion.
         if (pauseNode && !upcoming.done && !cancelled.current) await waitForResume(pauseNode.id);

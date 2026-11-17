@@ -11,6 +11,7 @@ export type ExposureViewPhase = "idle" | "queued" | "scanning" | "completed" | "
 export interface ExposureState {
   parallel: boolean;
   viewPauseSeconds: number;
+  pauseAfterView: boolean;
   viewZoom: number;
   phase: ExposurePhase;
   progress: WorkflowProgress[];
@@ -27,7 +28,7 @@ export interface ExposureState {
   viewExpectedSamples: number;
 }
 const initialState: ExposureState = {
-  parallel: false, viewPauseSeconds: 5, viewZoom: 1, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
+  parallel: false, viewPauseSeconds: 5, pauseAfterView: false, viewZoom: 1, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
   viewPhase: "idle", viewError: null, viewRequestId: 0,
   viewReceivedSamples: 0, viewReceivedChunks: 0, viewExpectedSamples: 0,
 };
@@ -43,6 +44,7 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
   setExposureViewZoom(s, a: PayloadAction<number>) {
     if (s.viewPhase !== "queued" && s.viewPhase !== "scanning") s.viewZoom = clampScanZoom(a.payload);
   },
+  setExposurePauseAfterView(s, a: PayloadAction<boolean>) { s.pauseAfterView = a.payload; },
   setExposureViewPauseSeconds(s, a: PayloadAction<number>) {
     s.viewPauseSeconds = Math.max(0, Math.min(15, Math.round(a.payload)));
   },
@@ -147,7 +149,7 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
     }
   });
 } });
-export const { setExposureViewZoom, setExposureParallel, setExposureViewPauseSeconds, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
+export const { setExposureViewZoom, setExposureParallel, setExposureViewPauseSeconds, setExposurePauseAfterView, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
   exposureStepCompleted, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
   exposureViewSamplesReceived, requestExposureView,
   exposurePaused, exposureResumed } = slice.actions;

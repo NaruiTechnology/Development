@@ -8274,6 +8274,26 @@ body {
   margin-left: 0;
   flex-shrink: 0;
 }
+.image-panel-pause-toggle {
+  display: inline-flex;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--c-accent);
+  cursor: pointer;
+}
+.image-panel-pause-toggle .icon { width: 16px; height: 16px; }
+.image-panel-pause-toggle--active {
+  border-color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-accent) 15%, transparent);
+}
+.image-panel-pause-toggle:hover { border-color: var(--c-accent); }
 
 .roi-canvas-frame { position: relative; flex: 1 1 0; min-width: 0; align-self: flex-start; }
 .processing-parallel-controls { flex: 1 0 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }

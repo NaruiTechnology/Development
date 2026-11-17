@@ -2,10 +2,24 @@ import { useTranslation } from "../i18n";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useExposureRun } from "../hooks/useExposureRun";
 import { useOtherWorkspaceBusy } from "../hooks/useScanWorkspace";
-import { exposureBusy, setExposureParallel, setExposureViewZoom, setExposureViewPauseSeconds } from "../store/exposureSlice";
+import { exposureBusy, setExposureParallel, setExposureViewZoom, setExposureViewPauseSeconds, setExposurePauseAfterView } from "../store/exposureSlice";
 import { NumberStepperInput } from "./NumberStepperField";
 import { MAX_SCAN_ZOOM } from "../lib/scanRegions";
 import { Icon } from "./Icon";
+
+export function ExposureReviewPauseToggle() {
+  const {t} = useTranslation(), dispatch = useAppDispatch();
+  const enabled = useAppSelector(s => s.exposure.pauseAfterView);
+  const phase = useAppSelector(s => s.exposure.phase);
+  if (phase !== "running" && phase !== "paused") return null;
+  return <button type="button" className={`image-panel-pause-toggle${enabled ? " image-panel-pause-toggle--active" : ""}`}
+    aria-label={t("processing.exposure.pauseAtView")}
+    aria-pressed={enabled}
+    title={t("processing.exposure.pauseAtViewHelp")}
+    onClick={() => dispatch(setExposurePauseAfterView(!enabled))}>
+    <Icon name="pause" />
+  </button>;
+}
 
 export function ExposureControls({disabled = false, showView = true}: {disabled?: boolean; showView?: boolean}) {
   const {t} = useTranslation(), dispatch = useAppDispatch();
