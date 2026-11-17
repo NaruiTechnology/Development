@@ -40,12 +40,15 @@ export function sampleExposureLattice(model: string, shape: PatternRoi, l: Latti
 export function exposureTraceFraction(received: number, count: number, completed: boolean): number {
   if (completed) return 1;
   if (!(received > 0 && count > 0)) return 0;
-  // Repaint the trace from the start of the lattice on each pass.
-  return (received % count) / count;
+  // Hold the completed lattice through the inter-pass View scan. The next
+  // pass starts repainting only when its first sample arrives.
+  const withinPass = received % count;
+  return withinPass === 0 ? 1 : withinPass / count;
 }
 
-/** The marker wraps to the beginning of each pass along with the trace. */
+/** Keep the head at the completed lattice edge until the next pass starts. */
 export function exposureHeadFraction(received: number, count: number): number {
   if (!(received > 0 && count > 0)) return 0;
-  return (received % count) / count;
+  const withinPass = received % count;
+  return withinPass === 0 ? 1 : withinPass / count;
 }

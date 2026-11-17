@@ -8436,10 +8436,14 @@ body {
 .patterns-exposure__zoom { display: flex; align-items: center; gap: 4px; margin-right: auto; font-size: 13px; }
 .patterns-exposure__zoom .number-stepper { width: 64px; }
 .patterns-exposure__zoom > .icon { width: 21px; height: 21px; flex-shrink: 0; color: var(--c-btn-primary-bord); }
-.patterns-exposure__view { flex-shrink: 0; font-size: 11px; pointer-events: auto; }
-.patterns-exposure__view .icon { width: 24px; height: 24px; color: dimgray; }
-.patterns-exposure__view--busy { color: var(--c-accent); }
-.patterns-exposure__view--busy .icon { color: lawngreen; }
+.patterns-exposure__view-tooltip { display: inline-flex; flex-shrink: 0; }
+.patterns-exposure__view { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 2px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: lawngreen; cursor: pointer; }
+.patterns-exposure__view .icon { width: 24px; height: 24px; color: currentColor; }
+.patterns-exposure__view--busy { color: dimgray; }
+.patterns-exposure__view--automatic,
+.patterns-exposure__view:disabled.patterns-exposure__view--automatic { color: #ffbf47; cursor: not-allowed; }
+.patterns-exposure__view:disabled { opacity: 1; }
+.patterns-exposure__view:not(:disabled):hover { border-color: currentColor; background: rgb(124 255 0 / 10%); }
 .patterns-exposure__view-row { display: grid; grid-template-columns: auto minmax(120px, 1fr); align-items: center; gap: 12px; margin-top: 8px; }
 .patterns-exposure__pause { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 4px; min-width: 0; color: white; font-size: 13px; white-space: nowrap; }
 .patterns-exposure__pause--zero { color: dimgray; }

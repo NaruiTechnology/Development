@@ -6,7 +6,7 @@ import { imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from
 import { patternBounds } from "../lib/processingPatterns";
 import { sampleExposureLattice, exposureTraceFraction, exposureHeadFraction } from "../lib/exposurePreview";
 import { orientCanvas } from "../lib/canvasOrientation";
-import { exposureViewScanRegions } from "../lib/processingScanRegions";
+import { exposureViewScanRegions, squareExposureViewRegions } from "../lib/processingScanRegions";
 import type { WorkflowProgress } from "../lib/processingWorkflows";
 import type { StreamTransforms } from "../store/scanSlice";
 
@@ -21,7 +21,17 @@ const ExposureStep = memo(function ExposureStep({ node, index, depthRank, depthC
     [e.model, e.shape, e.plan.lattice, e.parameters, budget]);
   const fraction = exposureTraceFraction(e.receivedSamples ?? 0, e.plan.count, node.status === "completed");
   const color = COLORS[index % COLORS.length];
-  const points = spots.map(p => ({ ...project(p.x, p.y), order: p.order, connect: p.connect }));
+  const circle = "cx" in e.shape && "radius" in e.shape ? e.shape : null;
+  const projectSpot: Project = circle
+    ? (x, y) => {
+      const center = project(circle.cx, circle.cy);
+      const xUnit = project(circle.cx + 1, circle.cy);
+      const pixelsPerWorldUnit = Math.hypot(xUnit.x - center.x, xUnit.y - center.y);
+      return { x: center.x + (x - circle.cx) * pixelsPerWorldUnit,
+        y: center.y + (y - circle.cy) * pixelsPerWorldUnit };
+    }
+    : project;
+  const points = spots.map(p => ({ ...projectSpot(p.x, p.y), order: p.order, connect: p.connect }));
   const path = points.map(p => `${p.connect ? "L" : "M"}${p.x},${p.y}`).join(" ");
   const traced = points.filter(p => p.order <= fraction);
   const headFraction = exposureHeadFraction(e.receivedSamples ?? 0, e.plan.count);
@@ -99,10 +109,12 @@ export function ExposureViewCanvasOverlay({ transforms, processingViewport = fal
   const roi = useAppSelector(s => s.scan.roi);
   const specs = useAppSelector(s => s.processing.specs);
   const instances = useAppSelector(s => s.processing.instances);
+  const viewZoom = useAppSelector(s => s.exposure.viewZoom);
   const viewPhase = useAppSelector(s => s.exposure.viewPhase);
   const viewActive = viewPhase === "queued" || viewPhase === "scanning";
-  const scanBounds = useMemo(() => exposureViewScanRegions(specs, instances, roi).regions,
-    [specs, instances, roi]);
+  const scanBounds = useMemo(() => squareExposureViewRegions(
+    exposureViewScanRegions(specs, instances, roi).regions, viewZoom, roi),
+    [specs, instances, roi, viewZoom]);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;

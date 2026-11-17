@@ -24,8 +24,11 @@ export function latticeShapeToDac(shape: PatternRoi, map: DacMap, frameWidthUM?:
     if (map.linear) {
       const ex = pt(shape.cx + outer, shape.cy), ey = pt(shape.cx, shape.cy + outer);
       const ix = pt(shape.cx + inner, shape.cy), iy = pt(shape.cx, shape.cy + inner);
-      return { kind: "ellipse", cx: c[0], cy: c[1], rx: Math.abs(ex[0] - c[0]), ry: Math.abs(ey[1] - c[1]),
-        ...(inner > 0 ? { inner_rx: Math.abs(ix[0] - c[0]), inner_ry: Math.abs(iy[1] - c[1]) } : {}) };
+      const rx = Math.abs(ex[0] - c[0]);
+      const ry = "radius" in shape ? rx : Math.abs(ey[1] - c[1]);
+      return { kind: "ellipse", cx: c[0], cy: c[1], rx, ry,
+        ...(inner > 0 ? { inner_rx: Math.abs(ix[0] - c[0]),
+          inner_ry: "radius" in shape ? Math.abs(ix[0] - c[0]) : Math.abs(iy[1] - c[1]) } : {}) };
     }
     if (inner > 0) throw new Error("A ring needs the plain FOV scan mapping; rectified scan geometry is not supported for rings yet.");
     return { kind: "polygon", points: ellipsePolygon(shape.cx, shape.cy, outer).map(([x, y]) => pt(x, y)) };

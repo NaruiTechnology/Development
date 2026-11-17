@@ -15,7 +15,7 @@ import { decodeScanSamples } from "../lib/scanSamples";
 import { rasterRequestWithBitmapSelection } from "../lib/bitmapVector";
 import { prepareScanAssets } from "../lib/scanAssets";
 import { scansUseHardware } from "../lib/takeoverTiming";
-import { exposureViewScanRegions } from "../lib/processingScanRegions";
+import { exposureViewScanRegions, squareExposureViewRegions } from "../lib/processingScanRegions";
 import { effectiveScanRegions } from "../lib/scanRegions";
 import { appendExposureViewFrame, clearExposureViewFrames } from "../store/imageSlice";
 
@@ -184,12 +184,13 @@ export function useExposureRun() {
       const simulated = !scansUseHardware(snapshot.status.defaults?.is_production, snapshot.status.sessionSimulation);
       const regions = exposureViewScanRegions(snapshot.processing.specs, snapshot.processing.instances, snapshot.scan.roi);
       if (!regions.regions.length) throw new Error("Draw at least one enabled pattern ROI before requesting View.");
-      // Acquire the zoomed centre of each ROI, then expand its samples across
-      // the original ROI for display, just like the regular ROI scan.
-      const displayBounds = regions.regions;
-      const scanBounds = effectiveScanRegions(regions.regions, snapshot.exposure.viewZoom, snapshot.scan.roi)
+      // Display a square window sized from the pattern ROI and zoom. Scan its
+      // centered zoom crop, then enlarge those samples across the display window.
+      const displayBounds = squareExposureViewRegions(regions.regions,
+        snapshot.exposure.viewZoom, snapshot.scan.roi);
+      const scanBounds = effectiveScanRegions(displayBounds, snapshot.exposure.viewZoom, snapshot.scan.roi)
         .filter((bounds): bounds is NonNullable<typeof bounds> => bounds !== null);
-      if (!scanBounds.length) throw new Error("The selected pattern ROIs do not intersect the zoomed scan field.");
+      if (!scanBounds.length) throw new Error("The selected pattern ROIs do not intersect the scan field.");
       dispatch(exposureViewExpectedSamples(resolution * resolution * scanBounds.length));
       const request: RasterRequest = {
         resolution, dwell: settings.dwell,
@@ -302,41 +303,54 @@ export function useExposureRun() {
           : [{...run.request.lattice!, passes: 1}])[Symbol.iterator]()}));
         const skipped = new Set<string>();
         // Parallel alternates scan-line requests across patterns on the single beam.
-        let remaining = true;
-        while (remaining && !cancelled.current) {
-          remaining = false;
+        const exposeSegment = async (queue: typeof queues[number]) => {
+          const next = queue.requests.next();
+          if (next.done) return false;
+          dispatch(exposureStepStarted(queue.run.entry.node.id));
+          await runRequest({...queue.run.request, lattice: next.value, preview: true,
+            ...(snapshot.status.sessionSimulation ? {simulation: snapshot.status.sessionSimulation} : {})},
+            undefined, queue.run.entry.node.id);
+          if (viewPending.current) await runQueuedView();
+          return true;
+        };
+        if (snapshot.exposure.parallel) {
+          let remaining = true;
+          while (remaining && !cancelled.current) {
+            remaining = false;
+            for (const queue of queues) {
+              if (!store.getState().processing.instances[queue.run.entry.key]?.enabled) {
+                skipped.add(queue.run.entry.node.id);
+                dispatch(exposureStepSkipped(queue.run.entry.node.id));
+                continue;
+              }
+              if (await exposeSegment(queue)) remaining = true;
+              if (cancelled.current) break;
+            }
+          }
+        } else {
           for (const queue of queues) {
             if (!store.getState().processing.instances[queue.run.entry.key]?.enabled) {
               skipped.add(queue.run.entry.node.id);
               dispatch(exposureStepSkipped(queue.run.entry.node.id));
               continue;
             }
-            const next = queue.requests.next();
-            if (next.done) continue;
-            remaining = true;
-            if (!snapshot.exposure.parallel && store.getState().processing.activeKey !== queue.run.entry.key)
+            if (store.getState().processing.activeKey !== queue.run.entry.key)
               dispatch(selectPattern(queue.run.entry.key));
-            dispatch(exposureStepStarted(queue.run.entry.node.id));
-            await runRequest({...queue.run.request, lattice: next.value, preview: true,
-              ...(snapshot.status.sessionSimulation ? {simulation: snapshot.status.sessionSimulation} : {})},
-              undefined, queue.run.entry.node.id);
+            while (!cancelled.current && await exposeSegment(queue)) { /* finish this pattern before the next */ }
             if (cancelled.current) break;
-            if (viewPending.current) await runQueuedView();
           }
         }
         if (cancelled.current) break;
         const finished = queues.filter(({run}) => run.final && !skipped.has(run.entry.node.id)).map(({run}) => run.entry.node);
         for (const node of finished) dispatch(exposureStepCompleted(node.id));
-        // A positive hold requests one View at every completed exposure pass,
-        // including single-pass ROI instances. Parallel patterns share a View
-        // at the round boundary; skipped patterns alone never request one.
+        // Automatic View runs once after each completed exposure pass/round.
+        // Parallel patterns share the View at their common round boundary.
         const automaticViewEnabled = store.getState().exposure.viewPauseSeconds > 0;
         const exposedRound = queues.some(({run}) => !skipped.has(run.entry.node.id));
         if (automaticViewEnabled && exposedRound && !viewPending.current) {
           viewPending.current = true;
           dispatch(exposureViewChanged({phase: "queued"}));
         }
-        // A requested raster can use the instrument only between rounds.
         await runQueuedView();
         const pauseNode = finished.find(n => n.exposure?.after === "viewPause");
         // Nothing left to expose: pausing after the last step would only delay completion.

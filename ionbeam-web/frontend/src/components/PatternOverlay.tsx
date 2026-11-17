@@ -248,7 +248,9 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         d.rect = { x_start: Math.min(a.x, b.x), x_end: Math.max(a.x, b.x), y_start: Math.min(a.y, b.y), y_end: Math.max(a.y, b.y) };
       }
     } else if (d.kind === "circle" || d.kind === "ring") {
-      const dist = worldDistance(api.toWorld(p), d.center);
+      const dist = d.kind === "circle"
+        ? Math.hypot(p.x - d.centerCanvas.x, p.y - d.centerCanvas.y) / sx
+        : worldDistance(api.toWorld(p), d.center);
       if (d.dragging) d.outer = dist;
       else {
         const gap = Math.min(d.outer / 4, 2 / Math.max(sx, sy));
@@ -293,7 +295,9 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       draft.current = null;
     } else if (d.kind === "circle" || d.kind === "ring") {
       const moved = Math.hypot(p.x - d.centerCanvas.x, p.y - d.centerCanvas.y);
-      if (d.dragging) d.outer = worldDistance(api.toWorld(p), d.center);
+      if (d.dragging) d.outer = d.kind === "circle"
+        ? moved / sx
+        : worldDistance(api.toWorld(p), d.center);
       if (moved >= DRAG_THRESHOLD && d.outer > 0) {
         if (d.kind === "circle") {
           commit({ cx: d.center.x, cy: d.center.y, radius: d.outer });
@@ -462,7 +466,7 @@ function Shape({ spec, params, roi, active, draft = false, stairSteps, materials
 
   if (spec.roi === "circle") {
     const r = roi as CircleRoi;
-    return <ellipse cx={cx(r.cx)} cy={cy(r.cy)} rx={r.radius * sx} ry={r.radius * sy} fill="none" {...common} />;
+    return <circle cx={cx(r.cx)} cy={cy(r.cy)} r={r.radius * sx} fill="none" {...common} />;
   }
   if (spec.roi === "ring") {
     const r = roi as RingRoi;

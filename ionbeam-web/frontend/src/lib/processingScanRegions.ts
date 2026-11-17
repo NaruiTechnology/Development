@@ -33,6 +33,28 @@ export function processingScanRegions(specs: readonly Pick<PatternSpec, "key">[]
   return { keys, regions };
 }
 
+/** Make each View acquisition window square and scale its side by the zoom value. */
+export function squareExposureViewRegions(
+  regions: readonly ROIRequest[],
+  zoomValue: number,
+  field: Pick<ROIState, "x_origin" | "x_end" | "y_origin" | "y_end">,
+): ROIRequest[] {
+  const zoom = Number.isFinite(zoomValue) && zoomValue > 0 ? zoomValue : 1;
+  const xMin = Math.min(field.x_origin, field.x_end), xMax = Math.max(field.x_origin, field.x_end);
+  const yMin = Math.min(field.y_origin, field.y_end), yMax = Math.max(field.y_origin, field.y_end);
+  const xSpan = xMax - xMin, ySpan = yMax - yMin;
+  return regions.map(region => {
+    const sideFraction = Math.min(1, Math.max(
+      (region.x_end - region.x_start) / xSpan,
+      (region.y_end - region.y_start) / ySpan,
+    ) * zoom);
+    const halfX = xSpan * sideFraction / 2, halfY = ySpan * sideFraction / 2;
+    const cx = Math.max(xMin + halfX, Math.min(xMax - halfX, (region.x_start + region.x_end) / 2));
+    const cy = Math.max(yMin + halfY, Math.min(yMax - halfY, (region.y_start + region.y_end) / 2));
+    return { x_start: cx - halfX, x_end: cx + halfX, y_start: cy - halfY, y_end: cy + halfY };
+  }).filter(region => xSpan > 0 && ySpan > 0 && region.x_end > region.x_start && region.y_end > region.y_start);
+}
+
 /** Regions acquired by a View scan: enabled pattern bounds plus any saved Scan-tab ROI areas. */
 export function exposureViewScanRegions(specs: readonly Pick<PatternSpec, "key">[],
   instances: Record<string, { roi: PatternRoi | null; enabled?: boolean }>,

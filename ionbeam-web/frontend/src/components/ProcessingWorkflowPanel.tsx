@@ -76,7 +76,8 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
     const plan = node.exposure?.plan;
     if (!plan || node.status === "upcoming") return null;
     const pass = node.status === "completed" ? plan.passes
-      : Math.min(plan.passes, Math.floor((node.exposure?.receivedSamples ?? 0) / Math.max(1, plan.count)) + 1);
+      : Math.min(plan.passes, Math.max(1,
+        Math.ceil((node.exposure?.receivedSamples ?? 0) / Math.max(1, plan.count))));
     return `Pass - ${pass} / ${plan.passes}`;
   };
   const currentNodeRef = useRef<HTMLLIElement | null>(null);

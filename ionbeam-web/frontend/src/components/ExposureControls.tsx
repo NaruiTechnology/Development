@@ -47,16 +47,16 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
                 onClick={() => void start()}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>}
         </div>
         <div className="patterns-exposure__view-row">
-          {showView && <label className={`checkbox vacuum-switch app-switch patterns-exposure__view${viewBusy ? " patterns-exposure__view--busy" : ""}`}
-            title={t("processing.exposure.viewHelp")}>
-            <input type="checkbox" role="switch" checked={viewBusy}
-              disabled={!defaultsReady || scanBusy || otherBusy || state.phase !== "running" || viewBusy}
+          {showView && <span className="patterns-exposure__view-tooltip" title={t("processing.exposure.viewHelp")}>
+            <button type="button"
+              className={`patterns-exposure__view${state.viewPauseSeconds > 0 ? " patterns-exposure__view--automatic" : viewBusy ? " patterns-exposure__view--busy" : ""}`}
               aria-label={t("processing.exposure.view")}
               aria-busy={viewBusy}
-              onChange={event => { if (event.target.checked) void view(); }} />
-            <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-            <Icon name="eye" />
-          </label>}
+              disabled={!defaultsReady || scanBusy || otherBusy || ["preparing", "stopping"].includes(state.phase) || viewBusy}
+              onClick={() => void view()}>
+              <Icon name="eye" />
+            </button>
+          </span>}
           <label className={`patterns-exposure__pause${state.viewPauseSeconds === 0 ? " patterns-exposure__pause--zero" : ""}`}>
             <span>{t("processing.exposure.pause")}</span>
             <div className="patterns-exposure__pause-shell">
