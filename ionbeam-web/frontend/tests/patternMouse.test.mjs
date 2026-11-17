@@ -100,14 +100,13 @@ test("pattern mouse selects, moves within bounds, resizes all corners, cancels a
       store.dispatch(actions.selectPattern("ring"));
     });
     const blankEvent = (x,y) => ({...event(x,y), target:{closest:()=>null}});
-    const circles = () => renderer.root.findAll(n => n.type === "ellipse" && n.props["data-ring-boundary"]);
+    const circles = () => renderer.root.findAll(n => n.type === "circle" && n.props["data-ring-boundary"]);
     const assertConcentric = () => {
       const [outer,inner] = circles();
       assert.ok(outer && inner, "ring has two circle outlines");
       assert.equal(outer.props.cx, inner.props.cx);
       assert.equal(outer.props.cy, inner.props.cy);
-      assert.ok(outer.props.rx > inner.props.rx && inner.props.rx > 0);
-      assert.ok(outer.props.ry > inner.props.ry && inner.props.ry > 0);
+      assert.ok(outer.props.r > inner.props.r && inner.props.r > 0);
     };
     await pointer("onPointerDown", blankEvent(300,300));
     await pointer("onPointerMove", blankEvent(400,300));

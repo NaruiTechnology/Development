@@ -448,8 +448,8 @@ interface ShapeProps {
   sy: number;
 }
 
-function ellipsePath(x: number, y: number, rx: number, ry: number) {
-  return `M${x - rx} ${y}A${rx} ${ry} 0 1 0 ${x + rx} ${y}A${rx} ${ry} 0 1 0 ${x - rx} ${y}Z`;
+function circlePath(x: number, y: number, radius: number) {
+  return `M${x - radius} ${y}A${radius} ${radius} 0 1 0 ${x + radius} ${y}A${radius} ${radius} 0 1 0 ${x - radius} ${y}Z`;
 }
 
 function Shape({ spec, params, roi, active, draft = false, stairSteps, materials = [], defaultMaterial, cx, cy, sx, sy }: ShapeProps) {
@@ -472,10 +472,12 @@ function Shape({ spec, params, roi, active, draft = false, stairSteps, materials
     const r = roi as RingRoi;
     const x = cx(r.cx);
     const y = cy(r.cy);
+    const outerRadius = r.r_outer * sx;
+    const innerRadius = r.r_inner * sx;
     return <g>
-      <path d={ellipsePath(x, y, r.r_outer * sx, r.r_outer * sy) + ellipsePath(x, y, r.r_inner * sx, r.r_inner * sy)} fillRule="evenodd" {...fill} stroke="none" />
-      <ellipse data-ring-boundary="outer" cx={x} cy={y} rx={r.r_outer * sx} ry={r.r_outer * sy} fill="none" {...common} />
-      <ellipse data-ring-boundary="inner" cx={x} cy={y} rx={r.r_inner * sx} ry={r.r_inner * sy} fill="none" {...common} />
+      <path d={circlePath(x, y, outerRadius) + circlePath(x, y, innerRadius)} fillRule="evenodd" {...fill} stroke="none" />
+      <circle data-ring-boundary="outer" cx={x} cy={y} r={outerRadius} fill="none" {...common} />
+      <circle data-ring-boundary="inner" cx={x} cy={y} r={innerRadius} fill="none" {...common} />
     </g>;
   }
   if (spec.roi === "polygon") {

@@ -352,14 +352,18 @@ const slice = createSlice({
         .sort(([, a], [, b]) => a.index - b.index)
         .map(([key]) => ({...spec, key}))]);
       s.specs = runtimeSpecs;
-      s.workflows = [DEFAULT_WORKFLOW, ...(a.payload.workflows ?? []).filter(w => w.name !== "default")];
+      const configuredWorkflows = (a.payload.workflows ?? []).filter(w => w.name !== "default");
+      const availableWorkflowNames = new Set([DEFAULT_WORKFLOW.name, ...configuredWorkflows.map(w => w.name)]);
+      s.workflows = [DEFAULT_WORKFLOW, ...configuredWorkflows];
       s.materials = a.payload.materials ?? [];
       s.stairReceipes = a.payload.stairReceipes ?? {};
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
       s.instances = Object.fromEntries(runtimeSpecs.map(p => {
         const previous = previousInstances[p.key];
-        return [p.key, previous ? {...previous, typeKey: previous.typeKey ?? p.key, index: previous.index ?? 1,
+        return [p.key, previous ? {...previous,
+          workflow: availableWorkflowNames.has(previous.workflow) ? previous.workflow : DEFAULT_WORKFLOW.name,
+          typeKey: previous.typeKey ?? p.key, index: previous.index ?? 1,
           parameters: {...defaultParameters(p.parameters), ...previous.parameters}}
           : {typeKey: p.key, index: 1, workflow: "default", workflowEnabled: true, material: "", AvgGray: null,
             enabled: false, parameters: defaultParameters(p.parameters), roi: null}];

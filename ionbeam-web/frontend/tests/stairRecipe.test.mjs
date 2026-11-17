@@ -122,7 +122,8 @@ test("Stair cut card renders a per-step table and edits only the chosen step", a
     const { ProcessingPatternCards } = await vite.ssrLoadModule("/src/components/ProcessingPatternsPanel.tsx");
     const parameters = Object.entries({ beamCurrent: 150, dwell: 1, overlap: 50, axis: "x", steps: 5, depth: 5 })
       .map(([name, value]) => ({ name, label: name, type: typeof value === "string" ? "choice" : "float", default: value, min: null, max: null, step: 1, unit: "", choices: typeof value === "string" ? [value] : [] }));
-    store.dispatch(processing.fetchProcessingPatterns.fulfilled({ patterns: [{ key: "stairs", caption: "Stair cut", model: "StairCutModel", roi: "rect", icon: "patternSolidBox", parameters }], lensLookup }, "t"));
+    store.dispatch(processing.fetchProcessingPatterns.fulfilled({ patterns: [{ key: "stairs", caption: "Stair cut", model: "StairCutModel", roi: "rect", icon: "patternSolidBox", parameters }], lensLookup,
+      workflows: [{ name: "testWorkflow", caption: "Test workflow", steps: [] }] }, "t"));
     store.dispatch(processing.setPatternRoi({ key: "stairs", roi }));
     store.dispatch(processing.selectPattern("stairs"));
     await act(async () => { renderer = create(React.createElement(Provider, { store }, React.createElement(ProcessingPatternCards, { disabled: false }))); });

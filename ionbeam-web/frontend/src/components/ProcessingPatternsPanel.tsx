@@ -294,7 +294,7 @@ function PatternCard({ spec, instance, active, indexed = false, countInvalid = f
         </button>
       </div>
       <div className="pattern-card__body" hidden={!active}>
-        <details className="pattern-image-guided" open={instance.workflowEnabled && instance.workflow !== "default"}>
+        {workflows.some(workflow => workflow.name !== "default") && <details className="pattern-image-guided" open={instance.workflowEnabled && instance.workflow !== "default"}>
           <summary>{tr("processing.imageGuided.title", "Image-guided removal (Scan only)")}</summary>
           <p className="pattern-image-guided__note">{tr("processing.imageGuided.note", "These gray-level workflow settings act on the Scan image path. Exposure Start uses the step recipe and ignores them.")}</p>
         <div className="pattern-workflow-controls">
@@ -322,7 +322,7 @@ function PatternCard({ spec, instance, active, indexed = false, countInvalid = f
             <small>AvgGray × {materials.find(material => material.name === instance.material)?.caption ?? instance.material}</small>
           </div>
         )}
-        </details>
+        </details>}
         <ProcessingWorkflowPanel patternKey={spec.key} />
         <section className="pattern-parameters-card">
           <div className="pattern-parameters-card__header" onClick={event => {

@@ -21,7 +21,7 @@ const ExposureStep = memo(function ExposureStep({ node, index, depthRank, depthC
     [e.model, e.shape, e.plan.lattice, e.parameters, budget]);
   const fraction = exposureTraceFraction(e.receivedSamples ?? 0, e.plan.count, node.status === "completed");
   const color = COLORS[index % COLORS.length];
-  const circle = "cx" in e.shape && "radius" in e.shape ? e.shape : null;
+  const circle = "cx" in e.shape && ("radius" in e.shape || "r_outer" in e.shape) ? e.shape : null;
   const projectSpot = useMemo<Project>(() => circle
     ? (x, y) => {
       const center = project(circle.cx, circle.cy);
