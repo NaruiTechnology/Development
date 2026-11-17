@@ -28,7 +28,7 @@ export interface ExposureState {
   viewExpectedSamples: number;
 }
 const initialState: ExposureState = {
-  parallel: false, viewPauseSeconds: 5, pauseAfterView: false, viewZoom: 1, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
+  parallel: false, viewPauseSeconds: 5, pauseAfterView: false, viewZoom: 2, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
   viewPhase: "idle", viewError: null, viewRequestId: 0,
   viewReceivedSamples: 0, viewReceivedChunks: 0, viewExpectedSamples: 0,
 };
