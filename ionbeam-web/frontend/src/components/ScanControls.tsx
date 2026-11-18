@@ -50,8 +50,8 @@ import { TransformCard } from "./TransformCard";
 import { imageWorldBounds } from "../lib/roiGeometry";
 import { type WorkflowProgress } from "../lib/processingWorkflows";
 import { setWorkflowProgress, updateWorkflowStep } from "../store/processingSlice";
-import { processingScanRegions } from "../lib/processingScanRegions";
-import { effectiveScanRegions, zoomInterleavedVectorPoints, zoomVectorPoints } from "../lib/scanRegions";
+import { processingScanRegions, squareExposureViewRegions, roiWindowScanRegions as effectiveScanRegions } from "../lib/processingScanRegions";
+import { zoomInterleavedVectorPoints, zoomVectorPoints } from "../lib/scanRegions";
 import { worldSelectionToDacROI } from "../lib/roiDac";
 import { targetGrayFilter } from "../lib/roiTargetGray";
 import { assessScan, assessTypedZoom, hasScanErrors, type ScanIssue } from "../lib/scanValidation";
@@ -376,7 +376,7 @@ export function ScanControls({
   // current ROIs and the DAC capacity. Recomputed whenever any of them change.
   const scanResolution = kind === "raster" ? raster.resolution : vector.vector_resolution;
   const scanAssessment = useMemo(
-    () => assessScan(activeScanRegions, roiState.scan_zoom, roiState, scanResolution),
+    () => assessScan(activeScanRegions, roiState.scan_zoom, roiState, scanResolution, true),
     [activeScanRegions, roiState.scan_zoom, roiState.x_origin, roiState.x_end, roiState.y_origin, roiState.y_end,
       roiState.scanGeometry, scanResolution],
   );
@@ -721,7 +721,7 @@ export function ScanControls({
       try {
         const regions = effectiveScanRegions(activeScanRegions, roiState.scan_zoom, roiState);
         const displayRegions = activeScanRegions.length
-          ? activeScanRegions.map((region) => worldSelectionToDacROI(region, roiState))
+          ? squareExposureViewRegions(activeScanRegions, roiState.scan_zoom, roiState).map((region) => worldSelectionToDacROI(region, roiState))
           : [null];
         const roiAreaDefined = roiState.roi_scan_enabled && (activeScanRegions.length > 0 || roiState.selection !== null);
         // ROI samples only replace their rectangle; keep the previous scan
@@ -771,7 +771,7 @@ export function ScanControls({
       try {
         const regions = effectiveScanRegions(activeScanRegions, roiState.scan_zoom, roiState);
         const displayRegions = activeScanRegions.length
-          ? activeScanRegions.map((region) => worldSelectionToDacROI(region, roiState))
+          ? squareExposureViewRegions(activeScanRegions, roiState.scan_zoom, roiState).map((region) => worldSelectionToDacROI(region, roiState))
           : [null];
         const roiAreaDefined = roiState.roi_scan_enabled && (activeScanRegions.length > 0 || roiState.selection !== null);
         const vectorBackground = roiAreaDefined && vectorImageFilled > 0
@@ -848,7 +848,7 @@ export function ScanControls({
       if (scanRegionsNow.length > 1 && parallelRegions) {
         const regions = effectiveScanRegions(scanRegionsNow, scanZoom, roiState)
           .filter((region): region is ROIRequest => region !== null);
-        const displayRegions = scanRegionsNow.map((region) => worldSelectionToDacROI(region, roiState));
+        const displayRegions = squareExposureViewRegions(scanRegionsNow, scanZoom, roiState).map((region) => worldSelectionToDacROI(region, roiState));
         let parallelEntry: InfiniteScanEntry;
         if (kind === "raster") {
           const initialFrame = !isProduction && roiState.imageDataUrl
@@ -905,7 +905,7 @@ export function ScanControls({
       const regions = effectiveScanRegions(scanRegionsNow, scanZoom, roiState);
       const activeIndex = roiState.active_scan_region ?? 0;
       const region = regions[Math.min(activeIndex, regions.length - 1)] ?? null;
-      const selectedRegion = scanRegionsNow[Math.min(activeIndex, scanRegionsNow.length - 1)] ?? null;
+      const selectedRegion = squareExposureViewRegions(scanRegionsNow, scanZoom, roiState)[Math.min(activeIndex, scanRegionsNow.length - 1)] ?? null;
       const displayROI = selectedRegion ? worldSelectionToDacROI(selectedRegion, roiState) : null;
       const roiAreaDefined = roiState.roi_scan_enabled && (scanRegionsNow.length > 0 || roiState.selection !== null);
       let entry: InfiniteScanEntry;
@@ -1034,7 +1034,7 @@ export function ScanControls({
     // A zoom above the allowed maximum is not applied: the technical reason
     // replaces the "Max zoom" message above the Zoom control.
     const typed = zoom > zoomMaximum
-      ? assessTypedZoom(activeScanRegions, zoom, roiState, scanResolution)
+      ? assessTypedZoom(activeScanRegions, zoom, roiState, scanResolution, true)
       : null;
     setTypedZoomIssue(typed);
     if (typed) { zoomTrace("exit: above max zoom", { zoom, zoomMaximum }); return; }
@@ -1050,10 +1050,17 @@ export function ScanControls({
       return;
     }
     const liveEntry = infiniteScanRef.current;
+    if (infiniteScanActiveRef.current && activeScanRegions.length > 0) {
+      // Zoom changes both the scan crop and its display window. Rebuild them
+      // together so streaming samples cannot land in the previous window.
+      dispatch(setScanZoom(zoom));
+      scheduleZoomRestart("infinite");
+      return;
+    }
     if (infiniteScanActiveRef.current) {
       const regions = effectiveScanRegions(activeScanRegions, zoom, roiState);
       const dacRegions = regions.map((region) => region ? worldSelectionToDacROI(region, roiState) : null);
-      const displayRegionsForZoom = activeScanRegions.map((region) => worldSelectionToDacROI(region, roiState));
+      const displayRegionsForZoom = squareExposureViewRegions(activeScanRegions, zoom, roiState).map((region) => worldSelectionToDacROI(region, roiState));
       // Sequential Infinite scans already end each region before starting the
       // next one. Replace their queued DAC bounds without cancelling the
       // region currently on the wire.
@@ -1312,7 +1319,7 @@ export function ScanControls({
     }
     if (!current.length) return;
 
-    const displayRegions = current.map((region) => worldSelectionToDacROI(region, roiState));
+    const displayRegions = squareExposureViewRegions(current, roiState.scan_zoom, roiState).map((region) => worldSelectionToDacROI(region, roiState));
     const scanRegions = effectiveScanRegions(current, roiState.scan_zoom, roiState)
       .map((region) => region ? worldSelectionToDacROI(region, roiState) : null);
     const liveEntry = infiniteScanRef.current;

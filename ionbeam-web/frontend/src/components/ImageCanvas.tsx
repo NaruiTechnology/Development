@@ -1,3 +1,4 @@
+import { roiWindowScanRegions as effectiveScanRegions } from "../lib/processingScanRegions.js";
 import { ImageScaleChip } from "./ImageScaleChip";
 import { TextureMeasurements } from "./TextureMeasurements";
 /**
@@ -47,7 +48,7 @@ import { ExposureLatticeOverlay, ExposureLatticeMessage, ExposureViewCanvasOverl
 import { ScanRegionOverlay } from "./ScanRegionOverlay";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
 import { paintVectorScanOrderOverlay } from "../lib/scanPathOverlay";
-import { effectiveScanRegions, scanRegionPixelBounds } from "../lib/scanRegions.js";
+import { scanRegionPixelBounds } from "../lib/scanRegions.js";
 import { scaleScanSample } from "../lib/scanSamples";
 import {
   AUTO_LEVELS,

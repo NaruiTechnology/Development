@@ -30,3 +30,23 @@ test("disabled patterns are skipped without discarding their ROIs", () => {
   instances.off.enabled = true;
   assert.deepEqual(processingScanRegions(specs, instances, field), { keys: ["off"], regions: [roi] });
 });
+
+test("Scan ROI uses the same zoomed outline windows and acquisition crops as Patterns", async () => {
+  const { squareExposureViewRegions, roiWindowScanRegions } = await import("../.test-dist/lib/processingScanRegions.js");
+  const { effectiveScanRegions } = await import("../.test-dist/lib/scanRegions.js");
+  const regions = [
+    { x_start: 40, x_end: 60, y_start: 45, y_end: 55 },
+    { x_start: 80, x_end: 100, y_start: 0, y_end: 20 },
+  ];
+  const windows = squareExposureViewRegions(regions, 2, field);
+  assert.deepEqual(windows, [
+    { x_start: 30, x_end: 70, y_start: 30, y_end: 70 },
+    { x_start: 60, x_end: 100, y_start: 0, y_end: 40 },
+  ]);
+  for (const zoom of [1, 2, 5, 10]) {
+    assert.deepEqual(roiWindowScanRegions(regions, zoom, field),
+      effectiveScanRegions(squareExposureViewRegions(regions, zoom, field), zoom, field));
+  }
+  assert.deepEqual(roiWindowScanRegions([], 2, field), effectiveScanRegions([], 2, field));
+  assert.deepEqual(regions[0], { x_start: 40, x_end: 60, y_start: 45, y_end: 55 });
+});

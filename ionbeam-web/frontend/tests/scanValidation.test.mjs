@@ -131,3 +131,13 @@ test("a degenerate ROI is an error", () => {
   const issues = validateScanPlan({ regions: [{ x_start: 5, x_end: 5, y_start: 0, y_end: 0 }], resolution: 64 });
   assert.ok(hasScanErrors(issues));
 });
+
+test("expanded ROI windows validate their actual crop rather than shrinking the outline twice", () => {
+  const field = { x_origin: 0, x_end: 16383, y_origin: 0, y_end: 16383 };
+  const regions = [{ x_start: 7000, x_end: 8000, y_start: 7000, y_end: 7500 }];
+  const assessment = assessScan(regions, 16, field, 64, true);
+  assert.equal(assessment.issues.some(issue => issue.severity === "error"), false);
+  assert.ok(assessment.maxZoom >= 16);
+  assert.equal(assessTypedZoom(regions, 16, field, 64, true), null);
+  assert.equal(assessScan(regions, 16, field, 64).issues.some(issue => issue.severity === "error"), true);
+});

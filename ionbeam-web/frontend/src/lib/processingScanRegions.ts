@@ -1,3 +1,4 @@
+import { effectiveScanRegions, type ScanRegionFov } from "./scanRegions.js";
 import type { PatternRoi, PatternSpec } from "./processingPatterns";
 import type { ROIState } from "../store/scanSlice";
 import type { ROIRequest } from "../types/api";
@@ -83,4 +84,9 @@ function validRegion(region: ROIRequest): boolean {
 
 function regionKey(region: ROIRequest): string {
   return `${region.x_start},${region.x_end},${region.y_start},${region.y_end}`;
+}
+
+/** Scan the centered zoom crop and render it across the enlarged ROI window. */
+export function roiWindowScanRegions(regions: ROIRequest[], zoom: number, field: ScanRegionFov) {
+  return effectiveScanRegions(squareExposureViewRegions(regions, zoom, field), zoom, field);
 }

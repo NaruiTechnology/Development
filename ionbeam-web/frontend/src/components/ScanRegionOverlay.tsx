@@ -9,6 +9,7 @@ import {
 } from "../store/scanSlice";
 import type { ROIRequest } from "../types/api";
 import { useTranslation } from "../i18n";
+import { squareExposureViewRegions } from "../lib/processingScanRegions";
 
 type Point = { x: number; y: number };
 type Interaction =
@@ -32,10 +33,10 @@ export function ScanRegionOverlay({ disabled, moveOnly = false }: { disabled: bo
   const yMax = Math.max(roi.y_origin, roi.y_end);
 
   const displayed = useMemo(
-    () => regions.map((region, index) =>
+    () => squareExposureViewRegions(regions.map((region, index) =>
       interaction?.kind !== "create" && interaction?.index === index && draft ? draft : region,
-    ),
-    [draft, interaction, regions],
+    ), roi.scan_zoom, roi),
+    [draft, interaction, regions, roi.scan_zoom, xMin, xMax, yMin, yMax],
   );
 
   function pointFromEvent(event: React.PointerEvent | React.MouseEvent): Point {
@@ -82,11 +83,20 @@ export function ScanRegionOverlay({ disabled, moveOnly = false }: { disabled: bo
   }
 
   function resizedRegion(original: ROIRequest, corner: "nw" | "ne" | "sw" | "se", current: Point): ROIRequest {
+    const window = squareExposureViewRegions([original], roi.scan_zoom, roi)[0];
     const anchor: Point = {
-      x: corner.endsWith("w") ? original.x_end : original.x_start,
-      y: corner.startsWith("n") ? original.y_end : original.y_start,
+      x: corner.endsWith("w") ? window.x_end : window.x_start,
+      y: corner.startsWith("n") ? window.y_end : window.y_start,
     };
-    return rectFromPoints(anchor, current);
+    const resized = rectFromPoints(anchor, current);
+    // Handles belong to the enlarged window; save the corresponding source
+    // outline so the next render does not multiply the zoom a second time.
+    const cx = (resized.x_start + resized.x_end) / 2;
+    const cy = (resized.y_start + resized.y_end) / 2;
+    const halfX = (resized.x_end - resized.x_start) / (2 * roi.scan_zoom);
+    const halfY = (resized.y_end - resized.y_start) / (2 * roi.scan_zoom);
+    return { x_start: cx - halfX, x_end: cx + halfX,
+      y_start: cy - halfY, y_end: cy + halfY };
   }
 
   function styleFor(region: ROIRequest) {

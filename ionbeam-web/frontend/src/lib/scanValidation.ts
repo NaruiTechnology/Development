@@ -2,6 +2,8 @@ import type { ROIRequest } from "../types/api";
 import { worldSelectionToDacROI } from "./roiDac.js";
 import { MAX_SCAN_ZOOM, effectiveScanRegions, type ScanRegionFov } from "./scanRegions.js";
 
+import { roiWindowScanRegions } from "./processingScanRegions.js";
+
 export { MAX_SCAN_ZOOM };
 
 /** The DAC has 14 bits: codes 0..16383. */
@@ -74,8 +76,8 @@ function area(b: Box): number {
   return (b.x1 - b.x0 + 1) * (b.y1 - b.y0 + 1);
 }
 
-function toDac(regions: ROIRequest[], zoom: number, fov: ScanRegionFov): Array<ROIRequest | null> {
-  return effectiveScanRegions(regions, zoom, fov).map((region) => region ? worldSelectionToDacROI(region, fov) : null);
+function toDac(regions: ROIRequest[], zoom: number, fov: ScanRegionFov, expandWindow = false): Array<ROIRequest | null> {
+  return (expandWindow ? roiWindowScanRegions : effectiveScanRegions)(regions, zoom, fov).map((region) => region ? worldSelectionToDacROI(region, fov) : null);
 }
 
 function smallestSpan(regions: Array<ROIRequest | null>): number {
@@ -98,9 +100,9 @@ function smallestSpan(regions: Array<ROIRequest | null>): number {
  * (see the `oversampled` warning), so the selected resolution does not lower
  * this limit.
  */
-export function maxScanZoom(regions: ROIRequest[], fov: ScanRegionFov): number {
+export function maxScanZoom(regions: ROIRequest[], fov: ScanRegionFov, expandWindow = false): number {
   const need = MIN_SCAN_RESOLUTION;
-  const spanAt = (zoom: number): number => smallestSpan(toDac(regions, zoom, fov));
+  const spanAt = (zoom: number): number => smallestSpan(toDac(regions, zoom, fov, expandWindow));
   if (spanAt(1) < need) return 1;
   let lo = 1;
   let hi = MAX_SCAN_ZOOM;
@@ -196,11 +198,12 @@ export function assessScan(
   zoom: number,
   fov: ScanRegionFov,
   resolution: number,
+  expandWindow = false,
 ): ScanAssessment {
-  const maxZoom = maxScanZoom(regions, fov);
-  const base = toDac(regions, 1, fov);
+  const maxZoom = maxScanZoom(regions, fov, expandWindow);
+  const base = toDac(regions, 1, fov, expandWindow);
   const issues = validateScanPlan({
-    regions: toDac(regions, zoom, fov),
+    regions: toDac(regions, zoom, fov, expandWindow),
     resolution,
     background: regions.length > 0,
     fullField: regions.length === 0,
@@ -221,14 +224,15 @@ export function assessTypedZoom(
   zoom: number,
   fov: ScanRegionFov,
   resolution: number,
+  expandWindow = false,
 ): ScanIssue | null {
-  const assessment = assessScan(regions, zoom, fov, resolution);
+  const assessment = assessScan(regions, zoom, fov, resolution, expandWindow);
   const limit = assessment.issues.find((issue) => issue.code === "zoom_exceeds_limit");
   if (limit) return limit;
   if (zoom > assessment.maxZoom) {
     // Beyond the absolute ceiling the store clamps the zoom, so derive the
     // zoomed span from the smallest ROI directly.
-    const base = toDac(regions, 1, fov);
+    const base = toDac(regions, 1, fov, expandWindow);
     let index = 0;
     let baseSpan = Infinity;
     let axis = "X";
