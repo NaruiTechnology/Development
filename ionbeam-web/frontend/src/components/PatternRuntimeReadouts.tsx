@@ -17,6 +17,9 @@ export function PatternRuntimeReadouts({spec, roi, parameters, stairSteps, defau
   const {t} = useTranslation();
   const field = useAppSelector(s => s.scan.roi);
   const lensLookup = useAppSelector(s => s.processing.lensLookup);
+  const collection = useAppSelector(s => s.processing.stairReceipes.SMProcess);
+  const recipeNode = useAppSelector(s => s.processing.instances[spec.key]?.stairRecipeNode);
+  const stairPresets = (collection?.nodes.find(n => n.name === recipeNode) ?? collection?.nodes[0])?.steps;
   const materials = useAppSelector(s => s.processing.materials);
   const progress = useAppSelector(s => s.exposure.progress.length ? s.exposure.progress : s.processing.workflowProgress);
   const nodes = progress.filter(n => n.id.startsWith(`${spec.key}:`));
@@ -36,12 +39,12 @@ export function PatternRuntimeReadouts({spec, roi, parameters, stairSteps, defau
     if (!roi || !lensLookup) return null;
     try {
       return plannedPatternExposureMetrics(spec, roi, parameters, lensLookup, field as ROIState,
-        {simulation, stairOverrides: stairSteps, defaultMaterial,
+        {simulation, stairPresets, stairOverrides: stairSteps, defaultMaterial,
           materialRemovalRates: Object.fromEntries(materials
             .filter(material => material.removalRateUM3PerNC !== undefined)
             .map(material => [material.name, material.removalRateUM3PerNC!]))});
     } catch { return null; }
-  }, [spec, roi, parameters, lensLookup, field, simulation, stairSteps, defaultMaterial, materials]);
+  }, [spec, roi, parameters, lensLookup, field, simulation, stairSteps, defaultMaterial, materials, stairPresets]);
   // Keep a fresh recipe preview on the card as geometry or parameters change; the
   // prepared exposure nodes are a fallback while the recipe's lens data is unavailable.
   const spotCount = plannedExposure?.spotCount ?? (exposureCount

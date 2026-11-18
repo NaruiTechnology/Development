@@ -104,7 +104,7 @@
         ],
         "rows": [
             {
-                "sourceRow": 2,
+                "sourceRow": 1,
                 "stepsBetweenApertures": 2000,
                 "beamVoltageKV": 30,
                 "apertureDiameterUM": "<10",
@@ -113,7 +113,7 @@
                 "spotSizeAngstrom": 80
             },
             {
-                "sourceRow": 3,
+                "sourceRow": 2,
                 "stepsBetweenApertures": 2000,
                 "beamVoltageKV": 30,
                 "apertureDiameterUM": 20,
@@ -122,7 +122,7 @@
                 "spotSizeAngstrom": 120
             },
             {
-                "sourceRow": 4,
+                "sourceRow": 3,
                 "stepsBetweenApertures": 2000,
                 "beamVoltageKV": 30,
                 "apertureDiameterUM": 30,
@@ -131,7 +131,7 @@
                 "spotSizeAngstrom": 150
             },
             {
-                "sourceRow": 5,
+                "sourceRow": 4,
                 "stepsBetweenApertures": 2000,
                 "beamVoltageKV": 30,
                 "apertureDiameterUM": 70,
@@ -140,7 +140,7 @@
                 "spotSizeAngstrom": 250
             },
             {
-                "sourceRow": 6,
+                "sourceRow": 5  ,
                 "stepsBetweenApertures": 2000,
                 "beamVoltageKV": 30,
                 "apertureDiameterUM": 100,
@@ -149,7 +149,7 @@
                 "spotSizeAngstrom": 350
             },
             {
-                "sourceRow": 7,
+                "sourceRow": 6,
                 "stepsBetweenApertures": 2000,
                 "beamVoltageKV": 30,
                 "apertureDiameterUM": 150,
@@ -158,7 +158,7 @@
                 "spotSizeAngstrom": 550
             },
             {
-                "sourceRow": 8,
+                "sourceRow": 7,
                 "stepsBetweenApertures": 3000,
                 "beamVoltageKV": 30,
                 "apertureDiameterUM": 250,
@@ -167,7 +167,7 @@
                 "spotSizeAngstrom": 800
             },
             {
-                "sourceRow": 9,
+                "sourceRow": 8,
                 "stepsBetweenApertures": 3000,
                 "beamVoltageKV": 30,
                 "apertureDiameterUM": 400,
@@ -176,7 +176,7 @@
                 "spotSizeAngstrom": 1200
             },
             {
-                "sourceRow": 10,
+                "sourceRow": 9,
                 "stepsBetweenApertures": 3000,
                 "beamVoltageKV": 30,
                 "apertureDiameterUM": 600,
@@ -185,22 +185,13 @@
                 "spotSizeAngstrom": 2700
             },
             {
-                "sourceRow": 11,
+                "sourceRow": 10,
                 "stepsBetweenApertures": 3000,
                 "beamVoltageKV": 30,
                 "apertureDiameterUM": 825,
                 "beamCurrentPA": 11500,
                 "lens1KV": "5.62*",
                 "spotSizeAngstrom": 5000
-            },
-            {
-                "sourceRow": 12,
-                "stepsBetweenApertures": null,
-                "beamVoltageKV": 10,
-                "apertureDiameterUM": 150,
-                "beamCurrentPA": 250,
-                "lens1KV": 3.1,
-                "spotSizeAngstrom": 3000
             }
         ],
         "notes": [

@@ -133,6 +133,7 @@ REQUIRED_DIST_MODULES = (
     'Development/glasgow_service/glasgow_service/api',
     'Development/glasgow_service/glasgow_service/lens_lookup',
     'Development/glasgow_service/glasgow_service/processing_reference_api',
+    'Development/glasgow_service/glasgow_service/pattern_recipes',
     'Development/glasgow_service/glasgow_service/service',
     'Development/glasgow_service/glasgow_service/device_lock',
     # Native desktop client (ionbeam-native): entry point, persistent Glasgow
@@ -175,6 +176,10 @@ REQUIRED_DIST_FILES = (
     'Development/glasgow_service/deploy/ionbeam-local-services.logrotate.in',
     'Development/ionbeam-web/backend/package.json',
     'Development/IobeamAdmin/Sql/006_equipment_csv_functions.sql',
+    'Development/IobeamAdmin/Sql/007_pattern_recipes.sql',
+    'Development/IobeamAdmin/Sql/008_pattern_recipe_editing.sql',
+    'Development/IobeamAdmin/Sql/009_pattern_recipe_history.sql',
+    'Development/IobeamAdmin/Sql/010_restore_technology_nodes.sql',
     'Development/glasgow_service/requirements.txt',
     'Development/glasgow_service/scripts/vacuum_excursion_test.py',
     'Development/requirements.txt',

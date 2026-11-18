@@ -15,6 +15,8 @@ type EquipmentGridContext = {
   canManage: boolean;
   actionDisabled: boolean;
   rowCount: number;
+  recipeCounts: Record<number, number>;
+  onOpenRecipes?: (equipmentId: number) => void;
   onEdit: (index: number) => void;
   onDelete: (index: number) => void;
   onBlockedAction: () => void;
@@ -53,8 +55,19 @@ function EquipmentActionsCell(params: ICellRendererParams<EquipmentGridRow> & { 
   );
 }
 
+function EquipmentRecipesCell(params: ICellRendererParams<EquipmentGridRow> & { context: EquipmentGridContext }) {
+  const id = params.data?.id;
+  const { t, recipeCounts, onOpenRecipes, actionDisabled } = params.context;
+  return <button type="button" className="btn btn--ghost" disabled={!id || actionDisabled || !onOpenRecipes}
+    onClick={() => { if (id) onOpenRecipes?.(id); }}>
+    {id && recipeCounts[id] ? t("recipes.assignedCount", {count: recipeCounts[id]}) : t("recipes.assign")}
+  </button>;
+}
+
 export function EquipmentGrid({
   equipment,
+  recipeCounts = {},
+  onOpenRecipes,
   disabled,
   actionDisabled,
   canManage,
@@ -63,6 +76,8 @@ export function EquipmentGrid({
   onBlockedAction,
 }: {
   equipment: EquipmentRow[];
+  recipeCounts?: Record<number, number>;
+  onOpenRecipes?: (equipmentId: number) => void;
   disabled: boolean;
   actionDisabled: boolean;
   canManage: boolean;
@@ -106,6 +121,8 @@ export function EquipmentGrid({
       valueFormatter: (p) => (p.value === null || p.value === undefined ? "—" : String(p.value)),
     },
     { field: "name", headerName: t("settings.admin.equipment.name"), editable: false, width: 150 },
+    { colId: "patternRecipes", headerName: t("recipes.title"), width: 170, sortable: false, filter: false,
+      cellRenderer: EquipmentRecipesCell },
     { field: "model", headerName: t("settings.admin.equipment.model"), editable: false, width: 140 },
     { field: "site", headerName: t("settings.admin.equipment.site"), editable: false, width: 150 },
     { field: "equipment_code", headerName: t("settings.admin.equipment.equipmentCode"), editable: false, width: 190 },
@@ -133,12 +150,13 @@ export function EquipmentGrid({
     canManage,
     actionDisabled,
     rowCount: equipment.length,
+    recipeCounts, onOpenRecipes,
     onEdit: openEdit,
     onDelete,
     onBlockedAction,
-  }), [t, canManage, actionDisabled, equipment.length, openEdit, onDelete, onBlockedAction]);
+  }), [t, canManage, actionDisabled, equipment.length, recipeCounts, onOpenRecipes, openEdit, onDelete, onBlockedAction]);
   const handleCellClicked = useCallback((event: CellClickedEvent<EquipmentGridRow>) => {
-    if (!canManage) onBlockedAction();
+    if (event.column.getColId() !== "patternRecipes" && !canManage) onBlockedAction();
   }, [canManage, onBlockedAction]);
 
   return <>

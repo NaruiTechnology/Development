@@ -356,3 +356,11 @@ async function resolveCurrentAdminDbConnection(): Promise<PgConnection> {
 function connectionKey(connection: PgConnection): string {
   return `${connection.host}:${connection.port}:${connection.database}:${connection.user}`;
 }
+
+/** Equipment recipes must use the configured database without a local fallback. */
+export async function queryAdminStoredStrict(sqlTemplate: string, payload: unknown = null): Promise<string> {
+  const connection = await resolveCurrentAdminDbConnection();
+  await ensureAdminSchema(connection);
+  const sql = sqlTemplate.replaceAll("$$payload$$", () => jsonbLiteral(payload));
+  return (await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection)).trim();
+}

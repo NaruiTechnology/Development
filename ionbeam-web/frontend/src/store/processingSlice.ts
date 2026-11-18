@@ -1,3 +1,4 @@
+import { selectedEquipmentId } from "../lib/adminActivity";
 import { parseLensLookup, type LensLookup } from "../lib/lensLookup";
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
@@ -43,6 +44,8 @@ export interface PatternInstance {
 }
 
 export interface ProcessingState {
+  recipeRequestId?: string;
+  recipeEquipmentId?: number | null;
   lensLookup: LensLookup | null;
   workflows: WorkflowSpec[];
   materials: { name: string; caption?: string; brightness: number; grayValueRange?: [number, number] | null;
@@ -65,6 +68,7 @@ export interface ProcessingState {
 const initialState: ProcessingState = { lensLookup: null, workflows: [DEFAULT_WORKFLOW], materials: [], stairReceipes: {}, workflowProgress: [], status: "idle", error: null, entryErrors: [], specs: [], instances: {}, activeKey: null, roiCreationOrder: [], roiHistory: [] };
 
 interface PatternsResponse {
+  recipeEquipmentId?: number | null;
   lensLookup?: unknown;
   ok?: boolean;
   error?: string;
@@ -77,7 +81,8 @@ interface PatternsResponse {
 }
 
 export const fetchProcessingPatterns = createAsyncThunk<PatternsResponse>("processing/fetch", async () => {
-  const response = await fetch(apiUrl("/api/processing/patterns"));
+  const equipmentId = selectedEquipmentId();
+  const response = await fetch(apiUrl(`/api/processing/patterns${equipmentId ? `?equipment_id=${equipmentId}` : ""}`));
   const data = await readJsonResponse<PatternsResponse>(response, "processing patterns");
   if (!response.ok || data.ok === false) throw new Error(data.error ?? `processing patterns: HTTP ${response.status}`);
   return data;
@@ -181,7 +186,12 @@ const slice = createSlice({
       const steps = a.payload.steps;
       if (steps && steps.length > MAX_STAIR_STEPS) return;
       if (steps) inst.parameters.steps = Math.max(2, steps.length);
-      if (steps) inst.stairSteps = steps; else delete inst.stairSteps;
+      if (steps) inst.stairSteps = steps;
+      else {
+        delete inst.stairSteps;
+        const node = s.stairReceipes.SMProcess?.nodes.find(n => n.name === inst.stairRecipeNode);
+        if (node) inst.parameters.steps = node.steps.length;
+      }
       s.workflowProgress = [];
     },
     setStairRecipeNode(s, a: PayloadAction<{ key: string; nodeName: string }>) {
@@ -191,9 +201,7 @@ const slice = createSlice({
       if (!inst || spec?.model !== "StairCutModel" || !node || node.steps.length > MAX_STAIR_STEPS) return;
       inst.stairRecipeNode = node.name;
       inst.parameters.steps = Math.max(2, node.steps.length);
-      inst.stairSteps = node.steps.map(step => ({ enabled: step.enabled, depth: step.depthUM, material: step.material,
-        removalRate: step.removalRateUM3PerNC, dwell: step.dwellUS, overlap: step.overlapPercent,
-        passes: step.passes, after: step.after }));
+      delete inst.stairSteps;
       s.workflowProgress = [];
     },
     /** Drawing creates another instance; geometry edits continue to use setPatternRoi. */
@@ -332,12 +340,15 @@ const slice = createSlice({
     },
   },
   extraReducers: (b) => {
-    b.addCase(fetchProcessingPatterns.pending, (s) => {
+    b.addCase(fetchProcessingPatterns.pending, (s, a) => {
+      s.recipeRequestId = a.meta.requestId;
       s.status = "loading";
       s.lensLookup = null;
+      s.stairReceipes = {};
       s.error = null;
     });
     b.addCase(fetchProcessingPatterns.fulfilled, (s, a) => {
+      if (s.recipeRequestId && s.recipeRequestId !== a.meta.requestId) return;
       const { specs, errors } = resolveCatalogue(a.payload.patterns ?? [], a.payload.errors ?? []);
       s.status = "ready";
       s.lensLookup = null;
@@ -356,6 +367,8 @@ const slice = createSlice({
       const availableWorkflowNames = new Set([DEFAULT_WORKFLOW.name, ...configuredWorkflows.map(w => w.name)]);
       s.workflows = [DEFAULT_WORKFLOW, ...configuredWorkflows];
       s.materials = a.payload.materials ?? [];
+      const equipmentChanged = s.recipeEquipmentId !== a.payload.recipeEquipmentId;
+      s.recipeEquipmentId = a.payload.recipeEquipmentId;
       s.stairReceipes = a.payload.stairReceipes ?? {};
       s.entryErrors = errors;
       // keep what the operator already drew when the catalogue is reloaded
@@ -375,6 +388,15 @@ const slice = createSlice({
         if (inst.roi) syncPatternGeometry(spec, inst.roi, inst.parameters);
       }
       for (const inst of Object.values(s.instances)) {
+        if (inst.typeKey === "stairCut") {
+          const collection = s.stairReceipes.SMProcess;
+          const node = collection?.nodes.find(n => !equipmentChanged && n.name === inst.stairRecipeNode) ?? collection?.nodes[0];
+          if (node) {
+            if (equipmentChanged || inst.stairRecipeNode !== node.name) delete inst.stairSteps;
+            inst.stairRecipeNode = node.name;
+            inst.parameters.steps = node.steps.length;
+          } else { delete inst.stairSteps; delete inst.stairRecipeNode; inst.enabled = false; }
+        }
         if (!inst.roi) inst.enabled = false;
         if (!s.materials.some(m => m.name === inst.material)) inst.material = s.materials[0]?.name ?? "";
       }
@@ -382,6 +404,7 @@ const slice = createSlice({
       if (s.activeKey && !s.instances[s.activeKey]) s.activeKey = null;
     });
     b.addCase(fetchProcessingPatterns.rejected, (s, a) => {
+      if (s.recipeRequestId && s.recipeRequestId !== a.meta.requestId) return;
       s.status = "error";
       s.error = a.error.message ?? "failed to load";
     });

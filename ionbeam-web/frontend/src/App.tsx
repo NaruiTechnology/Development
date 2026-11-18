@@ -386,6 +386,17 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     showROIPreviewSideCardBase && activeTopTab !== "processing" && !adcView && !showInlineSampleStage;
   const showROIThirdColumn = showROIPreviewSideCard || showInlineSampleStage;
 
+  useEffect(() => {
+    const reload = () => { void dispatch(fetchProcessingPatterns()); };
+    window.addEventListener("ionbeam:equipment-changed", reload);
+    const onStorage = (event: StorageEvent) => { if (event.key === "ionbeam:selectedEquipmentId") reload(); };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("ionbeam:equipment-changed", reload);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [dispatch]);
+
   const processingPatternsLoaded = useRef(false);
   useEffect(() => {
     if (imageWorkspace !== "processing" || processingPatternsLoaded.current) return;

@@ -1,7 +1,7 @@
 """Reference-only Processing API, independently testable without a device service."""
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, Query
-from . import lens_lookup
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from . import lens_lookup, pattern_recipes
 from .auth import require_token
 
 router = APIRouter(prefix="/processing", tags=["processing"], dependencies=[Depends(require_token)])
@@ -36,3 +36,11 @@ async def get_processing_milling_depth(beam_current_pa: float = Query(..., ge=0)
         raise HTTPException(422, str(exc)) from exc
 
 
+
+
+@router.get("/recipes/{equipment_id}/{pattern_key}")
+async def get_processing_recipes(equipment_id: int = Path(..., gt=0), pattern_key: str = Path(..., pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,99}$")):
+    try:
+        return await pattern_recipes.load_pattern_recipes(equipment_id, pattern_key)
+    except pattern_recipes.RecipeUnavailable as exc:
+        raise HTTPException(exc.status, str(exc)) from exc

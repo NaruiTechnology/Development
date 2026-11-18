@@ -26,6 +26,11 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
   for (const spec of specs) {
     const instance = patterns.instances[spec.key];
     if (!instance?.enabled || !instance.roi) continue;
+    if (patterns.recipeEquipmentId !== undefined && patterns.recipeEquipmentId !== null &&
+        spec.model === "StairCutModel" && !patterns.stairReceipes.SMProcess)
+      throw new Error("Load equipment recipes before Stair cut exposure.");
+    if (patterns.recipeEquipmentId === null && spec.model === "StairCutModel")
+      throw new Error("Select equipment and load its Stair cut recipes before exposure.");
     const stair = spec.model === "StairCutModel", cleaning = spec.model === "CleaningLineModel";
     const materialRemovalRates = Object.fromEntries(patterns.materials
       .filter(material => material.removalRateUM3PerNC !== undefined)
@@ -35,7 +40,9 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
     const base = stair ? null : preparePatternExposure(spec, instance.roi, instance.parameters, patterns.lensLookup, field);
     // Stair cut (per-step recipe) and Cleaning line (serial one-row-per-line queue) are step sequences in
     // production and simulation alike, so the planning lattice always matches what Run exposes.
-    const steps = stair ? stairExposureSteps(instance.roi, instance.parameters, instance.stairSteps, patterns.materials[0]?.name, materialRemovalRates)
+    const collection = patterns.stairReceipes?.SMProcess;
+    const presets = (collection?.nodes.find(node => node.name === instance.stairRecipeNode) ?? collection?.nodes[0])?.steps;
+    const steps = stair ? stairExposureSteps(instance.roi, instance.parameters, instance.stairSteps, patterns.materials[0]?.name, materialRemovalRates, presets)
       : cleaning ? cleaningExposureSteps(instance.roi, instance.parameters, base!.plan.spacingUM)
       : simulation ? simulationExposureSteps(spec, instance.roi, instance.parameters, base!.plan.spacingUM)
       : [{ shape: instance.roi, parameters: instance.parameters, caption: "Pattern exposure", requestedDepthUM: undefined, depthBand: undefined }];

@@ -55,7 +55,7 @@ export function stairStepCount(params: PatternParameters): number {
 export function defaultStairStep(params: PatternParameters, index: number, preset?: StairRecipeDefaults): StairStep {
   const n = stairStepCount(params);
   return {
-    enabled: true,
+    enabled: preset?.enabled ?? true,
     depth: preset?.depthUM ?? Number(params.depth ?? 1) * (index + 1) / n,
     dwell: preset?.dwellUS ?? Number(params.dwell ?? 1),
     overlap: preset?.overlapPercent ?? Number(params.overlap ?? 50),

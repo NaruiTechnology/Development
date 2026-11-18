@@ -1,3 +1,5 @@
+import { registerPatternRecipeRoutes } from "./patternRecipeRoutes";
+import { getPatternRecipes, getOptionalPatternRecipes } from "./patternRecipeRepository";
 /**
  * Entry point for the Node proxy / static server.
  *
@@ -488,6 +490,12 @@ app.post("/api/admin/iobeam/equipment/import", async (req, res) => {
   } catch (err) {
     sendConfigError(res, err);
   }
+});
+
+registerPatternRecipeRoutes(app, {
+  currentActor: req => currentAdminActor(req),
+  sendError: sendConfigError,
+  patternKeys: () => readProcessingPatterns(config.processingPatternsPath, false).patterns.map(pattern => pattern.key),
 });
 
 // FIB | SEM calibration parameters (CONFIGURATION > Admin > Calibration). See calibrationRoutes.ts.
@@ -1227,10 +1235,20 @@ app.get("/api/processing/image", (_req, res) => {
   }
 });
 
-app.get("/api/processing/patterns", (_req, res) => {
+app.get("/api/processing/recipes/:equipmentId/:patternKey", async (req, res) => {
   try {
     res.set("Cache-Control", "no-store");
-    res.json({ ok: true, ...readProcessingPatterns(config.processingPatternsPath) });
+    res.json({ ok: true, collections: await getPatternRecipes(Number(req.params.equipmentId), req.params.patternKey) });
+  } catch (err) { sendConfigError(res, err); }
+});
+
+app.get("/api/processing/patterns", async (req, res) => {
+  try {
+    res.set("Cache-Control", "no-store");
+    const catalogue = readProcessingPatterns(config.processingPatternsPath, false);
+    const equipmentId = req.query.equipment_id === undefined ? null : Number(req.query.equipment_id);
+    const stairReceipes = equipmentId === null ? {} : await getOptionalPatternRecipes(equipmentId, "stairCut");
+    res.json({ ok: true, ...catalogue, stairReceipes, recipeEquipmentId: equipmentId });
   } catch (err) {
     sendConfigError(res, err);
   }

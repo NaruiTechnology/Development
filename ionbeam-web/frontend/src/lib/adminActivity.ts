@@ -48,6 +48,7 @@ export function selectedEquipmentId(): number | null {
 export function setSelectedEquipmentId(id: number): void {
   try {
     window.localStorage.setItem(SELECTED_EQUIPMENT_KEY, String(id));
+    window.dispatchEvent(new Event("ionbeam:equipment-changed"));
   } catch {
     /* ignore storage failures */
   }

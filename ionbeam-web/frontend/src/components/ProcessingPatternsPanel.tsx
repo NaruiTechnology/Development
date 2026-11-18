@@ -59,6 +59,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
   const { t, tr } = useTr();
   const processing = useAppSelector((s) => s.processing);
   const { status, error, entryErrors, specs, activeKey } = processing;
+  const patternsLoading = visible && (status === "idle" || status === "loading");
   const field = useAppSelector(s => s.scan.roi);
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
   const selectedSpotCount = useMemo(() => {
@@ -81,15 +82,16 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
 
   return (
     <div hidden={!visible}>
-      <div className="card patterns-card" aria-busy={exposureActive}>
+      <div className="card patterns-card" aria-busy={exposureActive || patternsLoading}>
         <div className="card__header patterns-card__header">
           <span className="patterns-card__heading">
             <span className="card__title">{t("processing.patterns")}</span>
-            {exposureActive && <LoadingSpinner inline size={18} className="patterns-card__spinner"
+            {exposureActive && !patternsLoading && <LoadingSpinner inline size={18} className="patterns-card__spinner"
               ariaLabel={t("processing.exposure.status.current")} />}
           </span>
-          <ExposureControls disabled={exposureDisabled || countValidationFailed} />
+          <ExposureControls disabled={patternsLoading || exposureDisabled || countValidationFailed} />
         </div>
+        {patternsLoading && <LoadingSpinner label={t("processing.loading")} />}
         <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
           {specs.filter(spec => (processing.instances[spec.key]?.typeKey ?? spec.key) === spec.key).map((spec) => {
             const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
@@ -98,12 +100,12 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
                 key={spec.key}
                 type="button"
                 className="pattern-strip__btn"
+                disabled={patternsLoading || disabled}
                 aria-pressed={Boolean(activeKey && processing.instances[activeKey]?.typeKey === spec.key)}
                 aria-controls={`processing-pattern-${encodeURIComponent(activeKey && processing.instances[activeKey]?.typeKey === spec.key ? activeKey : spec.key)}`}
                 data-tooltip={caption}
                 data-styled-tooltip="true"
                 aria-label={caption}
-                disabled={disabled}
                 onClick={() => dispatch(selectPattern(activeKey && processing.instances[activeKey]?.typeKey === spec.key ? null : spec.key))}
               >
                 <PatternIcon name={spec.icon} />

@@ -67,32 +67,45 @@ export interface ProcessingCollection {
   nodes: { name: string; steps: StairRecipeDefaults[] }[];
 }
 
-function parseStairReceipes(raw: unknown): Record<string, ProcessingCollection> {
+export function parseStairReceipes(raw: unknown): Record<string, ProcessingCollection> {
   if (raw === undefined) return {};
   if (!Array.isArray(raw)) throw new ConfigError("Processing StairReceipes must be an array", 500);
   const output: Record<string, ProcessingCollection> = {};
   for (const entry of raw) {
     if (!isObject(entry) || Object.keys(entry).length !== 1) throw new ConfigError("Processing collection entries need exactly one name", 500);
     const [name, value] = Object.entries(entry)[0];
-    if (output[name] || !isObject(value) || value.model !== "StairRecipeDefaults" || !Array.isArray(value.nodes) || !isObject(value.stepDefaults))
+    if (output[name] || !isObject(value) || value.model !== "StairRecipeDefaults" || !Array.isArray(value.nodes) || value.nodes.length === 0 || !isObject(value.stepDefaults))
       throw new ConfigError(`Invalid processing collection: ${name}`, 500);
     const defaults = value.stepDefaults;
     const validAfter = (v: unknown): v is StairRecipeDefaults["after"] => ["none", "view", "viewPause"].includes(String(v));
     const after = defaults.after;
-    if (![defaults.dwellUS, defaults.overlapPercent, defaults.passes].every(v => typeof v === "number" && Number.isFinite(v)) || !validAfter(after))
+    if (![defaults.dwellUS, defaults.overlapPercent, defaults.passes].every(v => typeof v === "number" && Number.isFinite(v)) || !validAfter(after) || Number(defaults.dwellUS) < 0.125 || Number(defaults.dwellUS) > 8192 ||
+        Number(defaults.overlapPercent) < 0 || Number(defaults.overlapPercent) >= 100 ||
+        !Number.isInteger(defaults.passes) || Number(defaults.passes) < 1 || Number(defaults.passes) > 10000)
       throw new ConfigError(`Invalid processing collection defaults: ${name}`, 500);
     const nodeNames = new Set<string>();
     const nodes = value.nodes.map(node => {
-      if (!isObject(node) || typeof node.name !== "string" || nodeNames.has(node.name) || !Array.isArray(node.steps))
+      if (!isObject(node) || typeof node.name !== "string" || nodeNames.has(node.name) || !node.name.trim() || !Array.isArray(node.steps) || node.steps.length < 2 || node.steps.length > 50)
         throw new ConfigError(`Invalid or duplicate node in processing collection: ${name}`, 500);
       nodeNames.add(node.name);
+      let previousDepth = 0;
       const steps = node.steps.map(step => {
         if (!isObject(step) || typeof step.enabled !== "boolean" || typeof step.material !== "string" ||
           ![step.depthUM, step.removalRateUM3PerNC].every(v => typeof v === "number" && Number.isFinite(v) && v >= 0))
           throw new ConfigError(`Invalid step in processing collection ${name}.${node.name}`, 500);
+        if (Number(step.depthUM) <= previousDepth) throw new ConfigError(`Recipe depths must increase: ${name}.${node.name}`, 500);
+        previousDepth = Number(step.depthUM);
+        const dwellUS = step.dwellUS ?? defaults.dwellUS;
+        const overlapPercent = step.overlapPercent ?? defaults.overlapPercent;
+        const passes = step.passes ?? defaults.passes;
+        const stepAfter = step.after ?? after;
+        if (typeof dwellUS !== "number" || !Number.isFinite(dwellUS) || dwellUS < 0.125 || dwellUS > 8192 ||
+            typeof overlapPercent !== "number" || !Number.isFinite(overlapPercent) || overlapPercent < 0 || overlapPercent >= 100 ||
+            typeof passes !== "number" || !Number.isInteger(passes) || passes < 1 || passes > 10000 || !validAfter(stepAfter) ||
+            !step.material.trim()) throw new ConfigError(`Invalid step settings: ${name}.${node.name}`, 500);
         return { enabled: step.enabled, depthUM: step.depthUM as number, material: step.material,
-          removalRateUM3PerNC: step.removalRateUM3PerNC as number, dwellUS: defaults.dwellUS as number,
-          overlapPercent: defaults.overlapPercent as number, passes: defaults.passes as number, after };
+          removalRateUM3PerNC: step.removalRateUM3PerNC as number, dwellUS,
+          overlapPercent, passes, after: stepAfter };
       });
       return { name: node.name, steps };
     });
@@ -259,7 +272,7 @@ export function parseProcessingPatterns(data: unknown): ProcessingPatternsConfig
   return out;
 }
 
-export function readProcessingPatterns(file: string): ProcessingPatternsConfig {
+export function readProcessingPatterns(file: string, loadLocalRecipes = true): ProcessingPatternsConfig {
   let text: string;
   try {
     text = fs.readFileSync(file, "utf8");
@@ -268,6 +281,7 @@ export function readProcessingPatterns(file: string): ProcessingPatternsConfig {
   }
   try {
     const data: unknown = JSON.parse(text);
+    if (!loadLocalRecipes && isObject(data)) return parseProcessingPatterns({ ...data, StairReceipes: undefined });
     if (isObject(data) && isObject(data.StairReceipes) && typeof data.StairReceipes.$ref === "string") {
       const reference = path.resolve(path.dirname(file), data.StairReceipes.$ref);
       let recipes: unknown;

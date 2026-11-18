@@ -3,6 +3,8 @@ Description=Local Glasgow device service
 After=network.target
 
 [Service]
+# Recipe API shares the Node backend’s configured equipment database.
+Environment=IONBEAM_RECIPE_API_URL=http://127.0.0.1:4000
 Type=exec
 User=@ADMIN_USER@
 WorkingDirectory=@SERVICE_ROOT@

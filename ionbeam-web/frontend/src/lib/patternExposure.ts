@@ -1,3 +1,4 @@
+import type { StairRecipeDefaults } from "./stairRecipe.js";
 import { buildLatticeRequest, linearDacMap, type DacMap } from "./latticeRequest.js";
 import { lookupSpotSize, type LensLookup } from "./lensLookup.js";
 import { planExposure, type ExposurePlan } from "./exposurePlan.js";
@@ -73,9 +74,9 @@ export interface PatternExposureStep {
  * Used by simulation and production alike. */
 export function stairExposureSteps(shape: PatternRoi, parameters: PatternParameters,
   overrides?: ReadonlyArray<StairStepOverride | null | undefined>, defaultMaterial?: string,
-  materialRemovalRates: Readonly<Record<string, number>> = {}): PatternExposureStep[] {
+  materialRemovalRates: Readonly<Record<string, number>> = {}, presets?: ReadonlyArray<StairRecipeDefaults>): PatternExposureStep[] {
   const strips = stairRects(shape as RectRoi, parameters);
-  const recipe = resolveStairSteps(parameters, overrides).map(step => ({
+  const recipe = resolveStairSteps(parameters, overrides, presets).map(step => ({
     ...step,
     material: step.material || defaultMaterial || "",
     removalRate: step.removalRate > 0 ? step.removalRate : materialRemovalRates[step.material || defaultMaterial || ""] ?? 0,
@@ -137,12 +138,12 @@ export function simulationExposureSteps(spec: PatternSpec, shape: PatternRoi, pa
 /** Planned beam-on time and lattice spots, using the same step expansion as Exposure Start. */
 export function plannedPatternExposureMetrics(spec: PatternSpec, shape: PatternRoi, parameters: PatternParameters,
   lookup: LensLookup, fov: Pick<ROIState, "x_origin" | "x_end" | "y_origin" | "y_end" | "scanGeometry">,
-  options: {simulation?: boolean; stairOverrides?: ReadonlyArray<StairStepOverride | null | undefined>; defaultMaterial?: string;
+  options: {stairPresets?: ReadonlyArray<StairRecipeDefaults>; simulation?: boolean; stairOverrides?: ReadonlyArray<StairStepOverride | null | undefined>; defaultMaterial?: string;
     materialRemovalRates?: Readonly<Record<string, number>>} = {}):
   {spotCount: number; spotCountExact: boolean; beamOnS: number} {
   const stair = spec.model === "StairCutModel", cleaning = spec.model === "CleaningLineModel";
   const base = stair ? null : preparePatternExposure(spec, shape, parameters, lookup, fov);
-  const steps = stair ? stairExposureSteps(shape, parameters, options.stairOverrides, options.defaultMaterial, options.materialRemovalRates)
+  const steps = stair ? stairExposureSteps(shape, parameters, options.stairOverrides, options.defaultMaterial, options.materialRemovalRates, options.stairPresets)
     : cleaning ? cleaningExposureSteps(shape, parameters, base!.plan.spacingUM)
     : options.simulation ? simulationExposureSteps(spec, shape, parameters, base!.plan.spacingUM)
     : [{shape, parameters}];

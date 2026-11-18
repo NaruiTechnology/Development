@@ -10,7 +10,7 @@ const params = { axis: "x", beamCurrent: 150, dwell: 1, overlap: 50, steps: 5, d
 const roi = { x_start: 0, x_end: 10, y_start: 0, y_end: 10 };
 const spec = { key: "stairs", caption: "Stair cut", model: "StairCutModel", roi: "rect" };
 const field = { x_origin: 0, x_end: 100, y_origin: 0, y_end: 100 };
-const state = (extra = {}) => ({ lensLookup, specs: [spec],
+const state = (extra = {}) => ({ lensLookup, materials: [], specs: [spec],
   instances: { stairs: { enabled: true, roi, parameters: params, ...extra } } });
 
 test("defaults reproduce the previous even depth split with card-level recipe", () => {
@@ -82,7 +82,7 @@ test("an invalid recipe fails before any request is built", () => {
 
 test("other patterns keep their single production lattice", () => {
   const solid = { key: "box", caption: "Box", model: "SolidBoxModel", roi: "rect" };
-  const s = { lensLookup, specs: [solid], instances: { box: { enabled: true, roi, parameters: params } } };
+  const s = { lensLookup, materials: [], specs: [solid], instances: { box: { enabled: true, roi, parameters: params } } };
   assert.equal(prepareExposureSequence(s, field, false).length, 1);
 });
 
@@ -156,4 +156,48 @@ test("'after' defaults to none, imports with friendly spellings, validates, and 
   assert.deepEqual(entries.map(e => e.node.exposure.after), ["view", "viewPause", undefined, undefined, undefined]);
   const back = resolveStairSteps(params, parseStairStepsImport(stairStepsToCsv(resolveStairSteps(params, [{ after: "viewPause" }]))));
   assert.equal(back[0].after, "viewPause");
+});
+
+
+test("equipment presets drive production planning and sparse overrides", () => {
+  const presets = Array.from({length: 5}, (_, i) => ({enabled: i !== 1, depthUM: (i + 1) * 0.2,
+    material: "Si", removalRateUM3PerNC: 0.27, dwellUS: 2, overlapPercent: 40, passes: 1, after: "none"}));
+  const patterns = {...state(), recipeEquipmentId: 1290,
+    stairReceipes: {SMProcess: {nodes: [{name: "28nm", steps: presets}]}}};
+  patterns.instances.stairs.stairRecipeNode = "28nm";
+  const entries = prepareExposureSequence(patterns, field, false);
+  assert.equal(entries.length, 4, "a disabled database step is not exposed");
+  assert.equal(entries[0].node.exposure.requestedDepthUM, 0.2);
+  assert.equal(entries[0].node.exposure.removalRate, 0.27);
+  const resolved = resolveStairSteps(params, [{dwell: 4}], presets);
+  assert.equal(resolved[0].dwell, 4);
+  assert.equal(resolved[1].dwell, 2);
+  assert.equal(resolved[1].enabled, false);
+  assert.throws(() => prepareExposureSequence({...patterns, recipeEquipmentId: null}, field, false), /Select equipment/);
+});
+
+
+test("changing equipment discards overrides and ignores late recipe responses", async () => {
+  const {createServer} = await import("vite");
+  const vite = await createServer({server: {middlewareMode: true, watch: null, ws: false},
+    optimizeDeps: {noDiscovery: true, include: []}, appType: "custom"});
+  try {
+    const processing = await vite.ssrLoadModule("/src/store/processingSlice.ts");
+    const reducer = processing.default;
+    const presets = {SMProcess: {nodes: [{name: "28nm", steps: Array.from({length: 5}, (_, i) =>
+      ({enabled: true, depthUM: (i+1)*0.2, material: "Si", removalRateUM3PerNC: 0.27,
+        dwellUS: 1, overlapPercent: 50, passes: 1, after: "none"}))}]}};
+    const payload = {recipeEquipmentId: 1290, lensLookup, stairReceipes: presets,
+      patterns: [{key: "stairCut", caption: "Stair cut", model: "StairCutModel", roi: "rect", parameters: []}]};
+    let state = reducer(undefined, processing.fetchProcessingPatterns.pending("a"));
+    state = reducer(state, processing.fetchProcessingPatterns.fulfilled(payload, "a"));
+    state = reducer(state, processing.setStairStepField({key: "stairCut", index: 0, field: "dwell", value: 9}));
+    assert.equal(state.instances.stairCut.stairSteps[0].dwell, 9);
+    state = reducer(state, processing.fetchProcessingPatterns.pending("b"));
+    assert.equal(state.lensLookup, null);
+    state = reducer(state, processing.fetchProcessingPatterns.fulfilled({...payload, recipeEquipmentId: 1291}, "b"));
+    assert.equal(state.instances.stairCut.stairSteps, undefined);
+    state = reducer(state, processing.fetchProcessingPatterns.fulfilled(payload, "a"));
+    assert.equal(state.recipeEquipmentId, 1291);
+  } finally { await vite.close(); }
 });

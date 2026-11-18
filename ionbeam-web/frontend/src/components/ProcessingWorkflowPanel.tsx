@@ -6,11 +6,13 @@ import { useAppSelector } from "../store";
 
 /** Orbit's numbered timeline, adapted to scan stream completion events. */
 export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) {
-  const { workflowProgress, specs, instances, workflows, materials, lensLookup } = useAppSelector(s => s.processing);
+  const { workflowProgress, specs, instances, workflows, materials, lensLookup, stairReceipes } = useAppSelector(s => s.processing);
   const {progress: exposureProgress, phase: exposurePhase} = useAppSelector(s => s.exposure);
   const field = useAppSelector(s => s.scan.roi);
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
   const instance = instances[patternKey];
+  const stairPresets = (stairReceipes.SMProcess?.nodes.find(n => n.name === instance?.stairRecipeNode)
+    ?? stairReceipes.SMProcess?.nodes[0])?.steps;
   const selectedWorkflow = workflows.find(w => w.name === (instance?.workflowEnabled ? instance.workflow : "default"));
   const exposureNodes = exposureProgress.filter(step => step.id.startsWith(`${patternKey}:`));
   const recordedNodes = exposureNodes.length ? exposureNodes : workflowProgress.filter(step => step.id.startsWith(`${patternKey}:`));
@@ -40,9 +42,9 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
       .map(material => [material.name, material.removalRateUM3PerNC!]));
     try {
       return plannedPatternExposureMetrics(spec, instance.roi, instance.parameters, lensLookup, field,
-        {simulation, stairOverrides: instance.stairSteps, defaultMaterial: materials[0]?.name, materialRemovalRates}).beamOnS;
+        {simulation, stairPresets, stairOverrides: instance.stairSteps, defaultMaterial: materials[0]?.name, materialRemovalRates}).beamOnS;
     } catch { return 0; }
-  }, [exposureProgress, patternKey, specs, instance, lensLookup, field, simulation, materials]);
+  }, [exposureProgress, patternKey, specs, instance, lensLookup, field, simulation, materials, stairPresets]);
   const exposureInProgress = ["preparing", "running", "paused", "stopping"].includes(exposurePhase);
   const timeLeftMs = useMemo(() => {
     if (exposurePhase === "completed") return 0;

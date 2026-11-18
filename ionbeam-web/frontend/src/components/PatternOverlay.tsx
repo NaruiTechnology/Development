@@ -19,7 +19,7 @@ import { ExposureLatticeGeometry } from "./ExposureLatticeOverlay";
 import { createPortal } from "react-dom";
 
 import { MODEL_REGISTRY, lineRoi, patternBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
-import { resolveStairSteps, type StairStepOverride } from "../lib/stairRecipe";
+import { resolveStairSteps, type StairRecipeDefaults, type StairStepOverride } from "../lib/stairRecipe";
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { useAppDispatch, useAppSelector, useWorkspaceActive } from "../store";
 import { useTranslation } from "../i18n";
@@ -57,7 +57,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   const [menu, setMenu] = useState<{ x: number; y: number; key: string } | null>(null);
   const [grayTooltip, setGrayTooltip] = useState<{ x: number; y: number; value: number } | null>(null);
   const roi = useAppSelector((s) => s.scan.roi);
-  const { specs, instances, activeKey } = useAppSelector((s) => s.processing);
+  const { specs, instances, activeKey, stairReceipes } = useAppSelector((s) => s.processing);
   const materials = useAppSelector((s) => s.processing.materials);
   const [, repaint] = useReducer((n: number) => n + 1, 0);
   const draft = useRef<Draft | null>(null);
@@ -353,7 +353,9 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         return inst?.roi ? (
           <g key={spec.key} data-pattern-key={spec.key} style={{ cursor: disabled ? "default" : "grab" }}>
             <Shape spec={spec} params={inst.parameters} roi={inst.roi} active={spec.key === activeKey}
-              stairSteps={inst.stairSteps} materials={materials} defaultMaterial={materials[0]?.name} cx={cx} cy={cy} sx={sx} sy={sy} />
+              stairSteps={inst.stairSteps}
+              stairPresets={(stairReceipes.SMProcess?.nodes.find(n => n.name === inst.stairRecipeNode) ?? stairReceipes.SMProcess?.nodes[0])?.steps}
+              materials={materials} defaultMaterial={materials[0]?.name} cx={cx} cy={cy} sx={sx} sy={sy} />
             <ScanAxisCue roi={inst.roi} index={inst.index} axis={inst.parameters.axis === "y" ? "y" : "x"} cx={cx} cy={cy} sx={sx} sy={sy} />
             {spec.key === activeKey && (() => {
               const box = patternBounds(inst.roi);
@@ -440,6 +442,7 @@ interface ShapeProps {
   active: boolean;
   draft?: boolean;
   stairSteps?: ReadonlyArray<StairStepOverride | null | undefined>;
+  stairPresets?: ReadonlyArray<StairRecipeDefaults>;
   materials?: ReadonlyArray<{name: string; caption?: string; removalRateUM3PerNC?: number}>;
   defaultMaterial?: string;
   cx: (x: number) => number;
@@ -452,7 +455,7 @@ function circlePath(x: number, y: number, radius: number) {
   return `M${x - radius} ${y}A${radius} ${radius} 0 1 0 ${x + radius} ${y}A${radius} ${radius} 0 1 0 ${x - radius} ${y}Z`;
 }
 
-function Shape({ spec, params, roi, active, draft = false, stairSteps, materials = [], defaultMaterial, cx, cy, sx, sy }: ShapeProps) {
+function Shape({ spec, params, roi, active, draft = false, stairSteps, stairPresets, materials = [], defaultMaterial, cx, cy, sx, sy }: ShapeProps) {
   const color = active ? ACTIVE_COLOR : OTHER_COLOR;
   const common = {
     pointerEvents: "all" as const,
@@ -495,7 +498,7 @@ function Shape({ spec, params, roi, active, draft = false, stairSteps, materials
   }
   if (spec.model === "StairCutModel") {
     const steps = stairRects(r, params);
-    const recipe = resolveStairSteps(params, stairSteps);
+    const recipe = resolveStairSteps(params, stairSteps, stairPresets);
     const maxDepth = Math.max(...recipe.map(step => step.depth), Number.EPSILON);
     return (
       <g>

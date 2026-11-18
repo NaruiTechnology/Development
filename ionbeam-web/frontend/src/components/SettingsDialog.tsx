@@ -1,3 +1,5 @@
+import { PatternRecipesPanel } from "./PatternRecipesPanel";
+import { patternRecipeApi, type RecipeAssignment } from "../lib/patternRecipeApi";
 /**
  * SettingsDialog - modal editor for streamData.json with tabbed sections.
  *
@@ -364,7 +366,7 @@ function SettingsModalShell({
   // we light up the tabs.
   return (
     <div
-      className={`modal settings-modal${activeTab === "admin" && activeSubTab === "calibration" ? " settings-modal--wide" : activeTab === "admin" && activeSubTab === "equipment" ? " settings-modal--equipment" : ""}`}
+      className={`modal settings-modal${activeTab === "admin" && (activeSubTab === "calibration" || activeSubTab === "patternRecipes") ? " settings-modal--wide" : activeTab === "admin" && activeSubTab === "equipment" ? " settings-modal--equipment" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleIdRef.current}
@@ -1620,7 +1622,7 @@ const ADMIN_ROLE_OPTIONS = [
 
 const ADMIN_ROLE = 3;
 const AUDITOR_ROLE = 4;
-type AdminSubTab = "configuration" | "users" | "equipment" | "calibration" | "allowedHosts" | "ftp";
+type AdminSubTab = "patternRecipes" | "configuration" | "users" | "equipment" | "calibration" | "allowedHosts" | "ftp";
 
 function emptyAdminUser(nextId: number): AdminUserRow {
   return {
@@ -1852,6 +1854,16 @@ function AdminTab({
   const [privilegeNotice, setPrivilegeNotice] = useState<string | null>(null);
   const equipmentCsvInputRef = useRef<HTMLInputElement | null>(null);
   const [equipmentCsvBusy, setEquipmentCsvBusy] = useState(false);
+  const [recipeEquipmentId, setRecipeEquipmentId] = useState<number | null>(null);
+  const [recipeAssignments, setRecipeAssignments] = useState<RecipeAssignment[]>([]);
+  const [recipeListVersion, setRecipeListVersion] = useState(0);
+  useEffect(() => {
+    if (activeSubTab !== "equipment" && activeSubTab !== "patternRecipes") return;
+    let cancelled = false;
+    patternRecipeApi.list().then(result => { if (!cancelled) setRecipeAssignments(result.assignments); })
+      .catch(e => { if (!cancelled) setLocalError(e instanceof Error ? e.message : String(e)); });
+    return () => { cancelled = true; };
+  }, [activeSubTab, recipeListVersion]);
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
   const [dbPasswordVisible, setDbPasswordVisible] = useState(false);
   const [dbPasswordConfigured, setDbPasswordConfigured] = useState(false);
@@ -1885,7 +1897,7 @@ function AdminTab({
   }, []);
 
   useEffect(() => {
-    if (mobilityMode && (activeSubTab === "configuration" || activeSubTab === "calibration")) {
+    if (mobilityMode && (activeSubTab === "configuration" || activeSubTab === "calibration" || activeSubTab === "patternRecipes")) {
       onSelectSubTab("users");
     }
   }, [activeSubTab, mobilityMode, onSelectSubTab]);
@@ -2300,6 +2312,8 @@ function AdminTab({
           label={t("settings.admin.group.equipment")}
           onSelect={onSelectSubTab}
         />
+        {!mobilityMode && <AdminSubTabButton tab="patternRecipes" active={activeSubTab}
+          label={t("recipes.title")} onSelect={onSelectSubTab} />}
         {!mobilityMode && (
           <AdminSubTabButton
             tab="calibration"
@@ -2563,6 +2577,11 @@ function AdminTab({
           </div>
           <EquipmentGrid
             equipment={equipmentFromDraft(draft)}
+            recipeCounts={Object.fromEntries(equipmentFromDraft(draft).map(row => [row.id, recipeAssignments.filter(a => a.equipment_id === row.id).length]))}
+            onOpenRecipes={mobilityMode ? undefined : id => {
+              if (!equipmentFromDraft(source).some(row => row.id === id)) { setLocalError(t("recipes.saveEquipmentFirst")); return; }
+              setRecipeEquipmentId(id); onSelectSubTab("patternRecipes");
+            }}
             disabled={busy || equipmentCsvBusy || !canManageAdminConfig || equipmentError !== null}
             actionDisabled={busy || equipmentCsvBusy || equipmentError !== null}
             canManage={canManageAdminConfig}
@@ -2579,6 +2598,9 @@ function AdminTab({
         </>
       )}
 
+      {activeSubTab === "patternRecipes" && !mobilityMode && <PatternRecipesPanel
+        equipment={equipmentFromDraft(source)} initialEquipmentId={recipeEquipmentId} canManage={canManageAdminConfig}
+        onSaved={() => setRecipeListVersion(value => value + 1)} />}
       {activeSubTab === "calibration" && !mobilityMode && <CalibrationPanel />}
 
       {activeSubTab === "configuration" && (

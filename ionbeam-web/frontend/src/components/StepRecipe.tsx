@@ -37,22 +37,25 @@ export function StairRecipeCard({ patternKey, caption, instance, disabled }: {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const collection = useAppSelector(state => state.processing.stairReceipes.SMProcess);
+  const loading = useAppSelector(state => state.processing.status === "loading");
   const selectedNodeName = instance.stairRecipeNode ?? collection?.nodes[0]?.name ?? "";
   return (
     <details className="stair-recipe-card" data-stair-recipe={patternKey}>
       <summary className="stair-recipe-card__header">
         <span className="stair-recipe-card__title">{t("processing.stair.steps" as TranslationKey)}</span>
         <span className="stair-recipe-card__source">{t("processing.stair.technologyNode" as TranslationKey)}</span>
-        <select className="select stair-recipe-card__select" aria-label={`${caption}: SMProcess recipe`}
-          value={selectedNodeName} disabled={disabled || !collection?.nodes.length}
+        <select className="select stair-recipe-card__select" aria-label={`${caption}: ${t("processing.stair.technologyNode" as TranslationKey)}`}
+          value={selectedNodeName} disabled={disabled || loading || !collection?.nodes.length}
           onClick={event => event.stopPropagation()}
           onChange={event => dispatch(setStairRecipeNode({ key: patternKey, nodeName: event.target.value }))}>
+          {!collection?.nodes.length && <option value="">{t(loading ? "processing.loading" : "recipes.noNodes")}</option>}
           {collection?.nodes.map(node => <option key={node.name} value={node.name}>{node.name}</option>)}
         </select>
         <span className="stair-recipe-card__chevron" aria-hidden="true"><Icon name="chevronDown" /></span>
       </summary>
       <div className="stair-recipe-card__body">
-        <StepRecipe patternKey={patternKey} caption={caption} instance={instance} disabled={disabled} />
+        {!collection && !loading && <p role="status">{t("recipes.assignmentRequired")}</p>}
+        <StepRecipe patternKey={patternKey} caption={caption} instance={instance} disabled={disabled || !collection} />
       </div>
     </details>
   );

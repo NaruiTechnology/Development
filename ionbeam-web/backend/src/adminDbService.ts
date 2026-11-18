@@ -135,6 +135,10 @@ export const ADMIN_EXTRA_SCHEMA_FILES = [
   "003_calibration_schema.sql",
   "005_dimension_calibration_schema.sql",
   "006_equipment_csv_functions.sql",
+  "007_pattern_recipes.sql",
+  "008_pattern_recipe_editing.sql",
+  "009_pattern_recipe_history.sql",
+  "010_restore_technology_nodes.sql",
 ];
 
 export async function applyAdminDatabaseSetup(options: AdminDatabaseSetupOptions): Promise<AdminDatabaseSetupResult> {
