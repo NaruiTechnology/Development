@@ -241,6 +241,7 @@ function PatternCard({ spec, instance, active, indexed = false, countInvalid = f
   const unit = unitLabel(useAppSelector((s) => s.scan.roi.scale_unit));
   const workflows = useAppSelector(s => s.processing.workflows);
   const materials = useAppSelector(s => s.processing.materials);
+  const stairRecipeAssigned = useAppSelector(s => Boolean(s.processing.stairReceipes.SMProcess));
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
   const exposureState = useAppSelector(s => s.exposure);
   const [parametersOpen, setParametersOpen] = useState(false);
@@ -365,7 +366,8 @@ function PatternCard({ spec, instance, active, indexed = false, countInvalid = f
           </div>
           <div className="pattern-parameters-card__body" id={parametersId} hidden={!parametersOpen}>
         <div className="pattern-card__parameters">
-        {spec.parameters.filter((p) => p.name !== "axis" && p.name !== "steps" && p.name !== "loops" && p.name !== "passes" && p.name !== "direction").map((p) => (
+        {spec.parameters.filter((p) => p.name !== "axis" && p.name !== "steps" && p.name !== "loops" && p.name !== "passes" && p.name !== "direction"
+          && !(spec.model === "StairCutModel" && stairRecipeAssigned && (p.name === "depth" || p.name === "overlap"))).map((p) => (
           <ParameterField
             key={p.name}
             spec={p}
