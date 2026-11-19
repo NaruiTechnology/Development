@@ -68,7 +68,7 @@ import {
 import { saveAllowedHosts, syncAllowedHostsModuleFromDb } from "./allowedHosts";
 import { registerCalibrationRoutes } from "./calibrationRoutes";
 import { registerDimensionCalibrationRoutes } from "./dimensionCalibrationRoutes";
-import { readProcessingPatterns } from "./processingPatternsConfig";
+import { getProcessingCatalogue, getProcessingCatalogueDocument } from "./processingCatalogueRepository";
 import { readProcessingImage } from "./processingImageConfig";
 import { normalizeScanGeometry, readScanGeometry, writeScanGeometry } from "./scanGeometryConfig";
 import {
@@ -495,7 +495,7 @@ app.post("/api/admin/iobeam/equipment/import", async (req, res) => {
 registerPatternRecipeRoutes(app, {
   currentActor: req => currentAdminActor(req),
   sendError: sendConfigError,
-  patternKeys: () => readProcessingPatterns(config.processingPatternsPath, false).patterns.map(pattern => pattern.key),
+  patternKeys: async () => (await getProcessingCatalogue()).patterns.map(pattern => pattern.key),
 });
 
 // FIB | SEM calibration parameters (CONFIGURATION > Admin > Calibration). See calibrationRoutes.ts.
@@ -1224,12 +1224,12 @@ app.get("/api/admin/scan-geometry", async (_req, res) => {
   }
 });
 
-// Processing tab pattern catalogue (GlasgowDataIO/Json/processingPatterns.json). Read-only; the browser builds one
+// Database processing catalogue. Read-only; the browser builds one
 // model instance and one card per entry that is not marked skip.
-app.get("/api/processing/image", (_req, res) => {
+app.get("/api/processing/image", async (_req, res) => {
   try {
     res.set("Cache-Control", "no-store");
-    res.json({ ok: true, ...readProcessingImage(config.processingPatternsPath, config.configPath) });
+    res.json({ ok: true, ...readProcessingImage(config.processingPatternsPath, config.configPath, (await getProcessingCatalogue()).header) });
   } catch (err) {
     sendConfigError(res, err);
   }
@@ -1242,10 +1242,18 @@ app.get("/api/processing/recipes/:equipmentId/:patternKey", async (req, res) => 
   } catch (err) { sendConfigError(res, err); }
 });
 
+// Native clients consume the same database document rather than reading the legacy seed file.
+app.get("/api/processing/catalogue", async (_req, res) => {
+  try {
+    res.set("Cache-Control", "no-store");
+    res.json({ ok: true, document: await getProcessingCatalogueDocument() });
+  } catch (err) { sendConfigError(res, err); }
+});
+
 app.get("/api/processing/patterns", async (req, res) => {
   try {
     res.set("Cache-Control", "no-store");
-    const catalogue = readProcessingPatterns(config.processingPatternsPath, false);
+    const catalogue = await getProcessingCatalogue();
     const equipmentId = req.query.equipment_id === undefined ? null : Number(req.query.equipment_id);
     const stairReceipes = equipmentId === null ? {} : await getOptionalPatternRecipes(equipmentId, "stairCut");
     res.json({ ok: true, ...catalogue, stairReceipes, recipeEquipmentId: equipmentId });

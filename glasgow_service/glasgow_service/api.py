@@ -7,6 +7,8 @@ Swagger UI:   http://127.0.0.1:8765/docs
 ReDoc:        http://127.0.0.1:8765/redoc
 OpenAPI JSON: http://127.0.0.1:8765/openapi.json
 """
+import os
+import time
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -23,6 +25,7 @@ from .auth    import require_token
 from . import scan_assets
 from .processing_reference_api import router as processing_reference_router
 from .config  import find_config_path
+from .exposure_diagnostics import ExposureWireDiagnostics, exposure_scan_id
 from .service import LOG_NAME
 from AutomationPy.buildingblocks.automation_log import AutomationLog
 
@@ -423,8 +426,14 @@ async def _stream_scan(ws: WebSocket, make_gen, *, kind: str | None = None):
     gen = None
     watcher = None
     chunks = 0
+    wire_diagnostics = None
+    diagnostic_token = None
+    wire_completed = False
     try:
         payload = await ws.receive_json()
+        if payload.get("pattern") == "lattice" and os.environ.get("IONBEAM_EXPOSURE_DIAGNOSTICS", "1").lower() not in {"0", "false", "off"}:
+            wire_diagnostics = ExposureWireDiagnostics(logger)
+            diagnostic_token = exposure_scan_id.set(wire_diagnostics.id)
         watcher = asyncio.create_task(
             _watch_client_disconnect(ws, asyncio.current_task(), kind))
         gen = make_gen(payload)
@@ -433,9 +442,13 @@ async def _stream_scan(ws: WebSocket, make_gen, *, kind: str | None = None):
             gen, metadata = gen
             await ws.send_json(metadata)
         async for chunk in gen:
+            send_started = time.monotonic()
             await ws.send_bytes(chunk)
+            if wire_diagnostics:
+                wire_diagnostics.sent(chunk, time.monotonic()-send_started)
             chunks += 1
         await ws.send_json({"event": "done", "chunks": chunks})
+        wire_completed = True
     except DeviceBusy as e:
         await ws.send_json({"event": "error", "code": "busy",
                             "detail": str(e) or "device busy"})
@@ -467,7 +480,13 @@ async def _stream_scan(ws: WebSocket, make_gen, *, kind: str | None = None):
     finally:
         if watcher is not None:
             watcher.cancel()
-        if gen is not None:
-            await gen.aclose()
+        try:
+            if gen is not None:
+                await gen.aclose()
+        finally:
+            if wire_diagnostics:
+                wire_diagnostics.finish(wire_completed)
+            if diagnostic_token is not None:
+                exposure_scan_id.reset(diagnostic_token)
         try: await ws.close()
         except Exception: pass

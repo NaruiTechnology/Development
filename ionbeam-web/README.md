@@ -705,3 +705,16 @@ SCAN, with no database migration. Rebuild both web packages after these changes.
 Regression coverage includes `workspaceIsolation.test.mjs`,
 `workspaceResults.test.mjs`, and the backend `scanQueueStore.test.ts` workspace
 recovery test. No additional runtime dependency or environment setting is needed.
+
+
+### Processing catalogue database
+
+Runtime pattern initialization comes from `ionbeam_asset.processing_catalogue.document`,
+loaded by `/api/processing/patterns` (web) and `/api/processing/catalogue` (native).
+The document includes the pattern definitions, parameter defaults, readouts, materials,
+workflow definitions, lens lookup and image settings. Pass defaults are 3.
+Equipment-specific stair recipes remain in `ionbeam_asset.pattern_recipe`.
+Migration `011_processing_catalogue.sql` seeds the catalogue once and preserves existing
+rows on subsequent setup. The JSON catalogue is a legacy import/test fixture; runtime
+requests never fall back to it when the database is unavailable. Image files remain
+filesystem assets; their initialization settings come from the database.

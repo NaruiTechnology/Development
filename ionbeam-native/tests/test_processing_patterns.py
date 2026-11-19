@@ -191,3 +191,22 @@ def test_numeric_dimensions_sync_with_drawing_and_ring_edits():
     box.set_roi({"x_start":10,"x_end":20,"y_start":30,"y_end":40})
     box.set_parameter("width",20)
     assert box.roi == {"x_start":5,"x_end":25,"y_start":30,"y_end":40}
+
+
+def test_database_initialization_uses_shared_catalogue_without_local_fallback(monkeypatch):
+    from ionbeam_native.backend.client import Backend
+    from ionbeam_native.processing.config import load_database_models
+    document = {"Patterns": [{"circle": {"model": "CircleModel", "roi": "circle", "parameters": {
+        "passes": {"type": "int", "default": 3}}}}]}
+    class Response:
+        is_success = True
+    monkeypatch.setattr(Backend, "request", lambda self, method, url: Response())
+    monkeypatch.setattr(Backend, "read_json", staticmethod(lambda response, label: {"ok": True, "document": document}))
+    cfg, models = load_database_models()
+    assert not cfg.errors
+    assert models["circle"].parameters["passes"] == 3
+    def offline(*args):
+        raise RuntimeError("database offline")
+    monkeypatch.setattr(Backend, "request", offline)
+    with pytest.raises(PatternConfigError, match="database offline"):
+        load_database_models()

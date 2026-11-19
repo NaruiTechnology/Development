@@ -2,12 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { ConfigError } from "./configManager";
 
-/** Read only the image named by local configuration; requests cannot supply a path. */
-export function readProcessingImage(patternsPath: string, streamConfigPath: string) {
+/** Read the image asset named by database configuration; requests cannot supply a path. */
+export function readProcessingImage(patternsPath: string, streamConfigPath: string, header: Record<string, unknown>) {
   const stream = JSON.parse(fs.readFileSync(streamConfigPath, "utf8"));
   if (stream.IsProduction !== false) return { is_production: true, image: null };
-  const patterns = JSON.parse(fs.readFileSync(patternsPath, "utf8"));
-  const configured = patterns?.Header?.LoadImage;
+  const configured = header.LoadImage;
   if (configured === undefined || configured === null || configured === "") {
     return { is_production: false, image: null };
   }

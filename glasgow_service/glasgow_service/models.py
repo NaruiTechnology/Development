@@ -398,6 +398,13 @@ class LatticeRequest(BaseModel):
         return self
 
 
+class ExposureDiagnosticContext(BaseModel):
+    run_id: str = Field(max_length=80)
+    step_id: str = Field(max_length=160)
+    pass_index: int = Field(ge=0)
+    segment_index: int = Field(ge=1)
+
+
 class VectorRequest(BaseModel):
     pattern:        VectorPattern = VectorPattern.default
     # Default matches the frontend's VECTOR_SCAN_PATHS ordering (see
@@ -508,6 +515,7 @@ class VectorRequest(BaseModel):
         default=None,
         description="Browser-session simulation override. Ignored in production mode.",
     )
+    diagnostic_context: Optional[ExposureDiagnosticContext] = None
     lattice: Optional[LatticeRequest] = Field(
         default=None,
         description="Required for pattern=lattice: shape, pitch, axis, dwell and passes; the service streams the spots.",

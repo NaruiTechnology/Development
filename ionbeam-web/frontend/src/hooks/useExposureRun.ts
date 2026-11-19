@@ -59,6 +59,7 @@ export function useExposureRun() {
     })();
   }
   useEffect(()=>{void hydrateHistory();},[workspace]);
+  const diagnosticRun = useRef({id: "", segment: 0});
   const running = useRef(false), cancelled = useRef(false);
   const socket = useRef<ExposureStream | null>(null), auth = useRef<AbortController | null>(null);
   const viewSocket = useRef<ExposureStream | null>(null);
@@ -111,7 +112,12 @@ export function useExposureRun() {
       pendingSamples = 0;
     };
     try {
-      await activeSocket.run(request, buffer => {
+      const streamedRequest = liveKey ? {...request, diagnostic_context: {
+        run_id: diagnosticRun.current.id, step_id: liveKey,
+        pass_index: snapshot.image.millingFrame?.pass ?? 0,
+        segment_index: ++diagnosticRun.current.segment,
+      }} : request;
+      await activeSocket.run(streamedRequest, buffer => {
         if (viewFrames?.length) {
           const pixels = decodeScanSamples(buffer, request.output_mode);
           const regionCount = viewFrames.length;
@@ -183,6 +189,7 @@ export function useExposureRun() {
     }
     const release = claimWorkspaceRun(workspace, "exposure");
     if (!release) return;
+    diagnosticRun.current = {id: `milling-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`, segment: 0};
     running.current = true; cancelled.current = false; pendingStop.current = null; stopError.current = null;
     viewPending.current = true; resumeAfterView.current = false;
     dispatch(exposureViewChanged({phase: "queued"}));

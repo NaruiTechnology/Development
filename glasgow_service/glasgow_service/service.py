@@ -66,6 +66,7 @@ from .device_lock import DeviceHeld, DeviceLock
 from .roi_scaling import dac_step, roi_zoom
 from GlasgowDataIO.IobeamControl.transfer.linkStats import LinkStats
 from .exposure_lattice_adapter import lattice_stream
+from .exposure_diagnostics import exposure_diagnostics
 from .models import (
     DeviceState, ServiceStatus, RasterRequest, VectorRequest, AdcTestRequest,
     DacRampRequest, DacRampAxis, BeamHoldRequest, BeamHoldState,
@@ -1686,13 +1687,24 @@ class DeviceService:
             self._active_live_request = req if command.continuous else None
             self._activate_command(command)
             source = self._simulated_chunks(kind, req, command, pace=True)
+            diagnostics = exposure_diagnostics(logger, req, "simulation", "in_process" if native_samples else "websocket") if kind == "vector" and req.pattern is VectorPattern.lattice else None
+            if diagnostics:
+                diagnostics.emit("simulation_source", mode=self._simulation_settings(req).get("mode", "image"))
+            diagnostic_outcome = "interrupted"
             try:
                 async for chunk in source:
                     self._status.chunks_in_flight += 1
                     if capture_image:
                         captured.append(chunk)
-                    yield chunk if native_samples else _sample_chunk_to_wire_bytes(chunk)
+                    wire = _sample_chunk_to_wire_bytes(chunk) if diagnostics or not native_samples else None
+                    if diagnostics:
+                        diagnostics.observe(chunk, wire)
+                        diagnostics.forwarded += len(chunk)
+                    yield chunk if native_samples else wire
+                diagnostic_outcome = "aborted" if command.abort.is_set() else "ok"
             finally:
+                if diagnostics:
+                    diagnostics.finish(diagnostic_outcome, command)
                 await source.aclose()
                 self._deactivate_command(command)
                 self._active_live_request = None
@@ -2015,6 +2027,16 @@ class DeviceService:
             conn = await self._ensure_conn()
             cmd = self._build_vector_cmd(
                 req, continuous=bool(getattr(req, "continuous", False)))
+            diagnostics = exposure_diagnostics(logger, req, "hardware", transport) if req.pattern is VectorPattern.lattice else None
+            cmd.exposure_diagnostics = diagnostics
+            if diagnostics:
+                diagnostics.emit("command_setup", command=type(cmd).__name__,
+                                 max_pipeline=getattr(cmd, "_max_pipeline", None),
+                                 nominal_dwell=getattr(cmd, "link_dwell", None),
+                                 conversion_hz=getattr(self, "_conversion_hz", None),
+                                 frame_blank=getattr(cmd, "frame_blank", None),
+                                 require_sender_completion=getattr(cmd, "_require_sender_completion", None))
+            diagnostic_outcome = "interrupted"
             self._active_live_request = req if getattr(cmd, "continuous", False) else None
             latency = self._chunk_latency("vector", req.latency_bytes, cmd)
             logger.info("[vector] scan geometry roi=%s regions=%s command=%s max_pipeline=%s latency=%s continuous=%s",
@@ -2050,6 +2072,9 @@ class DeviceService:
                                     transport, time.monotonic() - scan_started)
                     if req.pattern is not VectorPattern.lattice:
                         captured.append(chunk)
+                    wire = _sample_chunk_to_wire_bytes(chunk) if diagnostics or not native_samples else None
+                    if diagnostics:
+                        diagnostics.observe(chunk, wire)
                     fault = adc_monitor.observe(chunk)
                     if fault is not None:
                         logger.warning("production ADC presence warning: %s", fault)
@@ -2060,8 +2085,12 @@ class DeviceService:
                             logger.info("ADC presence fault ignored: scan was stopped")
                             break
                         raise DeviceNotReady(fault)
-                    yield chunk if native_samples else _sample_chunk_to_wire_bytes(chunk)
+                    if diagnostics:
+                        diagnostics.forwarded += len(chunk)
+                    yield chunk if native_samples else wire
+                diagnostic_outcome = "aborted" if getattr(self, "_scan_aborted", False) or cmd.abort.is_set() else "ok"
             except BaseException as e:
+                diagnostic_outcome = type(e).__name__
                 adc_presence_fault = adc_presence_fault or (
                     isinstance(e, DeviceNotReady) and
                     str(e).startswith("ADC/subtarget presence check failed:"))
@@ -2075,6 +2104,8 @@ class DeviceService:
                     # before the service releases this scan generator.
                     await transfer_iter.aclose()
                 finally:
+                    if diagnostics:
+                        diagnostics.finish(diagnostic_outcome, cmd)
                     summary = adc_monitor.summary()
                     if summary is not None:
                         logger.info("%s", summary)

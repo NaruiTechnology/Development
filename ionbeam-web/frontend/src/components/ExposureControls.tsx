@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from "../store";
 import { useExposureRun } from "../hooks/useExposureRun";
 import { useOtherWorkspaceBusy } from "../hooks/useScanWorkspace";
 import { exposureBusy, setExposureMode, setExposureParallel, setExposureViewZoom, setExposureViewPauseSeconds, setExposurePauseAfterView } from "../store/exposureSlice";
+import { applyMillingPassDefaults } from "../store/processingSlice";
 import { NumberStepperInput } from "./NumberStepperField";
 import { MAX_SCAN_ZOOM } from "../lib/scanRegions";
 import { Icon } from "./Icon";
@@ -26,7 +27,11 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
   const {t} = useTranslation(), dispatch = useAppDispatch();
   const {state, start, stop, view, resume} = useExposureRun();
   const tab = state.mode;
-  const setTab = (mode: "auto" | "milling") => dispatch(setExposureMode(mode));
+  const setTab = (mode: "auto" | "milling") => {
+    if (exposureBusy(state.phase)) return;
+    dispatch(setExposureMode(mode));
+    if (mode === "milling") dispatch(applyMillingPassDefaults());
+  };
   const tabId = useId();
   const defaultsReady = useAppSelector(s => Boolean(s.status.defaults));
   const patterns = useAppSelector(s => s.processing);

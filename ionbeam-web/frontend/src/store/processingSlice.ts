@@ -92,6 +92,14 @@ const slice = createSlice({
   name: "processing",
   initialState,
   reducers: {
+    applyMillingPassDefaults(s) {
+      for (const spec of s.specs) {
+        const passes = spec.parameters.find(parameter => parameter.name === "passes");
+        const instance = s.instances[spec.key];
+        if (passes && instance) instance.parameters.passes = coerceParameter(passes, passes.default);
+      }
+      s.workflowProgress = [];
+    },
     setPatternWorkflow(s, a: PayloadAction<{ key: string; workflow?: string; enabled?: boolean }>) {
       const inst = s.instances[a.payload.key];
       if (!inst) return;
@@ -411,5 +419,5 @@ const slice = createSlice({
   },
 });
 
-export const { setPatternWorkflow, setPatternMaterial, setWorkflowProgress, updateWorkflowStep, undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setStairStepField, setStairSteps, setStairRecipeNode, createPatternRoi, setPatternRoi, clearPatternRoi } = slice.actions;
+export const { applyMillingPassDefaults, setPatternWorkflow, setPatternMaterial, setWorkflowProgress, updateWorkflowStep, undoPatternRoi, commitPatternRoiEdit, setPatternAvgGray, setPatternEnabled, selectPattern, setPatternParameter, setStairStepField, setStairSteps, setStairRecipeNode, createPatternRoi, setPatternRoi, clearPatternRoi } = slice.actions;
 export default slice.reducer;

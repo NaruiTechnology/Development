@@ -139,6 +139,7 @@ export const ADMIN_EXTRA_SCHEMA_FILES = [
   "008_pattern_recipe_editing.sql",
   "009_pattern_recipe_history.sql",
   "010_restore_technology_nodes.sql",
+  "011_processing_catalogue.sql",
 ];
 
 export async function applyAdminDatabaseSetup(options: AdminDatabaseSetupOptions): Promise<AdminDatabaseSetupResult> {

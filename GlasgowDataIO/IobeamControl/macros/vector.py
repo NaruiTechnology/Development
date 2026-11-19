@@ -449,6 +449,8 @@ class VectorScanCommand(BaseCommand):
                 yield commands, pixel_count
             return
 
+        diagnostics = getattr(self, "exposure_diagnostics", None)
+        first_point = last_point = None
         commands = bytearray()
         vector_body = bytearray()
         current_blank = None
@@ -473,7 +475,12 @@ class VectorScanCommand(BaseCommand):
         total_dwell = 0
         for points in self._iter_passes():
             for point in points:
-                x, y, dwell, blank, pass_index = _normalize_point(point)
+                normalized = _normalize_point(point)
+                x, y, dwell, blank, pass_index = normalized
+                if diagnostics is not None:
+                    last_point = normalized
+                    if first_point is None:
+                        first_point = last_point
                 if pass_index is not None and current_pass_index != pass_index:
                     self._logger.debug("vector pass index %s", pass_index)
                     current_pass_index = pass_index
@@ -489,13 +496,17 @@ class VectorScanCommand(BaseCommand):
                 vector_body.extend(struct.pack(">HHH", x, y, dwell))
                 if total_dwell >= latency:
                     flush_vector_body()
+                    self._diag_chunk_points = (first_point, last_point)
                     yield (memoryview(commands), chunk_pixel_count)
+                    first_point = last_point = None
                     commands = bytearray()
                     chunk_pixel_count = 0
                     total_dwell = 0
                 if chunk_pixel_count == 65536:
                     flush_vector_body()
+                    self._diag_chunk_points = (first_point, last_point)
                     yield (memoryview(commands), chunk_pixel_count)
+                    first_point = last_point = None
                     commands = bytearray()
                     chunk_pixel_count = 0
                     total_dwell = 0
@@ -505,7 +516,9 @@ class VectorScanCommand(BaseCommand):
                 # first point follows in the same command stream; the beam
                 # is NOT blanked between passes, like OBI's live scan).
                 flush_vector_body()
+                self._diag_chunk_points = (first_point, last_point)
                 yield (memoryview(commands), chunk_pixel_count)
+                first_point = last_point = None
                 commands = bytearray()
                 chunk_pixel_count = 0
                 total_dwell = 0
@@ -514,6 +527,7 @@ class VectorScanCommand(BaseCommand):
             flush_vector_body()
             if saw_explicit_blank and current_blank is False:
                 commands.extend(bytes(BlankCommand(enable=True)))
+            self._diag_chunk_points = (first_point, last_point)
             yield (memoryview(commands), chunk_pixel_count)
 
     @BaseCommand.log_transfer
@@ -539,6 +553,7 @@ class VectorScanCommand(BaseCommand):
         # either stalls bulk_write (TimeoutError) or trips the demultiplexer
         # _out_buffer assertion. 4 keeps the in-flight window bounded while
         # still hiding USB round-trip latency.
+        diagnostics = getattr(self, "exposure_diagnostics", None)
         max_pipeline = self._max_pipeline
 
         tokens = max_pipeline
@@ -596,6 +611,8 @@ class VectorScanCommand(BaseCommand):
                     t_flush = time.perf_counter()
                     await stream.flush()
                     stats.sent(time.perf_counter() - t_flush)
+                    if diagnostics is not None:
+                        diagnostics.command_sent(pixel_count, commands, getattr(self, "_diag_chunk_points", None))
                     tokens -= 1
                     total_pixels += pixel_count
                     pass_pixels = getattr(self, "pass_pixels", 0)
@@ -642,6 +659,8 @@ class VectorScanCommand(BaseCommand):
                     f"scan_pixels={total_pixels}, "
                     f"ratio_term={total_pixels // 200})"
                 )
+                if diagnostics is not None:
+                    diagnostics.drain(padding_pixels)
                 padding_body = bytearray()
                 for _ in range(padding_pixels):
                     padding_body.extend(struct.pack(">HHH", 0, 0, 1))
@@ -652,6 +671,8 @@ class VectorScanCommand(BaseCommand):
                 )
                 await stream.write(padding)
                 await stream.flush()
+                if diagnostics is not None:
+                    diagnostics.drain_flushed()
 
                 await FlushCommand().transfer(stream)
             finally:
@@ -683,6 +704,8 @@ class VectorScanCommand(BaseCommand):
         # TODO: assert against synchronization result
         try:
             cookie = await stream.read(4)
+            if diagnostics is not None:
+                diagnostics.synchronize(cookie, struct.pack(">HH", 0xffff, self._cookie))
             while True:
                 pixel_count = await count_queue.get()
                 if pixel_count is end_marker:

@@ -20,8 +20,8 @@ from PyQt6.QtWidgets import QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayo
 from ..i18n import fmt, t
 from ..core.geometry import image_world_bounds
 from ..processing.models import roi_bounds
-from ..paths import processing_patterns_path
 from ..processing import PatternConfigError, load_models
+from ..processing.config import load_database_models
 from . import theme
 from .common import Card, NumberStepper, button, icon, label
 from .panel import Panel
@@ -199,7 +199,7 @@ class ProcessingPanel(Panel):
         self.config_error: Optional[str] = None
         self.entry_errors: list = []
         try:
-            cfg, self.models = load_models(config_path or processing_patterns_path())
+            cfg, self.models = load_models(config_path) if config_path is not None else load_database_models()
             self.entry_errors = list(cfg.errors)
         except PatternConfigError as e:
             log.error("processing patterns: %s", e)

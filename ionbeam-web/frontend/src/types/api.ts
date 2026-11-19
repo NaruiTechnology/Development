@@ -137,6 +137,7 @@ export type VectorPointTuple =
   | [number, number, number, boolean | null, number | null];
 
 export interface VectorRequest {
+  diagnostic_context?: {run_id: string; step_id: string; pass_index: number; segment_index: number};
   pattern: VectorRequestPattern;
   scan_path: VectorScanPath;
   points: Array<VectorPointTuple | VectorPoint> | null;

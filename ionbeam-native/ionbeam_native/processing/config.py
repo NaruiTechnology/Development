@@ -235,3 +235,22 @@ def build_models(cfg: ProcessingConfig) -> dict:
 def load_models(path) -> tuple:
     cfg = load_config(path)
     return cfg, build_models(cfg)
+
+
+def load_database_models() -> tuple:
+    """Use the shared database catalogue through the backend, without a JSON fallback."""
+    from ..backend.client import Backend
+    try:
+        backend = Backend()
+        response = backend.request("GET", "/api/processing/catalogue")
+        payload = backend.read_json(response, "processing catalogue")
+        if not response.is_success or payload.get("ok") is False:
+            raise PatternConfigError(payload.get("error", "Cannot load database processing catalogue"))
+        cfg = parse_config(payload["document"])
+        if cfg.errors:
+            raise PatternConfigError("; ".join(cfg.errors))
+        return cfg, build_models(cfg)
+    except PatternConfigError:
+        raise
+    except Exception as exc:
+        raise PatternConfigError(f"Cannot load database processing catalogue: {exc}") from exc

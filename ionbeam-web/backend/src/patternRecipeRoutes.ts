@@ -6,7 +6,7 @@ import { getPatternRecipeRecord, getPatternRecipeDefaults, listPatternRecipeAssi
 export interface PatternRecipeRouteDeps {
   currentActor(req: express.Request): Promise<AdminUser | null>;
   sendError(res: express.Response, error: unknown): void;
-  patternKeys(): string[];
+  patternKeys(): string[] | Promise<string[]>;
   list?: typeof listPatternRecipeAssignments;
   get?: typeof getPatternRecipeRecord;
   save?: typeof savePatternRecipeRecord;
@@ -35,7 +35,7 @@ export function registerPatternRecipeRoutes(app: express.Express, deps: PatternR
   }));
   app.put(`${base}/:equipmentId/:patternKey`, route(true, async (req, res, actor) => {
     if (!actor.id) throw new ConfigError("A database account is required", 403);
-    if (!deps.patternKeys().includes(req.params.patternKey)) throw new ConfigError("Unknown pattern key", 400);
+    if (!(await deps.patternKeys()).includes(req.params.patternKey)) throw new ConfigError("Unknown pattern key", 400);
     const recipe = await (deps.save ?? savePatternRecipeRecord)(Number(req.params.equipmentId), req.params.patternKey,
       req.body?.collections, req.body?.expected_revision, actor.id);
     res.json({ ok: true, recipe });
