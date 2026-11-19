@@ -10,6 +10,8 @@ import { exposureViewScanRegions, squareExposureViewRegions } from "../lib/proce
 import type { WorkflowProgress } from "../lib/processingWorkflows";
 import type { StreamTransforms } from "../store/scanSlice";
 
+import { grayLevelLut, ROI_GRAY_SAMPLE_SCALE, type ResolvedLevels } from "../lib/displayLevels";
+
 type Project = (x: number, y: number) => { x: number; y: number };
 const COLORS = ["#fbbf24", "#fb923c", "#f472b6", "#a78bfa", "#4ade80"];
 
@@ -106,8 +108,9 @@ export function ExposureLatticeOverlay({ transforms: displayTransforms }: {
 }
 
 /** Separate raster canvas for the on-the-fly View frames; the exposure image and its trace stay intact below it. */
-export function ExposureViewCanvasOverlay({ transforms, processingViewport = false }: {
+export function ExposureViewCanvasOverlay({ transforms, processingViewport = false, displayLevels }: {
   transforms?: StreamTransforms; processingViewport?: boolean;
+  displayLevels?: ResolvedLevels;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frames = useAppSelector(s => s.image.exposureViewFrames);
@@ -133,6 +136,7 @@ export function ExposureViewCanvasOverlay({ transforms, processingViewport = fal
     if ((!frames.length && !viewActive) || !worldWidth || !worldHeight) return;
     const projectX = (x: number) => processingViewport ? worldToCanvasX(x, field, viewport) : (x - field.x_origin) / worldWidth * 640;
     const projectY = (y: number) => processingViewport ? worldToCanvasY(y, field, viewport) : (y - field.y_origin) / worldHeight * 640;
+    const lut = displayLevels ? grayLevelLut(displayLevels) : null;
     for (const frame of frames) {
       let low = 65535, high = 0;
       for (const value of frame.pixels) { if (value < low) low = value; if (value > high) high = value; }
@@ -143,7 +147,9 @@ export function ExposureViewCanvasOverlay({ transforms, processingViewport = fal
       if (!scratchContext) continue;
       const image = scratchContext.createImageData(frame.resolution, frame.resolution);
       for (let i = 0; i < frame.pixels.length; i++) {
-        const gray = Math.max(0, Math.min(255, Math.round((frame.pixels[i] - low) * 255 / span)));
+        const gray = lut
+          ? lut[Math.max(0, Math.min(255, Math.round(frame.pixels[i] / ROI_GRAY_SAMPLE_SCALE)))]
+          : Math.max(0, Math.min(255, Math.round((frame.pixels[i] - low) * 255 / span)));
         const offset = i * 4;
         image.data[offset] = image.data[offset + 1] = image.data[offset + 2] = gray;
         image.data[offset + 3] = 220;
@@ -170,7 +176,7 @@ export function ExposureViewCanvasOverlay({ transforms, processingViewport = fal
     }
     context.restore();
     if (!processingViewport && transforms) orientCanvas(canvas, transforms);
-  }, [frames, roi, transforms, viewActive, scanBounds, processingViewport]);
+  }, [frames, roi, transforms, viewActive, scanBounds, processingViewport, displayLevels]);
   if (!frames.length && !viewActive) return null;
   return <canvas ref={canvasRef} className="exposure-view-canvas" width={640} height={640}
     aria-label="View scan overlay for pattern ROIs" />;

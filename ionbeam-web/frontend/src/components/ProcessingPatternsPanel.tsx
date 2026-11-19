@@ -62,11 +62,15 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
   const patternsLoading = visible && (status === "idle" || status === "loading");
   const field = useAppSelector(s => s.scan.roi);
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
+  const milling = useAppSelector(s => s.exposure.mode === "milling");
   const selectedSpotCount = useMemo(() => {
     if (!processing.lensLookup) return null;
-    try { return totalExposureSpots(prepareExposureSequence(processing, field, simulation)); }
+    try {
+      const selected = milling ? {...processing, instances: Object.fromEntries(Object.entries(processing.instances).map(([key,instance]) => [key,{...instance,enabled:instance.enabled && key===activeKey}]))} : processing;
+      return totalExposureSpots(prepareExposureSequence(selected, field, simulation));
+    }
     catch { return null; }
-  }, [processing, field, simulation]);
+  }, [processing, field, simulation, milling, activeKey]);
   const countValidationFailed = selectedSpotCount !== null && selectedSpotCount > MAX_EXPOSURE_SPOTS;
   const exposurePhase = useAppSelector(s => s.exposure.phase);
   const exposureActive = ["preparing", "running", "stopping"].includes(exposurePhase);
@@ -89,8 +93,8 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
             {exposureActive && !patternsLoading && <LoadingSpinner inline size={18} className="patterns-card__spinner"
               ariaLabel={t("processing.exposure.status.current")} />}
           </span>
-          <ExposureControls disabled={patternsLoading || exposureDisabled || countValidationFailed} />
         </div>
+        <ExposureControls disabled={patternsLoading || exposureDisabled || countValidationFailed} />
         {patternsLoading && <LoadingSpinner label={t("processing.loading")} />}
         <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
           {specs.filter(spec => (processing.instances[spec.key]?.typeKey ?? spec.key) === spec.key).map((spec) => {
@@ -133,11 +137,15 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
   const viewLocked = exposure.viewPhase === "queued" || exposure.viewPhase === "scanning" || exposure.phase === "paused";
   const { tr } = useTr();
   const [limitMessage, setLimitMessage] = useState("");
+  const milling = useAppSelector(s => s.exposure.mode === "milling");
   const selectedSpotCount = useMemo(() => {
     if (!processing.lensLookup) return null;
-    try { return totalExposureSpots(prepareExposureSequence(processing, field, simulation)); }
+    try {
+      const selected = milling ? {...processing, instances: Object.fromEntries(Object.entries(processing.instances).map(([key,instance]) => [key,{...instance,enabled:instance.enabled && key===activeKey}]))} : processing;
+      return totalExposureSpots(prepareExposureSequence(selected, field, simulation));
+    }
     catch { return null; }
-  }, [processing, field, simulation]);
+  }, [processing, field, simulation, milling, activeKey]);
   const totalLimitMessage = selectedSpotCount !== null && selectedSpotCount > MAX_EXPOSURE_SPOTS
     ? tr("processing.exposure.totalLimit", `Count validation failed: enabled patterns require ${selectedSpotCount.toLocaleString()} spots including passes; the maximum is ${MAX_EXPOSURE_SPOTS.toLocaleString()}. Select a smaller ROI area before starting.`)
     : "";

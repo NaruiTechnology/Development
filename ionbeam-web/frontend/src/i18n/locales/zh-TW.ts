@@ -210,6 +210,8 @@ export const zhTW: Partial<TranslationTable> = {
   "canvas.scanParams.beamEnergy": "束能",
   "canvas.scanParams.resolution": "解析度",
   "canvas.scanParams.scanPath": "路徑",
+  "processing.exposure.autoTab": "自動",
+  "processing.exposure.millingTab": "銑削",
   "processing.exposure.card": "曝光",
   "processing.exposure.parallelLabel": "曝光平行",
   "processing.exposure.parallelHelp": "使用單束在各圖形間交替曝光分段；清潔線須關閉平行。",

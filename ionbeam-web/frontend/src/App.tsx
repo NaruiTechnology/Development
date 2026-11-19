@@ -1610,10 +1610,9 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
       grayScaleSkipped={displayedROIGrayScaleSkipped}
       processingPreview={activeTopTab === "processing" ? scanSubTab : null}
       hideSelectionOverlay={activeTopTab === "processing"}
-      hideLevelWedge={activeTopTab === "processing" && exposureViewActive}
       renderCanvasOverlay={activeTopTab === "processing"
         ? (api) => exposureViewActive
-          ? <ExposureViewCanvasOverlay processingViewport />
+          ? <ExposureViewCanvasOverlay processingViewport displayLevels={api.displayLevels} />
           : <PatternOverlay disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} api={api} />
         : undefined}
     />

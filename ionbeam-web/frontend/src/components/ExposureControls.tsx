@@ -1,8 +1,9 @@
+import { useId } from "react";
 import { useTranslation } from "../i18n";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useExposureRun } from "../hooks/useExposureRun";
 import { useOtherWorkspaceBusy } from "../hooks/useScanWorkspace";
-import { exposureBusy, setExposureParallel, setExposureViewZoom, setExposureViewPauseSeconds, setExposurePauseAfterView } from "../store/exposureSlice";
+import { exposureBusy, setExposureMode, setExposureParallel, setExposureViewZoom, setExposureViewPauseSeconds, setExposurePauseAfterView } from "../store/exposureSlice";
 import { NumberStepperInput } from "./NumberStepperField";
 import { MAX_SCAN_ZOOM } from "../lib/scanRegions";
 import { Icon } from "./Icon";
@@ -24,22 +25,38 @@ export function ExposureReviewPauseToggle() {
 export function ExposureControls({disabled = false, showView = true}: {disabled?: boolean; showView?: boolean}) {
   const {t} = useTranslation(), dispatch = useAppDispatch();
   const {state, start, stop, view, resume} = useExposureRun();
+  const tab = state.mode;
+  const setTab = (mode: "auto" | "milling") => dispatch(setExposureMode(mode));
+  const tabId = useId();
   const defaultsReady = useAppSelector(s => Boolean(s.status.defaults));
   const patterns = useAppSelector(s => s.processing);
   const scanBusy = useAppSelector(s => ["running", "stopping"].includes(s.scan.phase) || s.scan.streamRestarting || s.scan.infiniteActive || s.scan.roiTargetGrayRun.status === "running");
   const viewBusy = state.viewPhase === "queued" || state.viewPhase === "scanning";
   const otherBusy = useOtherWorkspaceBusy(), busy = exposureBusy(state.phase) || viewBusy;
-  const enabled = patterns.specs.filter(spec => patterns.instances[spec.key]?.enabled && patterns.instances[spec.key]?.roi);
-  const serialRequired = state.parallel && enabled.some(spec => spec.model === "CleaningLineModel");
+  const enabled = patterns.specs.filter(spec => (tab !== "milling" || spec.key === patterns.activeKey) && patterns.instances[spec.key]?.enabled && patterns.instances[spec.key]?.roi);
+  const serialRequired = tab === "auto" && state.parallel && enabled.some(spec => spec.model === "CleaningLineModel");
   const startDisabled = disabled || !defaultsReady || busy || scanBusy || otherBusy || patterns.status !== "ready" || !patterns.lensLookup || !enabled.length || serialRequired;
   return <div className="patterns-exposure" role="group" aria-label={t("processing.exposure.card")}>
+      <div className="patterns-exposure__tabs" role="tablist" aria-label={t("processing.exposure.card")}>
+        {(["milling", "auto"] as const).map(name => <button type="button" role="tab" key={name}
+          id={`${tabId}-${name}`} aria-controls={`${tabId}-panel`} aria-selected={tab === name}
+          disabled={exposureBusy(state.phase)} tabIndex={tab === name ? 0 : -1}
+          onClick={() => setTab(name)}
+          onKeyDown={event => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === "Home" ? "milling" : event.key === "End" ? "auto" : tab === "auto" ? "milling" : "auto";
+            setTab(next); document.getElementById(`${tabId}-${next}`)?.focus();
+          }}>{t(name === "auto" ? "processing.exposure.autoTab" : "processing.exposure.millingTab")}</button>)}
+      </div>
+      <div className="patterns-exposure__body" role="tabpanel" id={`${tabId}-panel`} aria-labelledby={`${tabId}-${tab}`}>
         <div className="patterns-exposure__controls">
-          <label className="checkbox vacuum-switch app-switch" title={t("processing.exposure.parallelHelp")}>
+          {tab === "auto" && <label className="checkbox vacuum-switch app-switch" title={t("processing.exposure.parallelHelp")}>
             <input type="checkbox" role="switch" aria-label={t("processing.exposure.parallelLabel")}
               checked={state.parallel} disabled={busy || disabled} onChange={e => dispatch(setExposureParallel(e.target.checked))} />
             <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
             <span>{t("scan.parallel")}</span>
-          </label>
+          </label>}
           <label className="patterns-exposure__zoom"
             title={t("processing.exposure.viewZoomHelp")}>
             <Icon name="zoomIn" />
@@ -60,7 +77,7 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
                 title={serialRequired ? t("processing.exposure.serialRequired") : t("processing.exposure.startHelp")}
                 onClick={() => void start()}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>}
         </div>
-        <div className="patterns-exposure__view-row">
+        {tab === "auto" && <div className="patterns-exposure__view-row">
           {showView && <span className="patterns-exposure__view-tooltip" title={t("processing.exposure.viewHelp")}>
             <button type="button"
               className={`patterns-exposure__view${state.viewPauseSeconds > 0 ? " patterns-exposure__view--automatic" : viewBusy ? " patterns-exposure__view--busy" : ""}`}
@@ -90,8 +107,9 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
               </div>
             </div>
           </label>
-        </div>
+        </div>}
         {state.phase === "paused" && <p className="scan-inline-note" role="status">{t("processing.exposure.paused").replace("{step}", state.progress.find(n => n.id === state.pausedAfterId)?.caption ?? "")}</p>}
         {serialRequired && <p className="scan-inline-error">{t("processing.exposure.serialRequired")}</p>}
+      </div>
   </div>;
 }

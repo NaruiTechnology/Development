@@ -220,6 +220,8 @@ export const en = {
   "canvas.scanParams.beamEnergy": "Beam",
   "canvas.scanParams.resolution": "Res",
   "canvas.scanParams.scanPath": "Path",
+  "processing.exposure.autoTab": "Auto",
+  "processing.exposure.millingTab": "Milling",
   "processing.exposure.card": "Exposure",
   "processing.exposure.parallelLabel": "Exposure Parallel",
   "processing.exposure.parallelHelp": "Alternate bounded exposure segments between patterns on one beam. Cleaning lines require Parallel off.",

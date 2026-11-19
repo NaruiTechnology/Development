@@ -44,6 +44,7 @@
     "src/lib/lensLookup.ts",
     "src/lib/processingWorkflows.ts",
     "src/lib/exposurePlan.ts",
+    "src/lib/millingLiveView.ts",
     "src/lib/exposurePreview.ts",
     "src/lib/exposureSequence.ts",
     "src/store/exposureSlice.ts",

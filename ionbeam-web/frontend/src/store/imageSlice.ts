@@ -23,7 +23,9 @@ import { fullFrameAxisMaps, scanPixelAxisMaps, scanRegionPixelBounds, type ScanP
 export type VectorPattern = "default" | "custom";
 export type VectorSource = "vector" | "roi";
 
+export interface MillingFrame { key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array; valid: Uint8Array; revision: number }
 interface ImageState {
+  millingFrame: MillingFrame | null;
   /** Temporary raster frames from the in-flight Exposure View scan, keyed to pattern ROI world bounds. */
   exposureViewFrames: Array<{ key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array }>;
   // ---------- raster -----------------------------------------------------
@@ -104,6 +106,7 @@ const RES = 512;
 const VEC_EDGE = 2048;
 
 const initialState: ImageState = {
+  millingFrame: null,
   exposureViewFrames: [],
   resolution: RES,
   cursor: 0,
@@ -176,6 +179,18 @@ const slice = createSlice({
   name: "image",
   initialState,
   reducers: {
+    resetMillingFrame(state, a: PayloadAction<{key: string; bounds: ROIRequest} | null>) {
+      state.millingFrame = a.payload ? {...a.payload, resolution: 256, pixels: new Uint16Array(256*256), valid: new Uint8Array(256*256), revision: 0} : null;
+    },
+    appendMillingSamples(state, a: PayloadAction<{key: string; samples: number[]}>) {
+      const frame = state.millingFrame;
+      if (!frame || frame.key !== a.payload.key) return;
+      for (let i=0; i<a.payload.samples.length; i+=2) {
+        const index = a.payload.samples[i];
+        if (index >= 0 && index < frame.pixels.length) { frame.pixels[index] = a.payload.samples[i+1]; frame.valid[index] = 1; }
+      }
+      frame.revision++;
+    },
     clearExposureViewFrames(state) { state.exposureViewFrames = []; },
     appendExposureViewFrame(state, a: PayloadAction<{ key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array }>) {
       const index = state.exposureViewFrames.findIndex(frame => frame.key === a.payload.key);
@@ -641,9 +656,15 @@ const slice = createSlice({
       state.revision++;
     },
   },
+  extraReducers: builder => {
+    builder.addMatcher(action => ["processing/setPatternRoi", "processing/createPatternRoi", "processing/clearPatternRoi", "processing/undoPatternRoi"].includes(action.type), state => {
+      state.millingFrame = null;
+    });
+  },
 });
 
 export const {
+  resetMillingFrame, appendMillingSamples,
   bumpRevision,
   clearExposureViewFrames,
   appendExposureViewFrame,

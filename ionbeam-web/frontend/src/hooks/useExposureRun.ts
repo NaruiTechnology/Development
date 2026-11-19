@@ -1,3 +1,6 @@
+import { millingSpotPositions } from "../lib/millingLiveView";
+import { patternBounds } from "../lib/processingPatterns";
+import { transform } from "../lib/scanGeometry";
 import { useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector, useAppStore, useAppWorkspace } from "../store";
 import { claimWorkspaceRun } from "./useScanWorkspace";
@@ -17,7 +20,7 @@ import { prepareScanAssets } from "../lib/scanAssets";
 import { scansUseHardware } from "../lib/takeoverTiming";
 import { exposureViewScanRegions, squareExposureViewRegions } from "../lib/processingScanRegions";
 import { effectiveScanRegions } from "../lib/scanRegions";
-import { appendExposureViewFrame, clearExposureViewFrames } from "../store/imageSlice";
+import { appendExposureViewFrame, clearExposureViewFrames, resetMillingFrame, appendMillingSamples } from "../store/imageSlice";
 
 const FULL_DAC_ROI = { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
 
@@ -79,11 +82,19 @@ export function useExposureRun() {
     if (cancelled.current) throw new Error("Exposure stopped");
     const activeSocket = stream ?? (socket.current ??= new ExposureStream(store.getState().status.defaults?.exposure_session_stream === true,
       () => resumeWaiter.current?.(), Number(store.getState().status.defaults?.adc?.adcHalfPeriod ?? 3)));
+    const snapshot = store.getState();
+    const liveNode = snapshot.exposure.progress.find(n => n.id === exposureStepId);
+    const liveKey = snapshot.exposure.mode === "milling" && liveNode?.exposure ? exposureStepId! : null;
+    const liveBounds = liveNode?.exposure ? patternBounds(liveNode.exposure.shape) : null;
+    const positions = liveKey && "lattice" in request && request.lattice ? millingSpotPositions(request.lattice) : null;
+    let pendingPixels: number[] = [];
     let pendingSamples = 0;
     let sampleTimer: ReturnType<typeof setTimeout> | undefined;
     const flush = () => {
       clearTimeout(sampleTimer); sampleTimer = undefined;
       if (pendingSamples && exposureStepId) dispatch(exposureSamplesReceived({id: exposureStepId, count: pendingSamples}));
+      if (liveKey && pendingPixels.length) dispatch(appendMillingSamples({key:liveKey, samples:pendingPixels}));
+      pendingPixels = [];
       pendingSamples = 0;
     };
     try {
@@ -102,6 +113,21 @@ export function useExposureRun() {
           dispatch(exposureViewSamplesReceived(pixels.length));
           onViewChunk?.();
         } else {
+          if (positions && liveBounds) {
+            const geometry = snapshot.scan.roi.scanGeometry;
+            const field = snapshot.scan.roi;
+            for (const value of decodeScanSamples(buffer, request.output_mode)) {
+              const next = positions.next();
+              if (next.done) throw new Error("Exposure feedback exceeds its lattice positions");
+              const [dx,dy] = next.value;
+              const [x,y] = geometry?.enabled ? transform(geometry.forward,[dx,dy]) : [
+                Math.min(field.x_origin,field.x_end)+dx/16383*Math.abs(field.x_end-field.x_origin),
+                Math.min(field.y_origin,field.y_end)+dy/16383*Math.abs(field.y_end-field.y_origin)];
+              const px=Math.max(0,Math.min(255,Math.floor((x-liveBounds.x_start)/(liveBounds.x_end-liveBounds.x_start)*256)));
+              const py=Math.max(0,Math.min(255,Math.floor((y-liveBounds.y_start)/(liveBounds.y_end-liveBounds.y_start)*256)));
+              pendingPixels.push(py*256+px,value);
+            }
+          }
           pendingSamples += buffer.byteLength / 2;
           sampleTimer ??= setTimeout(flush, 50);
         }
@@ -284,17 +310,21 @@ export function useExposureRun() {
         cellRanges = capabilities.exposure_cell_ranges === true;
       }
       if (cancelled.current) return;
-      const plannedEntries = prepareExposureSequence(snapshot.processing, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
+      const milling = snapshot.exposure.mode === "milling";
+      const selected = snapshot.processing.activeKey;
+      const patterns = milling ? {...snapshot.processing, instances: Object.fromEntries(Object.entries(snapshot.processing.instances).map(([key,instance]) => [key,{...instance,enabled:key===selected && instance.enabled && instance.roi!==null}]))} : snapshot.processing;
+      const plannedEntries = prepareExposureSequence(patterns, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
+      if (milling && plannedEntries[0]?.node.exposure) dispatch(resetMillingFrame({key:plannedEntries[0].node.id,bounds:patternBounds(plannedEntries[0].node.exposure.shape)}));
       const totalSpots = totalExposureSpots(plannedEntries);
       if (totalSpots > MAX_EXPOSURE_SPOTS)
         throw new Error(t("processing.exposure.totalLimit", {count: totalSpots.toLocaleString(), limit: MAX_EXPOSURE_SPOTS.toLocaleString()}));
-      if (snapshot.exposure.parallel && plannedEntries.some(e => e.node.exposure?.model === "CleaningLineModel"))
+      if (!milling && snapshot.exposure.parallel && plannedEntries.some(e => e.node.exposure?.model === "CleaningLineModel"))
         throw new Error("Cleaning lines require serial exposure (Parallel off).");
       dispatch(exposurePrepared(plannedEntries.map(e => e.node)));
       // Yield so the pattern cards can render their calculated spot counts before the first lattice starts.
       await new Promise<void>(resolve => window.setTimeout(resolve, 0));
       if (cancelled.current) return;
-      const rounds = exposureRounds(plannedEntries, snapshot.exposure.parallel);
+      const rounds = exposureRounds(plannedEntries, milling ? false : snapshot.exposure.parallel);
       let upcoming = rounds.next();
       while (!upcoming.done) {
         const round = upcoming.value;
@@ -308,9 +338,13 @@ export function useExposureRun() {
         const exposeSegment = async (queue: typeof queues[number]) => {
           const next = queue.requests.next();
           if (next.done) return false;
+          if (snapshot.exposure.mode === "milling" && store.getState().image.millingFrame?.key !== queue.run.entry.node.id && queue.run.entry.node.exposure)
+            dispatch(resetMillingFrame({key:queue.run.entry.node.id,bounds:patternBounds(queue.run.entry.node.exposure.shape)}));
           dispatch(exposureStepStarted(queue.run.entry.node.id));
           await runRequest({...queue.run.request, lattice: next.value, preview: true,
-            ...(snapshot.status.sessionSimulation ? {simulation: snapshot.status.sessionSimulation} : {})},
+            ...((milling && !scansUseHardware(snapshot.status.defaults?.is_production, snapshot.status.sessionSimulation))
+              ? {simulation: {...snapshot.status.sessionSimulation, enabled:true, mode:"loopback"}}
+              : snapshot.status.sessionSimulation ? {simulation:snapshot.status.sessionSimulation} : {})},
             undefined, queue.run.entry.node.id);
           if (viewPending.current) await runQueuedView();
           return true;
@@ -347,7 +381,7 @@ export function useExposureRun() {
         for (const node of finished) dispatch(exposureStepCompleted(node.id));
         // Automatic View runs once after each completed exposure pass/round.
         // Parallel patterns share the View at their common round boundary.
-        const automaticViewEnabled = store.getState().exposure.viewPauseSeconds > 0;
+        const automaticViewEnabled = !milling && store.getState().exposure.viewPauseSeconds > 0;
         const exposedRound = queues.some(({run}) => !skipped.has(run.entry.node.id));
         let pauseForReview = false;
         if (automaticViewEnabled && exposedRound && !viewPending.current) {

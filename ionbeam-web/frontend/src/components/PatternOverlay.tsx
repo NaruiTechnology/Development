@@ -57,6 +57,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   const [menu, setMenu] = useState<{ x: number; y: number; key: string } | null>(null);
   const [grayTooltip, setGrayTooltip] = useState<{ x: number; y: number; value: number } | null>(null);
   const roi = useAppSelector((s) => s.scan.roi);
+  const milling = useAppSelector(s => s.exposure.mode === "milling");
   const { specs, instances, activeKey, stairReceipes } = useAppSelector((s) => s.processing);
   const materials = useAppSelector((s) => s.processing.materials);
   const [, repaint] = useReducer((n: number) => n + 1, 0);
@@ -125,7 +126,10 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   }, [disabled, dispatch, workspaceActive]);
 
   function commit(roiValue: PatternRoi) {
-    if (active) dispatch(createPatternRoi({ key: active.key, roi: roiValue }));
+    if (active) {
+      if (milling && instances[active.key]?.roi) dispatch(setPatternRoi({ key: active.key, roi: roiValue }));
+      else dispatch(createPatternRoi({ key: active.key, roi: roiValue }));
+    }
   }
 
   function worldDistance(a: Pt, b: Pt) {
@@ -348,7 +352,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         }
       }}
     >
-      {specs.map((spec) => {
+      {specs.filter(spec => !milling || spec.key === activeKey).map((spec) => {
         const inst = instances[spec.key];
         return inst?.roi ? (
           <g key={spec.key} data-pattern-key={spec.key} style={{ cursor: disabled ? "default" : "grab" }}>

@@ -8,6 +8,7 @@
 import {
   ROI_GRAY_FULL_SCALE,
   applyGrayLut,
+  applyMaskedGrayLut,
   grayHistogram,
   grayLevelLut,
   isIdentityLut,
@@ -47,12 +48,14 @@ export function resolveRoiLevels(histogram: LevelHistogram | null, setting: Leve
 }
 
 /** Restretch the gray pixels of the whole canvas in place (no-op for identity levels). */
-export function applyLevelsToCanvas(canvas: HTMLCanvasElement, levels: ResolvedLevels): void {
+export function applyLevelsToCanvas(canvas: HTMLCanvasElement, levels: ResolvedLevels, mask?: Uint8Array | null): void {
   const lut = grayLevelLut(levels);
   if (isIdentityLut(lut)) return;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return;
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  applyGrayLut(image.data, lut);
+  if (mask) {
+    applyMaskedGrayLut(image.data, lut, mask);
+  } else applyGrayLut(image.data, lut);
   ctx.putImageData(image, 0, 0);
 }

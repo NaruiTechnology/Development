@@ -306,3 +306,14 @@ export function applyGrayLut(rgba: Uint8ClampedArray | Uint8Array, lut: ArrayLik
     rgba[p + 2] = g;
   }
 }
+
+/** Change only selected pixels; preserve outside pixels and alpha exactly. */
+export function applyMaskedGrayLut(rgba: Uint8ClampedArray, lut: Uint8Array, mask: Uint8Array): void {
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue;
+    const offset = i * 4;
+    rgba[offset] = lut[rgba[offset]];
+    rgba[offset + 1] = lut[rgba[offset + 1]];
+    rgba[offset + 2] = lut[rgba[offset + 2]];
+  }
+}

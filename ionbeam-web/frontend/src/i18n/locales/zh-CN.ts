@@ -202,6 +202,8 @@ export const zhCN: Partial<TranslationTable> = {
   "canvas.scanParams.beamEnergy": "束能",
   "canvas.scanParams.resolution": "分辨率",
   "canvas.scanParams.scanPath": "路径",
+  "processing.exposure.autoTab": "自动",
+  "processing.exposure.millingTab": "铣削",
   "processing.exposure.card": "曝光",
   "processing.exposure.parallelLabel": "曝光并行",
   "processing.exposure.parallelHelp": "使用单束在各图形间交替曝光分段；清洁线须关闭并行。",

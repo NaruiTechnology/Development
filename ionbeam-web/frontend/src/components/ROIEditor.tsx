@@ -1,3 +1,4 @@
+import { LiveViewCanvas } from "./LiveViewCanvas";
 import { createIdleWorkQueue } from "../lib/idleWork";
 import { MODEL_REGISTRY, patternAvgGraySteps } from "../lib/processingPatterns";
 import { pixelGray } from "../lib/roiTargetGray";
@@ -57,6 +58,7 @@ import {
   ROI_GRAY_FULL_SCALE,
   ROI_GRAY_SAMPLE_SCALE,
   grayLevelLut,
+  buildHistogram,
   type LevelHistogram,
   type ResolvedLevels,
 } from "../lib/displayLevels";
@@ -128,6 +130,7 @@ export function ROIEditor({
   graySelectionResetToken?: number;
   /** Extra layer drawn over the canvas (the Processing tab's pattern drawing). Receives pointer/world mapping. */
   renderCanvasOverlay?: (api: {
+    displayLevels: ResolvedLevels;
     pointFromClient: (clientX: number, clientY: number) => { x: number; y: number };
     toWorld: (point: { x: number; y: number }) => { x: number; y: number };
     sampleGrayAtClient: (clientX: number, clientY: number) => { value: number; x: number; y: number } | null;
@@ -144,6 +147,9 @@ export function ROIEditor({
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
   const processingPatterns = useAppSelector((s) => s.processing);
+  const milling = useAppSelector(s => s.exposure.mode === "milling") && Boolean(processingPreview);
+  const millingROI = milling && Boolean(processingPatterns.instances[processingPatterns.activeKey ?? ""]?.roi);
+  const [liveContrastHost, setLiveContrastHost] = useState<HTMLDivElement | null>(null);
   // Gray readouts must not invalidate canvas painting or shape clipping.
   const processingRoiKey = JSON.stringify(processingPatterns.specs.map(spec =>
     [spec.key, spec.model, processingPatterns.instances[spec.key]?.enabled, processingPatterns.instances[spec.key]?.roi]));
@@ -221,7 +227,26 @@ export function ROIEditor({
   // overlay and the captured scan image always work on these raw gray values.
   const rawCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const rawImageRef = useRef<HTMLImageElement | null>(null);
-  const [grayHist, setGrayHist] = useState<LevelHistogram | null>(null);
+  const [backgroundGrayHist, setGrayHist] = useState<LevelHistogram | null>(null);
+  const viewFrames = useAppSelector(s => s.image.exposureViewFrames);
+  // While Patterns shows a View acquisition, its wedge measures those raw
+  // samples on the same 0..255 gray axis as the background image.
+  const processingFrame = useAppSelector((s) => processingPreview === "raster" ? s.image.frame : s.image.vectorImage);
+  const processingEdge = useAppSelector((s) => processingPreview === "raster" ? s.image.resolution : s.image.vectorEdge);
+  const processingFilled = useAppSelector((s) => processingPreview === "raster" ? s.image.filled : s.image.vectorFilled);
+  // Contrast is measured over the image canvas, independent of pattern ROIs.
+  const grayHist = useMemo(() => {
+    if (milling || !processingPreview || !viewFrames.length) return backgroundGrayHist;
+    let min = ROI_GRAY_FULL_SCALE, max = 0, total = 0;
+    const graySample = (value: number) => Math.min(255, value >>> 8) * ROI_GRAY_SAMPLE_SCALE;
+    for (const frame of viewFrames) for (const value of frame.pixels) {
+      const sample = graySample(value);
+      min = Math.min(min, sample); max = Math.max(max, sample); total++;
+    }
+    return total ? buildHistogram(min, max, total, visit => {
+      for (const frame of viewFrames) for (const value of frame.pixels) visit(graySample(value));
+    }) : backgroundGrayHist;
+  }, [backgroundGrayHist, processingPreview, viewFrames, milling]);
   const [levelSetting, setLevelSetting] = useLevelSetting(ROI_LEVEL_KEY);
   const levels = useMemo(() => resolveRoiLevels(grayHist, levelSetting), [grayHist, levelSetting]);
   const lut = useMemo(() => grayLevelLut(levels), [levels]);
@@ -288,9 +313,6 @@ export function ROIEditor({
   const vectorPhase = useAppSelector((s) => s.scan.phase);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorRevision = useAppSelector((s) => s.image.revision);
-  const processingFrame = useAppSelector((s) => processingPreview === "raster" ? s.image.frame : s.image.vectorImage);
-  const processingEdge = useAppSelector((s) => processingPreview === "raster" ? s.image.resolution : s.image.vectorEdge);
-  const processingFilled = useAppSelector((s) => processingPreview === "raster" ? s.image.filled : s.image.vectorFilled);
   const processingCursor = useAppSelector((s) => processingPreview === "raster" ? s.image.cursor : s.image.vectorCursor);
   const processingROI = useAppSelector((s) => processingPreview === "raster" ? s.image.rasterROI : s.image.vectorROI);
   const processingRegions = useAppSelector((s) => processingPreview === "raster" ? s.image.rasterParallelROIs : s.image.vectorParallelROIs);
@@ -2000,10 +2022,13 @@ export function ROIEditor({
             aria-hidden="true"
           />
           {renderCanvasOverlay?.({
+            displayLevels: levels,
             pointFromClient: (clientX, clientY) => canvasPointFromClient(clientX, clientY, true),
             toWorld: toDut,
             sampleGrayAtClient: rawGrayAtClient,
           })}
+          {milling && <LiveViewCanvas contrastHost={liveContrastHost}
+            pointerWorld={(x,y)=>toDut(canvasPointFromClient(x,y,true))} />}
           {ctrlCursor && !roi.calibration_enabled && (
               <span
               className="roi-corner-cursor"
@@ -2300,7 +2325,11 @@ export function ROIEditor({
         {processingPreview && <ImageScaleChip extent={fullCanvasImageExtent(roi, globalPixelSize)}
           rotate90={streamTransforms.rotate90} zoom={roi.scan_zoom} />}
         </div>
-        {!hideLevelWedge && <LevelWedge
+        {!hideLevelWedge && <div className={millingROI ? "milling-contrast-split" : "roi-contrast-single"}>
+          {millingROI && <div className="milling-contrast-upper" ref={setLiveContrastHost} />}
+          <div className={millingROI ? "milling-contrast-lower" : "roi-contrast-full"}>
+          <LevelWedge
+          scopeLabel={processingPreview ? "Full image" : undefined}
           histogram={grayHist}
           levels={levels}
           auto={levelSetting.mode === "auto"}
@@ -2309,7 +2338,7 @@ export function ROIEditor({
           disabled={!grayHist || grayHist.total <= 0 || roi.calibration_enabled}
           fullScale={ROI_GRAY_FULL_SCALE}
           codeDivisor={ROI_GRAY_SAMPLE_SCALE}
-        />}
+        /></div></div>}
         </div>
       )}
       {calibrationCorrection && (

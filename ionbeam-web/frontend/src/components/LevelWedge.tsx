@@ -37,6 +37,7 @@ import {
 } from "../lib/displayLevels";
 
 export interface LevelWedgeProps {
+  scopeLabel?: string;
   histogram: LevelHistogram | null;
   /** Levels currently applied to the image. */
   levels: ResolvedLevels;
@@ -54,6 +55,7 @@ export interface LevelWedgeProps {
 type DragKind = "low" | "high" | "region";
 
 export function LevelWedge({
+  scopeLabel,
   histogram,
   levels,
   auto,
@@ -247,6 +249,7 @@ export function LevelWedge({
         <span title={t("canvas.wedge.white")}>▲ {highCode}</span>
         <span title={t("canvas.wedge.black")}>▽ {lowCode}</span>
       </div>
+      {scopeLabel && <div className="level-wedge__scope" title={scopeLabel} style={{fontSize: 10, textAlign: "center", overflowWrap: "anywhere"}}>{scopeLabel}</div>}
       <div className="level-wedge__actions">
         <button
           type="button"

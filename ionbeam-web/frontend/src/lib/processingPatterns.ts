@@ -418,3 +418,11 @@ export function patternDwellTicks(microseconds: unknown, fallback: number): numb
   const us = Number(microseconds);
   return Number.isFinite(us) && us > 0 ? Math.min(65535, Math.max(0, Math.ceil(us / 0.125) - 1)) : fallback;
 }
+
+/** Contrast follows the selected drawn ROI, independently of exposure enablement. */
+export function contrastPatternSpecs<T extends { key: string }>(specs: readonly T[],
+  instances: Record<string, { roi: PatternRoi | null }>, activeKey: string | null): T[] {
+  const defined = specs.filter(spec => instances[spec.key]?.roi);
+  const selected = defined.find(spec => spec.key === activeKey);
+  return selected ? [selected] : defined;
+}
