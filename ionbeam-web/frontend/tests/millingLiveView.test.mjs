@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { millingSpotPositions, liveViewWindow, defaultLiveViewOffset, circularLiveViewBounds } from "../.test-dist/lib/millingLiveView.js";
-import reducer, { resetMillingFrame, appendMillingSamples } from "../.test-dist/store/imageSlice.js";
+import reducer, { resetMillingFrame, appendMillingSamples, beginMillingPass, completeMillingPass } from "../.test-dist/store/imageSlice.js";
 const rect={shape:{kind:"rect",x0:0,x1:4,y0:0,y1:2},pitch_x:1,axis:"x",dwell:0,passes:1};
 test("feedback maps exact serpentine spot order, segmented rows and vertical order",()=>{
  assert.deepEqual([...millingSpotPositions(rect)],[[1,1],[2,1],[3,1],[4,1],[4,2],[3,2],[2,2],[1,2]]);
@@ -56,4 +56,24 @@ test("circle LiveView is square in pixels with unequal physical X/Y scales",()=>
    const width=(view.x_end-view.x_start)/250*640,height=(view.y_end-view.y_start)/500*640;
    assert.ok(Math.abs(width-height)<1e-8);
  }
+});
+
+
+test("LiveImage remains visible between passes and fresh pixels replace it progressively",()=>{
+ const key="circle:1:exposure",bounds={x_start:0,x_end:1,y_start:0,y_end:1};
+ let state=reducer(undefined,resetMillingFrame({key,bounds}));
+ state=reducer(state,beginMillingPass(key));
+ state=reducer(state,appendMillingSamples({key,samples:[0,100,1,200,2,0]}));
+ state=reducer(state,completeMillingPass(key));
+ state=reducer(state,beginMillingPass(key));
+ assert.deepEqual([...state.millingFrame.valid.slice(0,3)],[1,1,1]);
+ assert.deepEqual([...state.millingFrame.pixels.slice(0,3)],[100,200,0]);
+ assert.deepEqual([...state.millingFrame.counts.slice(0,3)],[0,0,0]);
+ state=reducer(state,appendMillingSamples({key,samples:[0,400]}));
+ assert.deepEqual([...state.millingFrame.pixels.slice(0,3)],[400,200,0]);
+ state=reducer(state,completeMillingPass(key));
+ assert.deepEqual([...state.millingFrame.completedValid.slice(0,3)],[1,0,0],"retained display pixels do not become fresh pass reference samples");
+ assert.equal(state.millingFrame.completedMeans[0],400);
+ state=reducer(state,resetMillingFrame({key:"different",bounds}));
+ assert.equal(state.millingFrame.valid[0],0,"a different exposure starts with a fresh image");
 });

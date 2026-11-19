@@ -204,14 +204,15 @@ const slice = createSlice({
     beginMillingPass(state,a:PayloadAction<string>) {
       const frame=state.millingFrame;if(!frame||frame.key!==a.payload)return;
       frame.previousMeans=frame.completedMeans;frame.previousValid=frame.completedValid;frame.previousCounts=frame.completedCounts;
-      frame.valid=new Uint8Array(frame.pixels.length);frame.sums=new Float64Array(frame.pixels.length);frame.counts=new Uint32Array(frame.pixels.length);
+      // Keep the displayed image while the next pass replaces pixels as they arrive.
+      frame.sums=new Float64Array(frame.pixels.length);frame.counts=new Uint32Array(frame.pixels.length);
       frame.pass++;frame.passComplete=false;frame.revision++;
     },
     completeMillingPass(state,a:PayloadAction<string>) {
       const frame=state.millingFrame;if(!frame||frame.key!==a.payload)return;
       const means=new Float64Array(frame.pixels.length);
       for(let i=0;i<means.length;i++)if(frame.counts[i])means[i]=frame.sums[i]/frame.counts[i];
-      frame.completedMeans=means;frame.completedValid=frame.valid.slice();frame.completedCounts=frame.counts.slice();frame.passComplete=true;frame.revision++;
+      frame.completedMeans=means;frame.completedValid=Uint8Array.from(frame.counts, count => count > 0 ? 1 : 0);frame.completedCounts=frame.counts.slice();frame.passComplete=true;frame.revision++;
       state.millingHistoryPersisted=false;
       state.millingHistory={referenceKey:frame.referenceKey,key:frame.key,bounds:{...frame.bounds},means,valid:frame.completedValid,counts:frame.completedCounts};
     },
