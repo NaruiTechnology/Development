@@ -18,7 +18,7 @@ import { VectorScanPathGlyph } from "./VectorScanPathPreview";
 import { ExposureLatticeGeometry } from "./ExposureLatticeOverlay";
 import { createPortal } from "react-dom";
 
-import { MODEL_REGISTRY, lineRoi, patternBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
+import { MODEL_REGISTRY, lineRoi, patternDisplayBounds, cleaningLines, stairRects, type CircleRoi, type PatternParameters, type PatternRoi, type PatternSpec, type PolygonRoi, type RectRoi, type RingRoi } from "../lib/processingPatterns";
 import { resolveStairSteps, type StairRecipeDefaults, type StairStepOverride } from "../lib/stairRecipe";
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { useAppDispatch, useAppSelector, useWorkspaceActive } from "../store";
@@ -155,7 +155,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     const key = target?.getAttribute("data-pattern-key");
     const original = key ? instances[key]?.roi : null;
     if (!draft.current && key && original) {
-      const box = patternBounds(original);
+      const box = patternDisplayBounds(original, sx, sy);
       let corner = (e.target as Element | undefined)?.getAttribute("data-pattern-resize") as Corner | null;
       if (!corner && e.ctrlKey) {
         corner = CORNERS.find(c => Math.hypot(p.x - cx(c.endsWith("w") ? box.x_start : box.x_end),
@@ -199,7 +199,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
           r_inner: Math.max(original.r_outer * 0.05, Math.min(radius, original.r_outer * 0.95)) }, preview: true }));
         return;
       }
-      const box = patternBounds(editing.original);
+      const box = patternDisplayBounds(editing.original, sx, sy);
       const corner = editing.corner;
       const xMin = Math.min(bounds.x_origin, bounds.x_end), xMax = Math.max(bounds.x_origin, bounds.x_end);
       const yMin = Math.min(bounds.y_origin, bounds.y_end), yMax = Math.max(bounds.y_origin, bounds.y_end);
@@ -362,7 +362,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
               materials={materials} defaultMaterial={materials[0]?.name} cx={cx} cy={cy} sx={sx} sy={sy} />
             <ScanAxisCue roi={inst.roi} index={inst.index} axis={inst.parameters.axis === "y" ? "y" : "x"} cx={cx} cy={cy} sx={sx} sy={sy} />
             {spec.key === activeKey && (() => {
-              const box = patternBounds(inst.roi);
+              const box = patternDisplayBounds(inst.roi, sx, sy);
               const x = Math.min(cx(box.x_start), cx(box.x_end));
               const y = Math.max(cy(box.y_start), cy(box.y_end));
               const unit = roi.scale_unit === "um" ? "µm" : roi.scale_unit;
@@ -544,7 +544,7 @@ function Shape({ spec, params, roi, active, draft = false, stairSteps, stairPres
 function ScanAxisCue({roi, index, axis, cx, cy, sx, sy}: {
   roi: PatternRoi; index: number; axis: "x" | "y"; cx: (x: number) => number; cy: (y: number) => number; sx: number; sy: number;
 }) {
-  const b = patternBounds(roi), mx = (b.x_start + b.x_end) / 2, my = (b.y_start + b.y_end) / 2;
+  const b = patternDisplayBounds(roi, sx, sy), mx = (b.x_start + b.x_end) / 2, my = (b.y_start + b.y_end) / 2;
   const size = Math.max(14, Math.min(24, Math.min((b.x_end - b.x_start) * sx, (b.y_end - b.y_start) * sy) * 0.35));
   return <g className="pattern-roi-axis-cue" pointerEvents="none" opacity={0.95}>
     <svg x={cx(mx) - size / 2} y={cy(my) - size / 2} width={size} height={size}

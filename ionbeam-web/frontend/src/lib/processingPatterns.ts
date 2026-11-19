@@ -302,6 +302,15 @@ export function patternBounds(roi: PatternRoi): RectRoi {
     y_start: Math.min(...roi.points.map(p => p[1])), y_end: Math.max(...roi.points.map(p => p[1])) };
 }
 
+/** Bounds of the rendered circle, whose radius uses the canvas X scale on both axes. */
+export function patternDisplayBounds(roi: PatternRoi, scaleX: number, scaleY: number): RectRoi {
+  const bounds = patternBounds(roi);
+  if (!("cx" in roi)) return bounds;
+  const radius = "radius" in roi ? roi.radius : roi.r_outer;
+  const radiusY = radius * scaleX / scaleY;
+  return { ...bounds, y_start: roi.cy - radiusY, y_end: roi.cy + radiusY };
+}
+
 /** Average raw gray of opaque pixel centres inside the actual ROI shape. */
 export function* patternAvgGraySteps(roi: PatternRoi, model: (typeof MODEL_REGISTRY)[string], width: number, height: number,
   world: { x_origin: number; x_end: number; y_origin: number; y_end: number },
