@@ -62,3 +62,60 @@ counts. These logs describe host-inferred positions, not position tags supplied 
 the FPGA, and WebSocket send completion is not browser pixel-map acknowledgement.
 Additional raw capture or gateware tagging may still be needed if counts and cookies
 are correct but the image remains wrong.
+
+
+## Milling image simulation
+
+Milling simulation samples the loaded source-image gray value at each generated
+exposure spot, using the same clipped, merged, serpentine spot sequence as hardware.
+Only the source-image area bounding the pattern ROI is uploaded, at native pixel
+resolution, with a one-pixel border. Sampling remains restricted to the actual
+pattern shape (including ring holes). Original image size and crop offsets preserve
+exact source-pixel addressing, even with calibrated rotation or unequal axes.
+The uploaded crop supports up to 4096 pixels per side; asset transport is bounded
+at 128 MiB. A large loaded image is not rejected merely for exceeding one million
+pixels when its pattern ROI crop is small.
+The bitmap is prepared/uploaded once per pattern for each run and remains immutable.
+
+The browser sends the current one-based milling pass index. Pass 1 uses original
+pixel values. Pass N subtracts `(N-1)` raw ADC14 codes, clamped at zero. One code is
+1/64 of an 8-bit gray level (four units in the left-aligned 16-bit wire format).
+Production uses actual ADC values; this synthetic darkening applies only to image
+simulation. Auto contrast can compensate for uniform darkening; the raw sample
+values still decrease as logged. The default Enhanced Auto display is unchanged.
+Deploy the frontend and Glasgow service changes together. This package supersedes
+the previous diagnostics-only archive for testing the new image-source behavior.
+
+
+## Scan-tab resolution
+
+The LiveView sample buffer uses the selected Scan resolution for the active scan
+type: Raster resolution for Raster, Vector resolution for Vector. It is fixed at
+the start of the milling run, while the exposure lattice still uses beam pitch and
+overlap. The original source crop is not resized to that preview grid. Incoming
+samples are projected into the selected grid, and saved completed-pass references
+are only reused when their dimensions match. The 640-pixel display canvas is a
+presentation surface, not the acquisition buffer resolution.
+
+
+## Milling change-threshold slider
+
+The Milling panel includes a 0-100% Change threshold slider, default 10%, styled
+like Auto's View hold control. It remains adjustable during acquisition and after
+completion. The current interpretation is absolute change relative to the previous
+completed pass: `100 * abs(current - previous) / abs(previous)`.
+
+Qualifying spots (`change >= threshold`) are drawn at the current contrast upper
+limit (white). This affects only LiveView rendering: raw ADC/source pixels, pass
+averages, histograms and contrast levels remain unchanged. The first pass has no
+highlight reference. Comparison uses the exact emitted spot ordinal and DAC
+coordinate before preview-pixel binning, including across transport segments.
+If several spots land in one preview pixel, any qualifying spot makes that pixel
+qualify. Previous highlights stay visible between passes until fresh samples arrive.
+
+0% includes unchanged matched spots, following the inclusive comparison. A previous
+zero changing to a nonzero value qualifies at every threshold; zero staying zero
+has 0% change. Incomplete passes, mismatched coordinates, different patterns and new
+runs cannot supply a comparison reference. Only two passes of typed spot buffers
+are retained during a run and released at its end. The displayed change map stays
+available for adjusting the slider after the run.

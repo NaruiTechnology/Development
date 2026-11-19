@@ -1,3 +1,4 @@
+import { promotedMillingGray } from "../lib/millingChange";
 import { CHANGE_ZERO, LIVE_FULL_SCALE, liveAutoLevels, liveChanges, liveStatistics, normalizedLiveGray } from "../lib/liveContrast";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -5,7 +6,7 @@ import { useAppSelector } from "../store";
 import { useLevelSetting } from "../hooks/useLevelSetting";
 import { levelGray, type ResolvedLevels } from "../lib/displayLevels";
 import { patternBounds } from "../lib/processingPatterns";
-import { liveViewWindow, defaultLiveViewOffset, circularLiveViewBounds } from "../lib/millingLiveView";
+import { liveViewWindow, defaultLiveViewOffset, circularLiveViewBounds, millingPreviewMask, millingPreviewRadius, millingDisplaySamples } from "../lib/millingLiveView";
 import { imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { LevelWedge } from "./LevelWedge";
 
@@ -13,6 +14,7 @@ type Point = {x:number;y:number};
 /** Transparent, detector-only preview. Dragging relocates its display, never the milling path. */
 export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contrastHost: HTMLElement|null; toolsHost:HTMLElement|null; pointerWorld:(x:number,y:number)=>Point}) {
   const roi=useAppSelector(s=>s.scan.roi),patterns=useAppSelector(s=>s.processing);
+  const threshold=useAppSelector(s=>s.exposure.millingChangeThresholdPercent);
   const zoom=useAppSelector(s=>s.exposure.viewZoom),rawFrame=useAppSelector(s=>s.image.millingFrame);
   const frame=rawFrame?.key.startsWith(`${patterns.activeKey}:`)?rawFrame:null;
   const referenceSaved=useAppSelector(s=>s.image.millingHistoryPersisted);
@@ -22,7 +24,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
   const active=patterns.instances[patterns.activeKey??""]?.roi;
   const shapeKey=JSON.stringify([patterns.activeKey,active]);
   useEffect(()=>{setOffset(null);},[shapeKey]);
-  const source=active?patternBounds(active):null;
+  const source=frame?.bounds ?? (active?patternBounds(active):null);
   const field=imageWorldBounds(roi),viewport=viewportBounds(roi);
   const sizing=source && active && "cx" in active ? circularLiveViewBounds(source,field,viewport,zoom) : source;
   const placement=offset ?? (sizing?defaultLiveViewOffset(sizing,zoom,field):{x:0,y:0});
@@ -63,6 +65,14 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
     const mean=rawStats.mean/4,radius=Math.max(minimumADC,rawStats.deviation/4);
     setBand([Math.max(0,Math.floor(mean-radius)),Math.min(16383,Math.ceil(mean+radius))]);setBandEnabled(true);
   };
+  const coverage=useMemo(()=>frame?.lattice&&frame.projection ? {
+    resolution:Math.min(frame.resolution,640),
+    mask:millingPreviewMask(frame.lattice,frame.projection,frame.bounds,Math.min(frame.resolution,640)),
+    radius:millingPreviewRadius(frame.lattice,frame.projection,frame.bounds,Math.min(frame.resolution,640)),
+  }:null,[frame?.lattice,frame?.projection,frame?.bounds,frame?.resolution]);
+  const display=useMemo(()=>frame&&coverage ? millingDisplaySamples(
+    mode==="change"?changes.valid:frame.valid,frame.changePercent,frame.resolution,
+    coverage.mask,coverage.resolution,coverage.radius):null,[frame,coverage,mode,changes]);
   const histogram=stats.histogram;
   const cx=(x:number)=>worldToCanvasX(x,field,viewport),cy=(y:number)=>worldToCanvasY(y,field,viewport);
   useEffect(()=> {
@@ -70,13 +80,17 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
     if(!canvas||!ctx)return;
     ctx.clearRect(0,0,640,640);
     if(!frame||!window||!source || !frame.key.startsWith(`${patterns.activeKey}:`))return;
-    const scratch=document.createElement("canvas");scratch.width=scratch.height=frame.resolution;
+    const edge=display?.resolution??frame.resolution;
+    const scratch=document.createElement("canvas");scratch.width=scratch.height=edge;
     const c=scratch.getContext("2d");if(!c)return;
-    const image=c.createImageData(frame.resolution,frame.resolution);
-    for(let i=0;i<frame.pixels.length;i++) if(mode==="change"?changes.valid[i]:frame.valid[i]) {
+    const image=c.createImageData(edge,edge);
+    for(let pIndex=0;pIndex<edge*edge;pIndex++) {
+      const i=display?display.owners[pIndex]:((mode==="change"?changes.valid[pIndex]:frame.valid[pIndex])?pIndex:-1);
+      if(i<0)continue;
       const gray=mode==="change"?levelGray(changes.values[i],levels.low,levels.high):mode==="normalize"&&bandEnabled?
-        normalizedLiveGray(frame.pixels[i],levels,selectedStats,sampleBand,strength,minimumWindow):levelGray(frame.pixels[i],levels.low,levels.high),p=i*4;
-      image.data[p]=image.data[p+1]=image.data[p+2]=gray;image.data[p+3]=255;
+        normalizedLiveGray(frame.pixels[i],levels,selectedStats,sampleBand,strength,minimumWindow):levelGray(frame.pixels[i],levels.low,levels.high),p=pIndex*4;
+      const displayedGray=promotedMillingGray(gray,display?.highlight[pIndex]??frame.changePercent[i],threshold);
+      image.data[p]=image.data[p+1]=image.data[p+2]=displayedGray;image.data[p+3]=255;
     }
     c.putImageData(image,0,0);
     // Recipe sub-bands occupy the same relative position inside the magnified window.
@@ -84,7 +98,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
     const mapY=(y:number)=>window.y_start+(y-source.y_start)/(source.y_end-source.y_start)*(window.y_end-window.y_start);
     ctx.imageSmoothingEnabled=false;
     ctx.drawImage(scratch,cx(mapX(frame.bounds.x_start)),cy(mapY(frame.bounds.y_start)),cx(mapX(frame.bounds.x_end))-cx(mapX(frame.bounds.x_start)),cy(mapY(frame.bounds.y_end))-cy(mapY(frame.bounds.y_start)));
-  },[frame,levels.low,levels.high,shapeKey,zoom,offset,roi,mode,changes,selectedStats,band[0],band[1],bandEnabled,strength,minimumWindow]);
+  },[frame,display,threshold,levels.low,levels.high,shapeKey,zoom,offset,roi,mode,changes,selectedStats,band[0],band[1],bandEnabled,strength,minimumWindow]);
   return <>
     <div className="milling-live-layer" aria-label="LiveViewCanvas">
       <canvas ref={canvasRef} width={640} height={640} aria-label="Milling spot feedback image" />

@@ -231,6 +231,8 @@ export const en = {
   "processing.exposure.viewHelp": "Above 0 seconds, an automatic View scan runs after each completed exposure pass and holds for the selected time. At 0, automatic scans are skipped. Click the eye to request a one-time scan.",
   "processing.exposure.pauseAtView": "Pause after View",
   "processing.exposure.pauseAtViewHelp": "Keep exposure paused after an automatic View scan so you can review the result. Resume continues the run.",
+  "processing.exposure.changeThreshold": "Change threshold",
+  "processing.exposure.changeThresholdHelp": "At or above this absolute percentage change from the previous pass, show the spot at the upper contrast limit. Raw gray values are preserved. 0% includes unchanged matched spots.",
   "processing.exposure.pause": "View hold (s)",
   "processing.exposure.seconds": "s",
   "processing.exposure.viewStatus.queued": "View queued; waiting for the current exposure segment to finish.",

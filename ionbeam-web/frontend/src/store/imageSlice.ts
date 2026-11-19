@@ -1,3 +1,5 @@
+import type { MillingProjection } from "../lib/millingLiveView";
+import type { LatticeRequest } from "../types/api";
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { ROIRequest, VectorPoint, VectorPointTuple, VectorScanPath } from "../types/api";
 import { vectorScanSampleCount, vectorScanSampleXY } from "../lib/vectorScanPath.js";
@@ -23,12 +25,12 @@ import { fullFrameAxisMaps, scanPixelAxisMaps, scanRegionPixelBounds, type ScanP
 export type VectorPattern = "default" | "custom";
 export type VectorSource = "vector" | "roi";
 
-export interface MillingFrame { key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array; valid: Uint8Array; revision: number;
+export interface MillingFrame { lattice?:LatticeRequest; projection?:MillingProjection; changePercent: Float32Array; key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array; valid: Uint8Array; revision: number;
   referenceKey: string; pass: number; passComplete: boolean; sums: Float64Array; counts: Uint32Array;
   previousMeans: Float64Array | null; previousValid: Uint8Array | null; previousCounts: Uint32Array|null;
   completedMeans: Float64Array | null; completedValid: Uint8Array | null; completedCounts: Uint32Array|null;
 }
-export interface MillingHistory {referenceKey:string; key:string; bounds:ROIRequest; means:Float64Array; valid:Uint8Array; counts:Uint32Array}
+export interface MillingHistory {resolution?:number; referenceKey:string; key:string; bounds:ROIRequest; means:Float64Array; valid:Uint8Array; counts:Uint32Array}
 interface ImageState {
   /** Last successfully completed pass/step, retained independently of the current preview. */
   millingHistory: MillingHistory | null;
@@ -195,11 +197,15 @@ const slice = createSlice({
     markMillingHistorySaved(state,a:PayloadAction<{referenceKey:string;saved:boolean}>) {
       if(state.millingHistory?.referenceKey===a.payload.referenceKey)state.millingHistoryPersisted=a.payload.saved;
     },
-    resetMillingFrame(state, a: PayloadAction<{key: string; bounds: ROIRequest; referenceKey?:string} | null>) {
-      const referenceKey=a.payload?.referenceKey??JSON.stringify([a.payload?.key,a.payload?.bounds]);
-      const history=state.millingHistory?.referenceKey===referenceKey?state.millingHistory:null;
-      state.millingFrame = a.payload ? {...a.payload, resolution: 256, pixels: new Uint16Array(256*256), valid: new Uint8Array(256*256), revision: 0,
-        referenceKey,pass:0, passComplete:false, sums:new Float64Array(256*256),counts:new Uint32Array(256*256),previousMeans:null,previousValid:null,previousCounts:null,completedMeans:history?.means??null,completedValid:history?.valid??null,completedCounts:history?.counts??null} : null;
+    resetMillingFrame(state, a: PayloadAction<{key: string; bounds: ROIRequest; referenceKey?:string; resolution?:number; lattice?:LatticeRequest; projection?:MillingProjection} | null>) {
+      const selected = a.payload?.resolution ?? 256;
+      const resolution = Number.isFinite(selected) ? Math.max(1, Math.min(2048, Math.trunc(selected))) : 512;
+      const size = resolution*resolution;
+      const referenceKey=a.payload?.referenceKey??JSON.stringify([a.payload?.key,a.payload?.bounds,resolution]);
+      const candidate=state.millingHistory?.referenceKey===referenceKey?state.millingHistory:null;
+      const history=candidate?.means.length===size && candidate.valid.length===size && candidate.counts.length===size ? candidate : null;
+      state.millingFrame = a.payload ? {...a.payload, resolution, changePercent:new Float32Array(size).fill(-1), pixels: new Uint16Array(size), valid: new Uint8Array(size), revision: 0,
+        referenceKey,pass:0, passComplete:false, sums:new Float64Array(size),counts:new Uint32Array(size),previousMeans:null,previousValid:null,previousCounts:null,completedMeans:history?.means??null,completedValid:history?.valid??null,completedCounts:history?.counts??null} : null;
     },
     beginMillingPass(state,a:PayloadAction<string>) {
       const frame=state.millingFrame;if(!frame||frame.key!==a.payload)return;
@@ -214,14 +220,17 @@ const slice = createSlice({
       for(let i=0;i<means.length;i++)if(frame.counts[i])means[i]=frame.sums[i]/frame.counts[i];
       frame.completedMeans=means;frame.completedValid=Uint8Array.from(frame.counts, count => count > 0 ? 1 : 0);frame.completedCounts=frame.counts.slice();frame.passComplete=true;frame.revision++;
       state.millingHistoryPersisted=false;
-      state.millingHistory={referenceKey:frame.referenceKey,key:frame.key,bounds:{...frame.bounds},means,valid:frame.completedValid,counts:frame.completedCounts};
+      state.millingHistory={resolution:frame.resolution,referenceKey:frame.referenceKey,key:frame.key,bounds:{...frame.bounds},means,valid:frame.completedValid,counts:frame.completedCounts};
     },
-    appendMillingSamples(state, a: PayloadAction<{key: string; samples: number[]}>) {
+    appendMillingSamples(state, a: PayloadAction<{key: string; samples: number[]; changes?:number[]}>) {
       const frame = state.millingFrame;
       if (!frame || frame.key !== a.payload.key) return;
       for (let i=0; i<a.payload.samples.length; i+=2) {
         const index = a.payload.samples[i];
-        if (index >= 0 && index < frame.pixels.length) { frame.pixels[index] = a.payload.samples[i+1]; frame.valid[index] = 1; frame.sums[index] += a.payload.samples[i+1]; frame.counts[index]++; }
+        if (index >= 0 && index < frame.pixels.length) {
+          const change=a.payload.changes?.[i/2] ?? -1;
+          frame.changePercent[index]=frame.counts[index] ? Math.max(frame.changePercent[index],change) : change;
+          frame.pixels[index] = a.payload.samples[i+1]; frame.valid[index] = 1; frame.sums[index] += a.payload.samples[i+1]; frame.counts[index]++; }
       }
       frame.revision++;
     },

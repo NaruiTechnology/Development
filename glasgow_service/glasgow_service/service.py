@@ -945,7 +945,32 @@ async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
                                    abort, interval: float, transforms=None):
     """Vector stream for the configured simulation source: one sample per point."""
     import numpy as np
-    sampler = await asyncio.to_thread(_simulation_sampler, simulation)
+    bitmap = req.simulation_bitmap if req.pattern is VectorPattern.lattice else None
+    if bitmap is not None:
+        # Use the same spot sequence as hardware; never substitute vector_resolution² pixels.
+        grid = await asyncio.to_thread(_bitmap_sample_grid, bitmap)
+        x0, x1, y0, y1 = _roi_bounds(bitmap.source_roi) or (0, 16383, 0, 16383)
+        # Derive each pass from the immutable original; chunks and segments must not
+        # accumulate extra darkening. One ADC14 code is 1/64 of an 8-bit image level.
+        pass_index = max(1, int(simulation.get("milling_pass_index", 1)))
+        delta_adc = max(0, min(16383, int(simulation.get("milling_gray_delta_adc", 1))))
+        darkening_adc = min(16383, (pass_index-1)*delta_adc)
+        def sampler(x, y):
+            if bitmap.source_transform is not None:
+                a, b, c, d, e, f = bitmap.source_transform
+                nx, ny = a*x+b*y+c, d*x+e*y+f
+            else:
+                nx, ny = (x-x0)/max(1, x1-x0), (y-y0)/max(1, y1-y0)
+            source_width, source_height = bitmap.source_image_size or (bitmap.width, bitmap.height)
+            offset_x, offset_y = bitmap.source_pixel_offset or (0, 0)
+            # Round in the original image coordinates before subtracting integer crop offsets.
+            # This preserves the identical nearest source pixel, including half-pixel ties.
+            bx = np.clip(np.rint(np.clip(nx, 0, 1)*(source_width-1)).astype(np.int64)-offset_x, 0, bitmap.width-1)
+            by = np.clip(np.rint(np.clip(ny, 0, 1)*(source_height-1)).astype(np.int64)-offset_y, 0, bitmap.height-1)
+            raw = (grid[by, bx] >> _OBI_SAMPLE_SHIFT).astype(np.int32)
+            return np.maximum(0, raw-darkening_adc)
+    else:
+        sampler = await asyncio.to_thread(_simulation_sampler, simulation)
     if req.pattern not in (VectorPattern.custom, VectorPattern.lattice):
         regions = req.parallel_rois or [req.roi]
         count = req.vector_resolution ** 2 * len(regions)
@@ -1008,6 +1033,9 @@ async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
 
 
 def _bitmap_vector_chunks(req: VectorRequest, transforms=None) -> Optional[List[array.array]]:
+    if req.pattern is VectorPattern.lattice:
+        # Lattices can contain millions of merged/clipped spots; sample lazily in _simulated_vector_chunks.
+        return None
     if req.parallel_rois and req.parallel_simulation_bitmaps:
         if len(req.parallel_rois) != len(req.parallel_simulation_bitmaps):
             raise ValueError("parallel_simulation_bitmaps must match parallel_rois")

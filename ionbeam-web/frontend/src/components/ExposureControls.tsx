@@ -3,7 +3,7 @@ import { useTranslation } from "../i18n";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useExposureRun } from "../hooks/useExposureRun";
 import { useOtherWorkspaceBusy } from "../hooks/useScanWorkspace";
-import { exposureBusy, setExposureMode, setExposureParallel, setExposureViewZoom, setExposureViewPauseSeconds, setExposurePauseAfterView } from "../store/exposureSlice";
+import { exposureBusy, setMillingChangeThresholdPercent, setExposureMode, setExposureParallel, setExposureViewZoom, setExposureViewPauseSeconds, setExposurePauseAfterView } from "../store/exposureSlice";
 import { applyMillingPassDefaults } from "../store/processingSlice";
 import { NumberStepperInput } from "./NumberStepperField";
 import { MAX_SCAN_ZOOM } from "../lib/scanRegions";
@@ -82,6 +82,23 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
                 title={serialRequired ? t("processing.exposure.serialRequired") : t("processing.exposure.startHelp")}
                 onClick={() => void start()}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>}
         </div>
+        {tab === "milling" && <div className="patterns-exposure__view-row patterns-exposure__change-row">
+          <label className="patterns-exposure__pause" title={t("processing.exposure.changeThresholdHelp")}>
+            <span>{t("processing.exposure.changeThreshold")} <output>{state.millingChangeThresholdPercent}%</output></span>
+            <div className="patterns-exposure__pause-shell">
+              <div className="patterns-exposure__pause-slider">
+                <div className="patterns-exposure__pause-track" />
+                <div className="patterns-exposure__pause-ticks" aria-hidden="true">
+                  {[0,25,50,75,100].map(value=><span key={value} className="patterns-exposure__pause-tick--major"
+                    style={{left:`${value}%`}}><i>{value}%</i></span>)}
+                </div>
+                <input type="range" min={0} max={100} step={1} value={state.millingChangeThresholdPercent}
+                  aria-label={t("processing.exposure.changeThreshold")} aria-valuetext={`${state.millingChangeThresholdPercent}%`}
+                  onChange={event=>dispatch(setMillingChangeThresholdPercent(Number(event.target.value)))} />
+              </div>
+            </div>
+          </label>
+        </div>}
         {tab === "auto" && <div className="patterns-exposure__view-row">
           {showView && <span className="patterns-exposure__view-tooltip" title={t("processing.exposure.viewHelp")}>
             <button type="button"

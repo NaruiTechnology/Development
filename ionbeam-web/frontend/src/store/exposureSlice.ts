@@ -12,6 +12,7 @@ export interface ExposureState {
   mode: "auto" | "milling";
   parallel: boolean;
   viewPauseSeconds: number;
+  millingChangeThresholdPercent: number;
   pauseAfterView: boolean;
   viewZoom: number;
   phase: ExposurePhase;
@@ -29,7 +30,7 @@ export interface ExposureState {
   viewExpectedSamples: number;
 }
 const initialState: ExposureState = {
-  mode: "milling", parallel: false, viewPauseSeconds: 5, pauseAfterView: false, viewZoom: 2, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
+  mode: "milling", millingChangeThresholdPercent: 10, parallel: false, viewPauseSeconds: 5, pauseAfterView: false, viewZoom: 2, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
   viewPhase: "idle", viewError: null, viewRequestId: 0,
   viewReceivedSamples: 0, viewReceivedChunks: 0, viewExpectedSamples: 0,
 };
@@ -41,6 +42,9 @@ export const selectExposurePreview = createSelector(
   (nodes, instances) => nodes.filter(node => instances[node.id.replace(/:\d+:exposure$/, "")]?.roi),
 );
 const slice = createSlice({ name: "exposure", initialState, reducers: {
+  setMillingChangeThresholdPercent(s, a: PayloadAction<number>) {
+    if (Number.isFinite(a.payload)) s.millingChangeThresholdPercent = Math.max(0, Math.min(100, Math.round(a.payload)));
+  },
   setExposureMode(s, a: PayloadAction<"auto" | "milling">) { if (!exposureBusy(s.phase)) s.mode = a.payload; },
   setExposureParallel(s, a: PayloadAction<boolean>) { if (!exposureBusy(s.phase)) s.parallel = a.payload; },
   setExposureViewZoom(s, a: PayloadAction<number>) {
@@ -151,7 +155,7 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
     }
   });
 } });
-export const { setExposureMode, setExposureViewZoom, setExposureParallel, setExposureViewPauseSeconds, setExposurePauseAfterView, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
+export const { setMillingChangeThresholdPercent, setExposureMode, setExposureViewZoom, setExposureParallel, setExposureViewPauseSeconds, setExposurePauseAfterView, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
   exposureStepCompleted, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
   exposureViewSamplesReceived, requestExposureView,
   exposurePaused, exposureResumed } = slice.actions;

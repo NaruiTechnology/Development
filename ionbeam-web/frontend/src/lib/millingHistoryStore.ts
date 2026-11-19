@@ -12,7 +12,9 @@ export async function millingHistoryStorage(workspace:string,write?:MillingHisto
       let result:MillingHistory|null=null;
       request.onsuccess=()=>{
         const candidate=write??request.result;
-        if(candidate && typeof candidate.referenceKey==="string" && candidate.means instanceof Float64Array && candidate.valid instanceof Uint8Array && candidate.means.length===256*256 && candidate.valid.length===256*256 && candidate.counts instanceof Uint32Array && candidate.counts.length===256*256)result=candidate;
+        const resolution=candidate?.resolution ?? Math.sqrt(candidate?.means?.length ?? 0);
+        const size=resolution*resolution;
+        if(Number.isInteger(resolution) && resolution>=1 && resolution<=2048 && candidate && typeof candidate.referenceKey==="string" && candidate.means instanceof Float64Array && candidate.valid instanceof Uint8Array && candidate.means.length===size && candidate.valid.length===size && candidate.counts instanceof Uint32Array && candidate.counts.length===size)result=candidate;
       };
       tx.oncomplete=()=>{db.close();resolve(result);};tx.onerror=tx.onabort=()=>{db.close();resolve(null);};
     };

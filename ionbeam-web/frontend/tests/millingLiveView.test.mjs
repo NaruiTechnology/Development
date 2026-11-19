@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { millingSpotPositions, liveViewWindow, defaultLiveViewOffset, circularLiveViewBounds } from "../.test-dist/lib/millingLiveView.js";
+import { millingSpotPositions, liveViewWindow, defaultLiveViewOffset, circularLiveViewBounds, millingPreviewResolution, millingPixelIndex } from "../.test-dist/lib/millingLiveView.js";
 import reducer, { resetMillingFrame, appendMillingSamples, beginMillingPass, completeMillingPass } from "../.test-dist/store/imageSlice.js";
 const rect={shape:{kind:"rect",x0:0,x1:4,y0:0,y1:2},pitch_x:1,axis:"x",dwell:0,passes:1};
 test("feedback maps exact serpentine spot order, segmented rows and vertical order",()=>{
@@ -76,4 +76,26 @@ test("LiveImage remains visible between passes and fresh pixels replace it progr
  assert.equal(state.millingFrame.completedMeans[0],400);
  state=reducer(state,resetMillingFrame({key:"different",bounds}));
  assert.equal(state.millingFrame.valid[0],0,"a different exposure starts with a fresh image");
+});
+
+
+test("LiveView resolution follows the active Scan tab and maps samples into its selected grid",()=>{
+ const scan={kind:"raster",raster:{resolution:512},vector:{vector_resolution:1024}};
+ assert.equal(millingPreviewResolution(scan),512);
+ assert.equal(millingPreviewResolution({...scan,kind:"vector"}),1024);
+ const bounds={x_start:10,x_end:20,y_start:30,y_end:50};
+ for(const resolution of [128,512,1024]) {
+   assert.equal(millingPixelIndex(10,30,bounds,resolution),0);
+   assert.equal(millingPixelIndex(20,50,bounds,resolution),resolution*resolution-1);
+   assert.equal(millingPixelIndex(15,40,bounds,resolution),resolution/2*resolution+resolution/2);
+ }
+ let state=reducer(undefined,resetMillingFrame({key:"scan-grid",bounds,resolution:512,referenceKey:"grid"}));
+ assert.equal(state.millingFrame.resolution,512);
+ assert.equal(state.millingFrame.pixels.length,512*512);
+ state=reducer(state,beginMillingPass("scan-grid"));
+ state=reducer(state,appendMillingSamples({key:"scan-grid",samples:[512*512-1,400]}));
+ state=reducer(state,completeMillingPass("scan-grid"));
+ assert.equal(state.millingHistory.resolution,512);
+ state=reducer(state,resetMillingFrame({key:"scan-grid",bounds,resolution:1024,referenceKey:"grid"}));
+ assert.equal(state.millingFrame.completedMeans,null,"references from a different resolution cannot be compared");
 });

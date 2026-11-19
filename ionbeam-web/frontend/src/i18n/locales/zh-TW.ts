@@ -221,6 +221,8 @@ export const zhTW: Partial<TranslationTable> = {
   "processing.exposure.viewHelp": "設為大於 0 秒時，每個曝光輪次完成後會自動執行一次檢視掃描，並等待所選時間。設為 0 時略過自動掃描。點擊眼睛圖示可手動要求單次掃描。",
   "processing.exposure.pauseAtView": "檢視後暫停",
   "processing.exposure.pauseAtViewHelp": "自動檢視掃描完成後暫停曝光，以便檢查結果。點擊「繼續」恢復執行。",
+  "processing.exposure.changeThreshold": "變化閾值",
+  "processing.exposure.changeThresholdHelp": "與上一遍相比，灰階絕對變化百分比達到此閾值時，以對比度上限顯示該點。保留原始灰階值。0% 包括未變化的匹配點。",
   "processing.exposure.pause": "檢視保持（秒）",
   "processing.exposure.seconds": "秒",
   "processing.exposure.viewStatus.queued": "已排程檢視，等待下一曝光遍次邊界。",

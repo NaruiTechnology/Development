@@ -64,6 +64,10 @@ class ExposureDiagnostics:
             grid = build_lattice(shape_from_request(spec.shape), spec.pitch_x, spec.pitch_y, spec.axis)
             details["grid"] = {"nx": grid.nx, "ny": grid.ny, "fast_axis": grid.axis,
                                "pitch_x": grid.pitch_x, "pitch_y": grid.pitch_y}
+        simulation = getattr(request, "simulation", None) or {}
+        if source == "simulation":
+            details["milling_simulation"] = {key: simulation.get(key) for key in
+                ("mode", "milling_pass_index", "milling_gray_delta_adc")}
         self.emit("start", diagnostic_version=1, source=source, transport=transport,
                   request=details, implementation=_implementation_hashes(), correspondence="host_order_inferred_not_position_tagged")
 

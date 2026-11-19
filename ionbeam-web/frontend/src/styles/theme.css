@@ -8585,3 +8585,7 @@ body {
 .live-normalize-range .vector-gray-levels__values { display:flex; justify-content:space-between; }
 .live-normalize-toolbar .live-normalize-range input[type="range"] { width:100%; }
 .live-normalize-toolbar > span { flex-basis:100%; }
+
+.patterns-exposure__change-row { grid-template-columns: minmax(0, 1fr); }
+.patterns-exposure__change-row .patterns-exposure__pause { width: 100%; }
+.patterns-exposure__change-row output { margin-left: 6px; color: var(--c-text); font-variant-numeric: tabular-nums; }

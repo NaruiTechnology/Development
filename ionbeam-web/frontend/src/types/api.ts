@@ -234,6 +234,11 @@ export interface BeamHoldRequest {
 }
 
 export interface SimulationBitmap {
+  /** Native source coordinates retained when only the exposure ROI crop is uploaded. */
+  source_image_size?: [number, number] | null;
+  source_pixel_offset?: [number, number] | null;
+  /** Commanded DAC -> normalized source-image coordinates, row-major affine 2x3. */
+  source_transform?: [number, number, number, number, number, number] | null;
   width: number;
   height: number;
   pixels: Array<number | SimulationBitmapPixel>;

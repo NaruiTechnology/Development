@@ -213,6 +213,8 @@ export const zhCN: Partial<TranslationTable> = {
   "processing.exposure.viewHelp": "设为大于 0 秒时，每个曝光轮次完成后会自动执行一次查看扫描，并等待所选时长。设为 0 时跳过自动扫描。点击眼睛图标可手动请求一次扫描。",
   "processing.exposure.pauseAtView": "查看后暂停",
   "processing.exposure.pauseAtViewHelp": "自动查看扫描完成后暂停曝光，以便检查结果。点击“继续”恢复运行。",
+  "processing.exposure.changeThreshold": "变化阈值",
+  "processing.exposure.changeThresholdHelp": "与上一遍相比，灰度绝对变化百分比达到此阈值时，以对比度上限显示该点。保留原始灰度值。0% 包括未变化的匹配点。",
   "processing.exposure.pause": "查看保持（秒）",
   "processing.exposure.seconds": "秒",
   "processing.exposure.viewStatus.queued": "查看已排队，等待当前曝光分段结束。",

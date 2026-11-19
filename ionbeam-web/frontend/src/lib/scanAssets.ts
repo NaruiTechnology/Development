@@ -3,7 +3,7 @@ import { apiUrl } from "./backendUrl.js";
 import { scanAuthHeaders } from "./authIdentity.js";
 
 const CHUNK_BYTES = 1024 * 1024;
-const MAX_ASSET_BYTES = 64 * 1024 * 1024;
+const MAX_ASSET_BYTES = 128 * 1024 * 1024;
 const MAX_WS_REQUEST_BYTES = 16 * 1024 * 1024;
 
 type PreparationOptions = {signal?: AbortSignal; timeoutMs?: number};
@@ -21,7 +21,7 @@ export async function encodeSimulationBitmap(bitmap: SimulationBitmap): Promise<
     const json = JSON.stringify(pixels.slice(offset, offset + 2048));
     const part = encoder.encode(`${offset ? "," : ""}${json.slice(1, -1)}`);
     total += part.byteLength;
-    if (total + 2 > MAX_ASSET_BYTES) throw new Error("simulation bitmap exceeds the 64 MiB asset limit");
+    if (total + 2 > MAX_ASSET_BYTES) throw new Error("simulation bitmap exceeds the 128 MiB asset limit");
     parts.push(part);
     if (performance.now() >= deadline) {
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -84,7 +84,7 @@ export async function prepareScanAssets<T extends RasterRequest | VectorRequest>
     if (existing) return existing;
     const bytes = await encodeSimulationBitmap(bitmap);
     options.signal?.throwIfAborted();
-    if (bytes.byteLength > MAX_ASSET_BYTES) throw new Error("simulation bitmap exceeds the 64 MiB asset limit");
+    if (bytes.byteLength > MAX_ASSET_BYTES) throw new Error("simulation bitmap exceeds the 128 MiB asset limit");
     const digest = await crypto.subtle.digest("SHA-256", bytes);
     const key = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
     let promise = pending.get(key);

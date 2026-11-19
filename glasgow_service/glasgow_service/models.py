@@ -15,7 +15,7 @@ backward compatible with frontends that don't send the field yet.
 """
 from enum import Enum
 from typing import List, Literal, Optional, Tuple, Union
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import FiniteFloat, BaseModel, Field, field_validator, model_validator
 
 
 class DeviceState(str, Enum):
@@ -311,10 +311,21 @@ class VectorPoint(BaseModel):
 
 
 class SimulationBitmap(BaseModel):
+    source_image_size: Optional[Tuple[int, int]] = None
+    source_pixel_offset: Optional[Tuple[int, int]] = None
+    source_transform: Optional[Tuple[FiniteFloat, FiniteFloat, FiniteFloat, FiniteFloat, FiniteFloat, FiniteFloat]] = None
     width:  int = Field(..., ge=1, le=4096)
     height: int = Field(..., ge=1, le=4096)
-    pixels: List[Union[int, "SimulationBitmapPixel"]] = Field(..., max_length=1_000_000)
+    pixels: List[Union[int, "SimulationBitmapPixel"]] = Field(..., max_length=16_777_216)
     source_roi: Optional["ROIRequest"] = None
+
+    @field_validator("source_image_size", "source_pixel_offset")
+    @classmethod
+    def _source_coordinates(cls, value, info):
+        minimum = 1 if info.field_name == "source_image_size" else 0
+        if value is not None and any(item < minimum for item in value):
+            raise ValueError(f"{info.field_name} entries must be at least {minimum}")
+        return value
 
     @field_validator("pixels")
     @classmethod

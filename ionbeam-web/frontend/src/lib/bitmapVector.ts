@@ -187,6 +187,59 @@ export async function rasterRequestWithBitmapSelection(
   };
 }
 
+/** Milling retains its exposure lattice; only the simulated detector source is attached. */
+export async function millingRequestWithSourceImage(req: VectorRequest, roi: ROIState, simulated: boolean): Promise<VectorRequest> {
+  if (!simulated) return req;
+  if (!roi.imageDataUrl) throw new Error("Load a source image before simulating milling.");
+  const image = await loadImage(roi.imageDataUrl);
+  const imageWidth = image.naturalWidth || image.width, imageHeight = image.naturalHeight || image.height;
+  if (!imageWidth || !imageHeight) throw new Error("The milling simulation source image could not be decoded.");
+  const bounds = imageWorldBounds(roi);
+  const geometry = roi.scanGeometry?.enabled ? roi.scanGeometry.forward : {
+    a: [Math.abs(roi.x_end-roi.x_origin)/16383, 0, 0, Math.abs(roi.y_end-roi.y_origin)/16383],
+    b: [Math.min(roi.x_origin,roi.x_end), Math.min(roi.y_origin,roi.y_end)],
+  };
+  const spanX = bounds.x_end-bounds.x_origin, spanY = bounds.y_end-bounds.y_origin;
+  const source_transform: [number,number,number,number,number,number] = [
+    geometry.a[0]/spanX, geometry.a[1]/spanX, (geometry.b[0]-bounds.x_origin)/spanX,
+    geometry.a[2]/spanY, geometry.a[3]/spanY, (geometry.b[1]-bounds.y_origin)/spanY,
+  ];
+  const shape = req.lattice?.shape;
+  const points = !shape ? [] : shape.kind === "rect" ? [[shape.x0,shape.y0],[shape.x1,shape.y1]]
+    : shape.kind === "ellipse" ? [[shape.cx-shape.rx,shape.cy-shape.ry],[shape.cx+shape.rx,shape.cy+shape.ry]]
+    : shape.kind === "frame" ? shape.outer : shape.points;
+  let x = 0, y = 0, width = imageWidth, height = imageHeight;
+  if (points.length) {
+    const xs = points.map(p=>p[0]), ys = points.map(p=>p[1]);
+    const corners = [Math.min(...xs),Math.max(...xs)].flatMap(dx=>
+      [Math.min(...ys),Math.max(...ys)].map(dy=>[
+        source_transform[0]*dx+source_transform[1]*dy+source_transform[2],
+        source_transform[3]*dx+source_transform[4]*dy+source_transform[5],
+      ]));
+    const px = corners.map(p=>Math.max(0,Math.min(imageWidth-1,p[0]*(imageWidth-1))));
+    const py = corners.map(p=>Math.max(0,Math.min(imageHeight-1,p[1]*(imageHeight-1))));
+    x = Math.max(0,Math.floor(Math.min(...px))-1); y = Math.max(0,Math.floor(Math.min(...py))-1);
+    width = Math.min(imageWidth,Math.ceil(Math.max(...px))+2)-x;
+    height = Math.min(imageHeight,Math.ceil(Math.max(...py))+2)-y;
+  }
+  if (width > 4096 || height > 4096 || width*height > 16_777_216)
+    throw new Error("The pattern ROI source crop exceeds 4096 pixels per side.");
+  const canvas = document.createElement("canvas");
+  canvas.width = width; canvas.height = height;
+  const context = canvas.getContext("2d", {willReadFrequently: true});
+  if (!context) throw new Error("The milling simulation source image could not be decoded.");
+  // Equal source and destination sizes preserve native pixels; do not resize the image.
+  context.drawImage(image, x, y, width, height, 0, 0, width, height);
+  const rgba = context.getImageData(0, 0, width, height).data;
+  const pixels = Array.from({length: width*height}, (_, index) => {
+    const offset = index*4;
+    return rgba[offset+3] === 0 ? 255 : Math.round(.2126*rgba[offset]+.7152*rgba[offset+1]+.0722*rgba[offset+2]);
+  });
+  return {...req, simulation: {...req.simulation, enabled: true, mode: "image"},
+    simulation_bitmap: {width, height, pixels, source_transform,
+      source_image_size: [imageWidth,imageHeight], source_pixel_offset: [x,y]}};
+}
+
 export async function vectorRequestWithBitmapSelection(
   req: VectorRequest,
   roi: ROIState,

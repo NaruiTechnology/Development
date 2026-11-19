@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .models import SimulationBitmap
 
-MAX_ASSET_BYTES = 64 * 1024 * 1024
+MAX_ASSET_BYTES = 128 * 1024 * 1024
 MAX_CHUNK_BYTES = 1024 * 1024
 _LOCK = threading.RLock()
 
