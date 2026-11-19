@@ -8570,3 +8570,18 @@ body {
 .milling-live-window > span { position: absolute; left: 0; bottom: 100%; color: #7fff00; font: 10px monospace; white-space: nowrap; text-shadow: 0 1px 2px black; pointer-events: none; }
 
 .milling-contrast-upper .level-wedge__hist path { fill: lawngreen; }
+
+.live-contrast-control { display:flex; flex-direction:column; flex:1; min-height:0; gap:5px; width:100%; }
+.live-contrast-control > .level-wedge { flex:1; min-height:0; }
+.live-contrast-mode,.live-contrast-floor { font-size:10px; display:flex; flex-wrap:wrap; align-items:center; gap:3px; }
+.live-contrast-mode select { width:100%; min-width:0; font-size:10px; padding:3px; background:var(--c-bg); color:var(--c-text); border:1px solid var(--c-border); }
+.live-contrast-floor input { width:40px; min-width:0; font-size:10px; background:var(--c-bg); color:var(--c-text); border:1px solid var(--c-border); }
+.live-contrast-control small { font-size:9px; }
+.live-normalize-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:8px; border:1px solid var(--c-border); margin-bottom:8px; font-size:11px; }
+.live-normalize-toolbar label { display:flex; align-items:center; gap:5px; }
+.live-normalize-toolbar .btn { padding:4px 8px; min-height:26px; font-size:11px; }
+.live-normalize-toolbar input[type="range"] { width:100px; }
+.live-normalize-toolbar .live-normalize-range { flex:1 1 200px; min-width:180px; padding-top:3px; }
+.live-normalize-range .vector-gray-levels__values { display:flex; justify-content:space-between; }
+.live-normalize-toolbar .live-normalize-range input[type="range"] { width:100%; }
+.live-normalize-toolbar > span { flex-basis:100%; }

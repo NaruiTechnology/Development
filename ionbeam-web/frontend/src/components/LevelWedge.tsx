@@ -38,6 +38,8 @@ import {
 
 export interface LevelWedgeProps {
   scopeLabel?: string;
+  /** Offset in raw sample units for signed difference displays. */
+  codeOffset?: number;
   histogram: LevelHistogram | null;
   /** Levels currently applied to the image. */
   levels: ResolvedLevels;
@@ -64,6 +66,7 @@ export function LevelWedge({
   disabled = false,
   fullScale = OBI_FULL_SCALE,
   codeDivisor = 4,
+  codeOffset = 0,
 }: LevelWedgeProps) {
   const { t } = useTranslation();
   const barRef = useRef<HTMLDivElement | null>(null);
@@ -78,7 +81,7 @@ export function LevelWedge({
       ),
     [hist, levels, fullScale],
   );
-  const ticks = useMemo(() => niceCodeTicks(domain, 7, codeDivisor), [domain, codeDivisor]);
+  const ticks = useMemo(() => niceCodeTicks({min:domain.min-codeOffset,max:domain.max-codeOffset},7,codeDivisor).map(tick=>tick+codeOffset/codeDivisor), [domain, codeDivisor, codeOffset]);
 
   const lowFrac = valueToFraction(levels.low, domain);
   const highFrac = valueToFraction(levels.high, domain);
@@ -155,8 +158,8 @@ export function LevelWedge({
     );
   };
 
-  const lowCode = sampleToCode(levels.low, codeDivisor);
-  const highCode = sampleToCode(levels.high, codeDivisor);
+  const lowCode = sampleToCode(levels.low-codeOffset, codeDivisor);
+  const highCode = sampleToCode(levels.high-codeOffset, codeDivisor);
 
   return (
     <div className="level-wedge" data-disabled={disabled ? "true" : "false"} aria-label={t("canvas.wedge.label")}>
@@ -168,7 +171,7 @@ export function LevelWedge({
               className="level-wedge__tick"
               style={{ bottom: `${valueToFraction(codeToSample(tick, codeDivisor), domain) * 100}%` }}
             >
-              {tick}
+              {Number((tick-codeOffset/codeDivisor).toFixed(4))}
             </span>
           ))}
         </div>
@@ -215,8 +218,8 @@ export function LevelWedge({
             tabIndex={disabled ? -1 : 0}
             aria-orientation="vertical"
             aria-label={t("canvas.wedge.white")}
-            aria-valuemin={sampleToCode(domain.min, codeDivisor)}
-            aria-valuemax={sampleToCode(domain.max, codeDivisor)}
+            aria-valuemin={sampleToCode(domain.min-codeOffset, codeDivisor)}
+            aria-valuemax={sampleToCode(domain.max-codeOffset, codeDivisor)}
             aria-valuenow={highCode}
             title={`${t("canvas.wedge.white")}: ${highCode}`}
             onPointerDown={beginDrag("high")}
@@ -232,8 +235,8 @@ export function LevelWedge({
             tabIndex={disabled ? -1 : 0}
             aria-orientation="vertical"
             aria-label={t("canvas.wedge.black")}
-            aria-valuemin={sampleToCode(domain.min, codeDivisor)}
-            aria-valuemax={sampleToCode(domain.max, codeDivisor)}
+            aria-valuemin={sampleToCode(domain.min-codeOffset, codeDivisor)}
+            aria-valuemax={sampleToCode(domain.max-codeOffset, codeDivisor)}
             aria-valuenow={lowCode}
             title={`${t("canvas.wedge.black")}: ${lowCode}`}
             onPointerDown={beginDrag("low")}

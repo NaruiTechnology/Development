@@ -1,8 +1,9 @@
+import { CHANGE_ZERO, LIVE_FULL_SCALE, liveAutoLevels, liveChanges, liveStatistics, normalizedLiveGray } from "../lib/liveContrast";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAppSelector } from "../store";
 import { useLevelSetting } from "../hooks/useLevelSetting";
-import { buildHistogram, normalizeLevels, resolveLevels, levelGray } from "../lib/displayLevels";
+import { levelGray, type ResolvedLevels } from "../lib/displayLevels";
 import { patternBounds } from "../lib/processingPatterns";
 import { liveViewWindow, defaultLiveViewOffset, circularLiveViewBounds } from "../lib/millingLiveView";
 import { imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
@@ -10,10 +11,11 @@ import { LevelWedge } from "./LevelWedge";
 
 type Point = {x:number;y:number};
 /** Transparent, detector-only preview. Dragging relocates its display, never the milling path. */
-export function LiveViewCanvas({contrastHost, pointerWorld}: {contrastHost: HTMLElement|null; pointerWorld:(x:number,y:number)=>Point}) {
+export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contrastHost: HTMLElement|null; toolsHost:HTMLElement|null; pointerWorld:(x:number,y:number)=>Point}) {
   const roi=useAppSelector(s=>s.scan.roi),patterns=useAppSelector(s=>s.processing);
   const zoom=useAppSelector(s=>s.exposure.viewZoom),rawFrame=useAppSelector(s=>s.image.millingFrame);
   const frame=rawFrame?.key.startsWith(`${patterns.activeKey}:`)?rawFrame:null;
+  const referenceSaved=useAppSelector(s=>s.image.millingHistoryPersisted);
   const canvasRef=useRef<HTMLCanvasElement|null>(null);
   const [offset,setOffset]=useState<Point|null>(null);
   const drag=useRef<{start:Point;offset:Point}|null>(null);
@@ -25,13 +27,43 @@ export function LiveViewCanvas({contrastHost, pointerWorld}: {contrastHost: HTML
   const sizing=source && active && "cx" in active ? circularLiveViewBounds(source,field,viewport,zoom) : source;
   const placement=offset ?? (sizing?defaultLiveViewOffset(sizing,zoom,field):{x:0,y:0});
   const window=sizing?liveViewWindow(sizing,zoom,field,placement):null;
-  const [setting,setSetting]=useLevelSetting("milling-live");
-  const histogram=useMemo(()=> {
-    let min=65532,max=0,total=0;
-    if(frame) for(let i=0;i<frame.pixels.length;i++) if(frame.valid[i]) {min=Math.min(min,frame.pixels[i]);max=Math.max(max,frame.pixels[i]);total++;}
-    return buildHistogram(min,max,total,visit=>{if(frame)for(let i=0;i<frame.pixels.length;i++)if(frame.valid[i])visit(frame.pixels[i]);});
-  },[frame]);
-  const levels=setting.mode==="auto" && histogram.total?normalizeLevels(histogram.min,histogram.max):resolveLevels(histogram,setting);
+  const [mode,setMode]=useState<"auto"|"change"|"normalize">("auto");
+  const [rawSetting,setRawSetting]=useLevelSetting("milling-live");
+  const [deltaSetting,setDeltaSetting]=useLevelSetting("milling-change");
+  const setting=mode==="change"?deltaSetting:rawSetting;
+  const setSetting=mode==="change"?setDeltaSetting:setRawSetting;
+  const [minimumADC,setMinimumADC]=useState(8),[strength,setStrength]=useState(75);
+  const [band,setBand]=useState<[number,number]>([0,16383]),[bandEnabled,setBandEnabled]=useState(true);
+  const [autoEpoch,setAutoEpoch]=useState(0);
+  const minimumWindow=minimumADC*4;
+  const rawStats=useMemo(()=>liveStatistics(frame?.pixels??[],frame?.valid??[]),[frame]);
+  const changes=useMemo(()=>liveChanges(frame?.pixels??[],frame?.valid??[],frame?.sums,frame?.counts,frame?.previousMeans,frame?.previousValid,frame?.previousCounts),[frame]);
+  const changeStats=useMemo(()=>liveStatistics(changes.values,changes.valid,[0,LIVE_FULL_SCALE*2],LIVE_FULL_SCALE*2),[changes]);
+  const sampleBand: [number,number]=bandEnabled?[band[0]*4,band[1]*4]:[0,LIVE_FULL_SCALE];
+  const selectedStats=useMemo(()=>liveStatistics(frame?.pixels??[],frame?.valid??[],sampleBand),[frame,band[0],band[1],bandEnabled]);
+  const stats=mode==="change"?changeStats:rawStats;
+  const target=liveAutoLevels(stats,minimumWindow,mode==="change");
+  const context=`${frame?.key}:${shapeKey}:${mode}:${stats.count>0}:${autoEpoch}:${setting.mode}`;
+  const [autoLevels,setAutoLevels]=useState<ResolvedLevels>(target);
+  const lastContext=useRef(context),shownLevels=useRef(autoLevels);
+  useEffect(()=>{
+    let id=0;
+    if(lastContext.current!==context){lastContext.current=context;shownLevels.current=target;setAutoLevels(target);return;}
+    const from=shownLevels.current,start=performance.now();
+    const tick=(now:number)=>{
+      const t=Math.min(1,(now-start)/180);
+      const next={low:from.low+(target.low-from.low)*t,high:from.high+(target.high-from.high)*t};
+      shownLevels.current=next;setAutoLevels(next);
+      if(t<1)id=requestAnimationFrame(tick);
+    };
+    id=requestAnimationFrame(tick);return()=>cancelAnimationFrame(id);
+  },[target.low,target.high,context]);
+  const levels=setting.mode==="auto"?autoLevels:setting;
+  const aroundMean=()=>{
+    const mean=rawStats.mean/4,radius=Math.max(minimumADC,rawStats.deviation/4);
+    setBand([Math.max(0,Math.floor(mean-radius)),Math.min(16383,Math.ceil(mean+radius))]);setBandEnabled(true);
+  };
+  const histogram=stats.histogram;
   const cx=(x:number)=>worldToCanvasX(x,field,viewport),cy=(y:number)=>worldToCanvasY(y,field,viewport);
   useEffect(()=> {
     const canvas=canvasRef.current,ctx=canvas?.getContext("2d");
@@ -41,8 +73,9 @@ export function LiveViewCanvas({contrastHost, pointerWorld}: {contrastHost: HTML
     const scratch=document.createElement("canvas");scratch.width=scratch.height=frame.resolution;
     const c=scratch.getContext("2d");if(!c)return;
     const image=c.createImageData(frame.resolution,frame.resolution);
-    for(let i=0;i<frame.pixels.length;i++) if(frame.valid[i]) {
-      const gray=levelGray(frame.pixels[i],levels.low,levels.high),p=i*4;
+    for(let i=0;i<frame.pixels.length;i++) if(mode==="change"?changes.valid[i]:frame.valid[i]) {
+      const gray=mode==="change"?levelGray(changes.values[i],levels.low,levels.high):mode==="normalize"&&bandEnabled?
+        normalizedLiveGray(frame.pixels[i],levels,selectedStats,sampleBand,strength,minimumWindow):levelGray(frame.pixels[i],levels.low,levels.high),p=i*4;
       image.data[p]=image.data[p+1]=image.data[p+2]=gray;image.data[p+3]=255;
     }
     c.putImageData(image,0,0);
@@ -51,7 +84,7 @@ export function LiveViewCanvas({contrastHost, pointerWorld}: {contrastHost: HTML
     const mapY=(y:number)=>window.y_start+(y-source.y_start)/(source.y_end-source.y_start)*(window.y_end-window.y_start);
     ctx.imageSmoothingEnabled=false;
     ctx.drawImage(scratch,cx(mapX(frame.bounds.x_start)),cy(mapY(frame.bounds.y_start)),cx(mapX(frame.bounds.x_end))-cx(mapX(frame.bounds.x_start)),cy(mapY(frame.bounds.y_end))-cy(mapY(frame.bounds.y_start)));
-  },[frame,levels.low,levels.high,shapeKey,zoom,offset,roi]);
+  },[frame,levels.low,levels.high,shapeKey,zoom,offset,roi,mode,changes,selectedStats,band[0],band[1],bandEnabled,strength,minimumWindow]);
   return <>
     <div className="milling-live-layer" aria-label="LiveViewCanvas">
       <canvas ref={canvasRef} width={640} height={640} aria-label="Milling spot feedback image" />
@@ -63,8 +96,40 @@ export function LiveViewCanvas({contrastHost, pointerWorld}: {contrastHost: HTML
         <span>LiveView · {zoom}×</span>
       </div>}
     </div>
-    {contrastHost && createPortal(<LevelWedge scopeLabel="ROIContrast" histogram={histogram} levels={levels}
-      auto={setting.mode==="auto"} onChange={next=>setSetting({mode:"manual",...next})} onAuto={()=>setSetting({mode:"auto"})}
-      disabled={!histogram.total || !source}/>,contrastHost)}
+    {contrastHost && createPortal(<div className="live-contrast-control">
+      <label className="live-contrast-mode">View
+        <select aria-label="LiveView contrast mode" value={mode} onChange={e=>{
+          const next=e.target.value as typeof mode;setMode(next);if(next==="normalize"&&rawStats.count)aroundMean();
+        }}>
+          <option value="auto">Enhanced Auto</option><option value="change">Change</option><option value="normalize">Normalize range</option>
+        </select>
+      </label>
+      <LevelWedge scopeLabel={mode==="change"?"Δ previous pass (ADC)":"ROIContrast"} histogram={histogram} levels={levels}
+        fullScale={mode==="change"?LIVE_FULL_SCALE*2:LIVE_FULL_SCALE} codeOffset={mode==="change"?CHANGE_ZERO:0}
+        auto={setting.mode==="auto"} onChange={next=>setSetting({mode:"manual",...next})} onAuto={()=>{setSetting({mode:"auto"});setAutoEpoch(n=>n+1);}}
+        disabled={!stats.count||!source}/>
+      <label className="live-contrast-floor" title="Smallest Auto contrast window, in ADC codes. Raise it to suppress noise amplification.">
+        Min window <input type="number" aria-label="Minimum Auto window in ADC codes" min={1} max={1024} value={minimumADC}
+          onChange={e=>{const v=Number(e.target.value);if(Number.isInteger(v)&&v>=1&&v<=1024)setMinimumADC(v);}} /> ADC
+      </label>
+      {mode==="change"&&!stats.count&&<small role="status">{frame?.previousMeans?"Waiting for matching pixels":"First pass establishes reference"}</small>}
+      {mode==="change"&&stats.count>0&&<small>Preview-pixel change · pass {frame?.pass??1}</small>}
+      {mode==="change"&&frame?.completedMeans&&<small>{referenceSaved?"Reference saved locally":"Reference retained in session"}</small>}
+    </div>,contrastHost)}
+    {toolsHost&&mode==="normalize"&&createPortal(<div className="live-normalize-toolbar">
+      <label><input type="checkbox" aria-label="Enable LiveView normalization range" checked={bandEnabled} onChange={e=>setBandEnabled(e.target.checked)}/> Brighten range (ADC)</label>
+      <div className="live-normalize-range">
+        <div className="vector-gray-levels__values"><span>{band[0]}</span><span>{band[1]}</span></div>
+        <div className="vector-gray-levels__slider">
+          <div className="vector-gray-levels__track"/><div className="vector-gray-levels__selection" style={{left:`${band[0]/16383*100}%`,width:`${(band[1]-band[0])/16383*100}%`}}/>
+          <input className="vector-gray-levels__range" type="range" min={0} max={16383} step={1} value={band[0]} disabled={!bandEnabled} aria-label="LiveView normalization minimum ADC" onChange={e=>setBand([Math.min(Number(e.target.value),band[1]),band[1]])}/>
+          <input className="vector-gray-levels__range" type="range" min={0} max={16383} step={1} value={band[1]} disabled={!bandEnabled} aria-label="LiveView normalization maximum ADC" onChange={e=>setBand([band[0],Math.max(band[0],Number(e.target.value))])}/>
+        </div>
+      </div>
+      <button type="button" className="btn btn--ghost" disabled={!rawStats.count} onClick={aroundMean}>Around mean</button>
+      <label>Brightness <input type="range" min={0} max={100} value={strength} aria-label="LiveView normalization brightness" onChange={e=>setStrength(Number(e.target.value))}/><output>{strength}%</output></label>
+      <button type="button" className="btn btn--ghost" onClick={()=>{setBand([0,16383]);setBandEnabled(true);setStrength(75);setMinimumADC(8);setSetting({mode:"auto"});}}>Reset</button>
+      <span role="status">{!bandEnabled?"Range brightening off":selectedStats.count?`Mean ${(selectedStats.mean/4).toFixed(1)} ADC · ${selectedStats.count.toLocaleString()} preview pixels`:"No acquired pixels in range"}</span>
+    </div>,toolsHost)}
   </>;
 }

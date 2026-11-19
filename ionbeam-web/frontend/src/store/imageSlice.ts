@@ -23,8 +23,16 @@ import { fullFrameAxisMaps, scanPixelAxisMaps, scanRegionPixelBounds, type ScanP
 export type VectorPattern = "default" | "custom";
 export type VectorSource = "vector" | "roi";
 
-export interface MillingFrame { key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array; valid: Uint8Array; revision: number }
+export interface MillingFrame { key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array; valid: Uint8Array; revision: number;
+  referenceKey: string; pass: number; passComplete: boolean; sums: Float64Array; counts: Uint32Array;
+  previousMeans: Float64Array | null; previousValid: Uint8Array | null; previousCounts: Uint32Array|null;
+  completedMeans: Float64Array | null; completedValid: Uint8Array | null; completedCounts: Uint32Array|null;
+}
+export interface MillingHistory {referenceKey:string; key:string; bounds:ROIRequest; means:Float64Array; valid:Uint8Array; counts:Uint32Array}
 interface ImageState {
+  /** Last successfully completed pass/step, retained independently of the current preview. */
+  millingHistory: MillingHistory | null;
+  millingHistoryPersisted:boolean;
   millingFrame: MillingFrame | null;
   /** Temporary raster frames from the in-flight Exposure View scan, keyed to pattern ROI world bounds. */
   exposureViewFrames: Array<{ key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array }>;
@@ -106,6 +114,8 @@ const RES = 512;
 const VEC_EDGE = 2048;
 
 const initialState: ImageState = {
+  millingHistory: null,
+  millingHistoryPersisted:false,
   millingFrame: null,
   exposureViewFrames: [],
   resolution: RES,
@@ -179,15 +189,38 @@ const slice = createSlice({
   name: "image",
   initialState,
   reducers: {
-    resetMillingFrame(state, a: PayloadAction<{key: string; bounds: ROIRequest} | null>) {
-      state.millingFrame = a.payload ? {...a.payload, resolution: 256, pixels: new Uint16Array(256*256), valid: new Uint8Array(256*256), revision: 0} : null;
+    restoreMillingHistory(state,a:PayloadAction<MillingHistory>) {
+      if(!state.millingHistory){state.millingHistory=a.payload;state.millingHistoryPersisted=true;}
+    },
+    markMillingHistorySaved(state,a:PayloadAction<{referenceKey:string;saved:boolean}>) {
+      if(state.millingHistory?.referenceKey===a.payload.referenceKey)state.millingHistoryPersisted=a.payload.saved;
+    },
+    resetMillingFrame(state, a: PayloadAction<{key: string; bounds: ROIRequest; referenceKey?:string} | null>) {
+      const referenceKey=a.payload?.referenceKey??JSON.stringify([a.payload?.key,a.payload?.bounds]);
+      const history=state.millingHistory?.referenceKey===referenceKey?state.millingHistory:null;
+      state.millingFrame = a.payload ? {...a.payload, resolution: 256, pixels: new Uint16Array(256*256), valid: new Uint8Array(256*256), revision: 0,
+        referenceKey,pass:0, passComplete:false, sums:new Float64Array(256*256),counts:new Uint32Array(256*256),previousMeans:null,previousValid:null,previousCounts:null,completedMeans:history?.means??null,completedValid:history?.valid??null,completedCounts:history?.counts??null} : null;
+    },
+    beginMillingPass(state,a:PayloadAction<string>) {
+      const frame=state.millingFrame;if(!frame||frame.key!==a.payload)return;
+      frame.previousMeans=frame.completedMeans;frame.previousValid=frame.completedValid;frame.previousCounts=frame.completedCounts;
+      frame.valid=new Uint8Array(frame.pixels.length);frame.sums=new Float64Array(frame.pixels.length);frame.counts=new Uint32Array(frame.pixels.length);
+      frame.pass++;frame.passComplete=false;frame.revision++;
+    },
+    completeMillingPass(state,a:PayloadAction<string>) {
+      const frame=state.millingFrame;if(!frame||frame.key!==a.payload)return;
+      const means=new Float64Array(frame.pixels.length);
+      for(let i=0;i<means.length;i++)if(frame.counts[i])means[i]=frame.sums[i]/frame.counts[i];
+      frame.completedMeans=means;frame.completedValid=frame.valid.slice();frame.completedCounts=frame.counts.slice();frame.passComplete=true;frame.revision++;
+      state.millingHistoryPersisted=false;
+      state.millingHistory={referenceKey:frame.referenceKey,key:frame.key,bounds:{...frame.bounds},means,valid:frame.completedValid,counts:frame.completedCounts};
     },
     appendMillingSamples(state, a: PayloadAction<{key: string; samples: number[]}>) {
       const frame = state.millingFrame;
       if (!frame || frame.key !== a.payload.key) return;
       for (let i=0; i<a.payload.samples.length; i+=2) {
         const index = a.payload.samples[i];
-        if (index >= 0 && index < frame.pixels.length) { frame.pixels[index] = a.payload.samples[i+1]; frame.valid[index] = 1; }
+        if (index >= 0 && index < frame.pixels.length) { frame.pixels[index] = a.payload.samples[i+1]; frame.valid[index] = 1; frame.sums[index] += a.payload.samples[i+1]; frame.counts[index]++; }
       }
       frame.revision++;
     },
@@ -664,7 +697,7 @@ const slice = createSlice({
 });
 
 export const {
-  resetMillingFrame, appendMillingSamples,
+  resetMillingFrame, appendMillingSamples, beginMillingPass, completeMillingPass, restoreMillingHistory, markMillingHistorySaved,
   bumpRevision,
   clearExposureViewFrames,
   appendExposureViewFrame,

@@ -149,6 +149,7 @@ export function ROIEditor({
   const processingPatterns = useAppSelector((s) => s.processing);
   const milling = useAppSelector(s => s.exposure.mode === "milling") && Boolean(processingPreview);
   const millingROI = milling && Boolean(processingPatterns.instances[processingPatterns.activeKey ?? ""]?.roi);
+  const [liveToolsHost,setLiveToolsHost]=useState<HTMLDivElement|null>(null);
   const [liveContrastHost, setLiveContrastHost] = useState<HTMLDivElement | null>(null);
   // Gray readouts must not invalidate canvas painting or shape clipping.
   const processingRoiKey = JSON.stringify(processingPatterns.specs.map(spec =>
@@ -1792,6 +1793,8 @@ export function ROIEditor({
       )}
 
       {(variant === "canvas" || variant === "all") && (
+        <>
+        {millingROI && <div className="milling-live-tools" ref={setLiveToolsHost}/>}
         <div className={`canvas-stage roi-canvas-stage${hideLevelWedge ? " roi-canvas-stage--view" : ""}`}>
         <div className="roi-canvas-frame">
         <div
@@ -2027,7 +2030,7 @@ export function ROIEditor({
             toWorld: toDut,
             sampleGrayAtClient: rawGrayAtClient,
           })}
-          {milling && <LiveViewCanvas contrastHost={liveContrastHost}
+          {milling && <LiveViewCanvas contrastHost={liveContrastHost} toolsHost={liveToolsHost}
             pointerWorld={(x,y)=>toDut(canvasPointFromClient(x,y,true))} />}
           {ctrlCursor && !roi.calibration_enabled && (
               <span
@@ -2340,6 +2343,7 @@ export function ROIEditor({
           codeDivisor={ROI_GRAY_SAMPLE_SCALE}
         /></div></div>}
         </div>
+        </>
       )}
       {calibrationCorrection && (
         <div className="modal-backdrop" role="presentation">
