@@ -276,7 +276,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(imageWorkspace, null);
-  const [autoLoadLastScanToPatterns, setAutoLoadLastScanToPatterns] = useWorkspaceState<boolean>(imageWorkspace, false);
+  const [autoLoadLastScanToPatterns, setAutoLoadLastScanToPatterns] = useWorkspaceState<boolean>(imageWorkspace, true);
   const [mostRecentScanImage, setMostRecentScanImage] = useState<{ imageUrl: string } | null>(() => {
     const result = getWorkspaceStore("scan").getState().scan.lastResult;
     const imageUrl = result?.artifacts?.figureDataUrl;
@@ -761,7 +761,10 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
       ? lastLiveScanImage.imageUrl
       : serverScanImageUrl
     : null;
-  const availableLastScanImageUrl = mostRecentScanImage?.imageUrl ?? workspaceLastScanImageUrl;
+  const scanWorkspaceROI = getWorkspaceStore("scan").getState().scan.roi;
+  const scanWorkspaceStoredImageUrl = scanWorkspaceROI.scanImageDataUrl ??
+    (scanWorkspaceROI.imageKind === "lastScan" ? scanWorkspaceROI.imageDataUrl : null);
+  const availableLastScanImageUrl = mostRecentScanImage?.imageUrl ?? workspaceLastScanImageUrl ?? scanWorkspaceStoredImageUrl;
   const roiScanImageUrl = kind === "roi" ? workspaceLastScanImageUrl : null;
   const activeROIScanImageUrl =
     roiCachedScanImageUrl && roiCachedScanImageUrl !== suppressedROIScanImageUrl
@@ -1490,14 +1493,14 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     if (suppressedProcessingLastScanImageUrlRef.current !== null) {
       suppressedProcessingLastScanImageUrlRef.current = null;
     }
-    if (roiState.imageKind === "lastScan" && roiState.imageDataUrl === availableLastScanImageUrl) {
-      processingImageInitialized.current = true;
-      return;
-    }
+    // PATTERNS entry may find a saved file, a scan preview, or a selected
+    // source already on its canvas. Auto-load the latest scan only when the
+    // canvas is genuinely empty, so an available scan never replaces work.
+    if (roiState.imageDataUrl || roiState.scanImageDataUrl) return;
     processingImageInitialized.current = true;
     handleLoadLastScan(availableLastScanImageUrl);
   }, [activeTopTab, autoLoadLastScanToPatterns, availableLastScanImageUrl, roiState.imageKind,
-    roiState.imageDataUrl, handleLoadLastScan, suppressedProcessingLastScanImageUrlRef]);
+    roiState.imageDataUrl, roiState.scanImageDataUrl, handleLoadLastScan, suppressedProcessingLastScanImageUrlRef]);
 
   function selectKind(nextKind: ScanKind) {
     if (nextKind === storedKind) return;

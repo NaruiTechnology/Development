@@ -8631,3 +8631,5 @@ body {
 .patterns-exposure__change-row { grid-template-columns: minmax(0, 1fr); }
 .patterns-exposure__change-row .patterns-exposure__pause { width: 100%; }
 .patterns-exposure__change-row output { margin-left: 6px; color: var(--c-text); font-variant-numeric: tabular-nums; }
+.patterns-exposure__change-label { display: flex; align-items: center; gap: 4px; color: #88d3ff; }
+.patterns-exposure__change-row .patterns-exposure__change-label output { color: lawngreen; }

@@ -13,7 +13,9 @@ export function millingChangePercent(current: number, previous: number): number 
 }
 
 export function promotedMillingGray(gray: number, changePercent: number, threshold: number): number {
-  return changePercent >= 0 && changePercent >= threshold ? 255 : gray;
+  // Zero is the explicit "no change highlighting" setting. For a positive
+  // threshold, only matched samples meeting the delta qualify for promotion.
+  return threshold > 0 && changePercent >= 0 && changePercent >= threshold ? 255 : gray;
 }
 
 export class MillingSpotChanges {

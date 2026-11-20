@@ -8,6 +8,7 @@ import { applyMillingPassDefaults } from "../store/processingSlice";
 import { NumberStepperInput } from "./NumberStepperField";
 import { MAX_SCAN_ZOOM } from "../lib/scanRegions";
 import { Icon } from "./Icon";
+import { HelpPopover } from "./HelpPopover";
 
 export function ExposureReviewPauseToggle() {
   const {t} = useTranslation(), dispatch = useAppDispatch();
@@ -83,21 +84,30 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
                 onClick={() => void start()}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>}
         </div>
         {tab === "milling" && <div className="patterns-exposure__view-row patterns-exposure__change-row">
-          <label className="patterns-exposure__pause" title={t("processing.exposure.changeThresholdHelp")}>
-            <span>{t("processing.exposure.changeThreshold")} <output>{state.millingChangeThresholdPercent}%</output></span>
+          <div className="patterns-exposure__pause">
+            <div className="patterns-exposure__change-label">
+              <span id={`${tabId}-change-threshold-label`}>{t("processing.exposure.changeThreshold")} <output>{state.millingChangeThresholdPercent}%</output></span>
+              <HelpPopover title={t("processing.exposure.changeThreshold")} ariaLabel={t("processing.exposure.changeThresholdHelp.aria")}>
+                <p>{t("processing.exposure.changeThresholdHelp")}</p>
+              </HelpPopover>
+            </div>
             <div className="patterns-exposure__pause-shell">
               <div className="patterns-exposure__pause-slider">
                 <div className="patterns-exposure__pause-track" />
                 <div className="patterns-exposure__pause-ticks" aria-hidden="true">
-                  {[0,25,50,75,100].map(value=><span key={value} className="patterns-exposure__pause-tick--major"
-                    style={{left:`${value}%`}}><i>{value}%</i></span>)}
+                  {Array.from({length: 21}, (_, index) => {
+                    const value = index * 5;
+                    const major = value % 25 === 0;
+                    return <span key={value} className={major ? "patterns-exposure__pause-tick--major" : ""}
+                      style={{left:`${value}%`}}>{major && <i>{value}%</i>}</span>;
+                  })}
                 </div>
                 <input type="range" min={0} max={100} step={1} value={state.millingChangeThresholdPercent}
-                  aria-label={t("processing.exposure.changeThreshold")} aria-valuetext={`${state.millingChangeThresholdPercent}%`}
+                  aria-labelledby={`${tabId}-change-threshold-label`} aria-valuetext={`${state.millingChangeThresholdPercent}%`}
                   onChange={event=>dispatch(setMillingChangeThresholdPercent(Number(event.target.value)))} />
               </div>
             </div>
-          </label>
+          </div>
         </div>}
         {tab === "auto" && <div className="patterns-exposure__view-row">
           {showView && <span className="patterns-exposure__view-tooltip" title={t("processing.exposure.viewHelp")}>
