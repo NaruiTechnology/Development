@@ -2,7 +2,7 @@
 
 Recipe ownership is `(ionbeam_asset.equipment.id, pattern_key)`. A pattern key is the stable catalogue type key (`stairCut`), never the ID of a drawn ROI instance. Each assignment contains the named collections, ordered technology nodes, ordered steps, source SHA-256, and import timestamp. The first migrated recipe format is `StairRecipeDefaults`; other pattern types may have independent assignments using this step format. Other recipe models need a corresponding parser and editor.
 
-`007_pattern_recipes.sql` adds `ionbeam_asset.pattern_recipe` with a foreign key to equipment and a composite primary key. It is included in admin database setup and distribution packaging. JSONB retains the existing ordered recipe structure without requiring one SQL column for each future recipe field. There is no global or cross-equipment fallback. The application uses the configured admin database connection, including its secret resolution, and does not substitute the local database on failure.
+`007_pattern_recipes.sql` adds `ionbeam_asset.pattern_recipe` with a foreign key to equipment and a composite primary key. It is included in admin database setup and distribution packaging. JSONB retains the existing ordered recipe structure without requiring one SQL column for each future recipe field. There is no global or cross-equipment recipe fallback. The application uses the configured admin database connection, including its secret resolution, and retries the provisioned local database after a remote connectivity failure.
 
 ## Migration
 

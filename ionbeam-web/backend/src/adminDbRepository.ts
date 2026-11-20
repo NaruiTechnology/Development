@@ -1,7 +1,7 @@
 import {
   applyAdminDatabaseSetup,
   isDbConnectivityError,
-  pgConnectionFromAdminConfig,
+  pgConnectionFromAdminConfigMode,
   pgConnectionFromRuntimeConfig,
   runPsql,
   type PgConnection,
@@ -303,9 +303,26 @@ async function queryStored(sqlTemplate: string, payload: unknown = null, fallbac
 
 /** Run a whole SQL script (e.g. a seed file) against the admin database. */
 export async function runAdminSqlScript(sql: string): Promise<void> {
-  const connection = await resolveCurrentAdminDbConnection();
-  await ensureAdminSchema(connection);
-  await runPsql(["-q", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
+  const primary = await resolveCurrentAdminDbConnection();
+  const localFallback = pgConnectionFromRuntimeConfig();
+  const targets = connectionKey(primary) === connectionKey(localFallback)
+    ? [primary]
+    : [primary, localFallback];
+  for (let index = 0; index < targets.length; index += 1) {
+    const connection = targets[index];
+    try {
+      await ensureAdminSchema(connection);
+      await runPsql(["-q", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
+      if (index > 0) {
+        console.warn(`[admin-db] remote connection failed; using local fallback at ${connection.host}`);
+      }
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (index === 0 && targets.length > 1 && isDbConnectivityError(message)) continue;
+      throw error;
+    }
+  }
 }
 
 export async function queryAdminStored(
@@ -348,19 +365,37 @@ function jsonbLiteral(value: unknown): string {
   return `'${JSON.stringify(value).replace(/'/g, "''")}'::jsonb`;
 }
 
-async function resolveCurrentAdminDbConnection(): Promise<PgConnection> {
+export async function resolveCurrentAdminDbConnection(): Promise<PgConnection> {
   const info = await readAdminWithBackup();
-  return pgConnectionFromAdminConfig(info.data, pgConnectionFromRuntimeConfig());
+  return pgConnectionFromAdminConfigMode(info.data, pgConnectionFromRuntimeConfig());
 }
 
 function connectionKey(connection: PgConnection): string {
   return `${connection.host}:${connection.port}:${connection.database}:${connection.user}`;
 }
 
-/** Equipment recipes must use the configured database without a local fallback. */
+/** Strict result handling with the same local fallback used by other admin DB operations. */
 export async function queryAdminStoredStrict(sqlTemplate: string, payload: unknown = null): Promise<string> {
-  const connection = await resolveCurrentAdminDbConnection();
-  await ensureAdminSchema(connection);
+  const primary = await resolveCurrentAdminDbConnection();
+  const localFallback = pgConnectionFromRuntimeConfig();
+  const targets = connectionKey(primary) === connectionKey(localFallback)
+    ? [primary]
+    : [primary, localFallback];
   const sql = sqlTemplate.replaceAll("$$payload$$", () => jsonbLiteral(payload));
-  return (await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection)).trim();
+  for (let index = 0; index < targets.length; index += 1) {
+    const connection = targets[index];
+    try {
+      await ensureAdminSchema(connection);
+      const result = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
+      if (index > 0) {
+        console.warn(`[admin-db] remote connection failed; using local fallback at ${connection.host}`);
+      }
+      return result.trim();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (index === 0 && targets.length > 1 && isDbConnectivityError(message)) continue;
+      throw error;
+    }
+  }
+  return "";
 }

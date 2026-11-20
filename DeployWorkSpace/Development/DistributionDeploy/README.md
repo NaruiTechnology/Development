@@ -362,11 +362,13 @@ list.
   former is kept for parity with the spec; the latter is the practical
   fallback. Either one is idempotent against apt.
 * **PostgreSQL** client tools are installed by `installPostgreSQL`; the server
-  is installed only when local fallback provisioning is enabled. The
-  `setupIobeamAdminDb` state checks the configured remote connection; the optional
-  `provisionLocalAdminDb` state is skipped by default. Enable it to provision
-  a local fallback and refresh it from the remote database when reachable.
-  Runtime admin queries retry the local connection after remote connectivity
+  is installed by the default `provisionLocalAdminDb` state. The
+  `setupIobeamAdminDb` state checks the configured remote connection, then the
+  local fallback is provisioned and refreshed from the remote database when
+  reachable. A local database setup failure is logged but does not stop the
+  remaining install. On remote connection failure, active accounts in the
+  local `iobeam_admin.auditor` table receive database owner access. Runtime
+  admin operations retry the local connection after remote connectivity
   failures. The SQL scripts live under
   `Development/IobeamAdmin/Sql/` and create the `user`, `session`, and
   `activity` tables plus their stored procedures.

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
@@ -90,6 +91,38 @@ export function pgConnectionFromAdminConfig(data: unknown, fallback: PgConnectio
       parsed?.commandTimeoutMs ||
       fallback.commandTimeoutMs,
   };
+}
+
+export function pgConnectionFromAdminConfigMode(data: unknown, fallback: PgConnection = pgConnectionFromRuntimeConfig()): PgConnection {
+  const db = readRecord(data, ["Database"]);
+  const mode = stringValue(db.ConnectionMode ?? db.connectionMode).toLowerCase();
+  return mode === "local" ? { ...fallback } : pgConnectionFromAdminConfig(data, fallback);
+}
+
+/** Refresh the provisioned local admin database from the configured remote database. */
+export async function syncAdminDatabaseToLocal(remote: PgConnection, local: PgConnection = pgConnectionFromRuntimeConfig()): Promise<void> {
+  if (connectionKey(remote) === connectionKey(local)) {
+    throw new Error("Remote and local database connections point to the same database");
+  }
+
+  const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "iobeam-admin-sync-"));
+  fs.chmodSync(tempDirectory, 0o700);
+  const dumpPath = path.join(tempDirectory, "remote.dump");
+  const fd = fs.openSync(dumpPath, "wx", 0o600);
+  fs.closeSync(fd);
+  try {
+    await runPostgresTool("pg_dump", [
+      "--no-password", "--format=custom", "--no-owner", "--no-acl", "--file", dumpPath,
+      "-h", remote.host, "-p", String(remote.port), "-U", remote.user, "-d", remote.database,
+    ], remote);
+    await runPostgresTool("pg_restore", [
+      "--no-password", "--single-transaction", "--exit-on-error", "--clean", "--if-exists",
+      "--no-owner", "--no-acl", "--role=iobeam_admin_owner",
+      "-h", local.host, "-p", String(local.port), "-U", local.user, "--dbname", local.database, dumpPath,
+    ], local);
+  } finally {
+    fs.rmSync(tempDirectory, { recursive: true, force: true });
+  }
 }
 
 export function pgConnectionFromOperationConfig(
@@ -313,6 +346,42 @@ export function runPsql(
         reject(new Error(message));
       });
     });
+  });
+}
+
+function runPostgresTool(program: "pg_dump" | "pg_restore", args: string[], connection: PgConnection): Promise<void> {
+  const timeoutMs = 30 * 60 * 1000;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let stderr = "";
+    const child = spawn(program, args, {
+      env: {
+        ...process.env,
+        ...(connection.password ? { PGPASSWORD: connection.password } : {}),
+        ...(connection.sslMode ? { PGSSLMODE: connection.sslMode } : {}),
+        PGCONNECT_TIMEOUT: String(Math.max(1, Math.ceil(connection.commandTimeoutMs / 1000))),
+      },
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGTERM");
+      reject(new Error(`${program} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      fn();
+    };
+    child.stderr?.setEncoding("utf8");
+    child.stderr?.on("data", (chunk: string) => { stderr += chunk; });
+    child.on("error", (error) => finish(() => reject(error)));
+    child.on("close", (code) => finish(() => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `${program} exited with code ${code}`));
+    }));
   });
 }
 

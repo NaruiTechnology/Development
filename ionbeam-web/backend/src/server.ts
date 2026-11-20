@@ -36,7 +36,9 @@ import { createScanQueue, latestScanQueue, queuePage, recoverInterruptedScanQueu
 import {
   applyAdminDatabaseSetup,
   pgConnectionFromAdminConfig,
+  pgConnectionFromAdminConfigMode,
   runPsql,
+  syncAdminDatabaseToLocal,
   type PgConnection,
 } from "./adminDbService";
 import {
@@ -54,6 +56,7 @@ import {
   recordActivityInDb,
   recordAdminSessionInDb,
   registerAdminUserInDb,
+  resolveCurrentAdminDbConnection,
   syncAdminUsersToDb,
   syncEquipmentToDb,
   type AdminUser,
@@ -581,6 +584,18 @@ app.get(
   },
 );
 
+app.post("/api/admin/iobeam/db/sync", async (req, res) => {
+  try {
+    await requireAdminPrivilege(req, "only Admin or Auditor accounts can sync the local database");
+    const info = await readAdminWithBackup();
+    const remote = pgConnectionFromAdminConfig(info.data);
+    await syncAdminDatabaseToLocal(remote);
+    res.json({ ok: true });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
 app.post(
   "/api/admin/iobeam/config/restore",
   async (_req, res: express.Response<ConfigSaveResponse>) => {
@@ -905,7 +920,7 @@ app.post(
     try {
       await requireAdminPrivilege(req, "only Admin or Auditor accounts can apply database setup");
       await authorizeAdminConfigSave(req, data);
-      const connection = pgConnectionFromAdminConfig(data);
+      const connection = pgConnectionFromAdminConfigMode(data);
       const setup = await applyAdminDatabaseSetup({
         connection,
         roleName: connection.user,
@@ -920,8 +935,7 @@ app.post(
 
 app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
   try {
-    const info = await readAdminWithBackup();
-    const connection = pgConnectionFromAdminConfig(info.data);
+    const connection = await resolveCurrentAdminDbConnection();
     const dbUsers = await listAdminUsersFromDb();
     const activeUsers = dbUsers.filter((u) => u.is_active);
     const requestedAccountId = Number(req.query.account_id ?? 0);

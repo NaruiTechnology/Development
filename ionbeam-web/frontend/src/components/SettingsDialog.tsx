@@ -842,7 +842,7 @@ function FrameBlankConfirmation({ onCancel, onConfirm }: {
         <div className="modal__body">
           <p id="frame-blank-confirm-message">{t("settings.confirm.frameBlankOff")}</p>
         </div>
-        <div className="frame-blank-confirm__actions">
+        <div className="admin-db-sync-confirm__actions">
           <button ref={cancelRef} type="button" className="btn btn--cancel" onClick={onCancel}>
             <Icon name="x" />
             {t("settings.confirm.cancel")}
@@ -1475,6 +1475,18 @@ async function applyAdminDatabaseSetup(data: unknown): Promise<AdminDatabaseAppl
   return await readJsonResponse<AdminDatabaseApplyResponse>(r, "apply admin database setup");
 }
 
+async function syncAdminDatabase(): Promise<void> {
+  const r = await fetch(apiUrl("/api/admin/iobeam/db/sync"), {
+    method: "POST",
+    headers: scanAuthHeaders(),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`sync local admin database: HTTP ${r.status} ${text}`);
+  }
+  await readJsonResponse<{ ok: boolean }>(r, "sync local admin database");
+}
+
 async function fetchAdminDatabaseConnection(includePassword = false): Promise<AdminDatabaseConnectionResponse> {
   const qs = includePassword ? "?include_password=1" : "";
   const r = await fetch(apiUrl(`/api/admin/iobeam/db/connection${qs}`), {
@@ -1849,6 +1861,8 @@ function AdminTab({
   const [saving, setSaving] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [dbApplying, setDbApplying] = useState(false);
+  const [dbSyncing, setDbSyncing] = useState(false);
+  const [dbSyncConfirmOpen, setDbSyncConfirmOpen] = useState(false);
   const [error, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [privilegeNotice, setPrivilegeNotice] = useState<string | null>(null);
@@ -2156,6 +2170,31 @@ function AdminTab({
     }
   }
 
+  async function onSyncDatabase() {
+    if (!canManageAdminConfig) {
+      showPrivilegeNotice();
+      return;
+    }
+    setDbSyncConfirmOpen(true);
+  }
+
+  async function onConfirmSyncDatabase() {
+    setDbSyncConfirmOpen(false);
+    setDbSyncing(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      await syncAdminDatabase();
+      setNotice(t("settings.admin.db.sync.ok"));
+    } catch (err) {
+      setLocalError(t("settings.admin.db.sync.error", {
+        detail: err instanceof Error ? err.message : String(err),
+      }));
+    } finally {
+      setDbSyncing(false);
+    }
+  }
+
   async function onSaveFtp() {
     if (ftpDraft === null) return;
     setFtpSaving(true);
@@ -2239,7 +2278,7 @@ function AdminTab({
     setDbPasswordVisible(false);
   }
 
-  const busy = loading || saving || restoring || dbApplying;
+  const busy = loading || saving || restoring || dbApplying || dbSyncing;
   const dirty = draft !== null && draft !== source;
   const canManageAdminConfig = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
   const adminApprovalRequired =
@@ -2368,6 +2407,45 @@ function AdminTab({
       </div>
 
       <h4 className="settings-form__group">{t("settings.admin.group.database")}</h4>
+      <fieldset className="settings-admin-db-mode" disabled={busy}>
+        <legend>{t("settings.admin.db.connectionWith")}</legend>
+        <div className="settings-admin-db-mode__options">
+          <div className="settings-admin-db-mode__choices">
+            <label><input type="radio" name="admin-db-connection-mode" value="remote"
+              checked={stringField(draft, ["Database", "ConnectionMode"], "remote") !== "local"}
+              onChange={() => set(["Database", "ConnectionMode"], "remote")} />
+              {t("settings.admin.db.remote")}</label>
+            <label><input type="radio" name="admin-db-connection-mode" value="local"
+              checked={stringField(draft, ["Database", "ConnectionMode"], "remote") === "local"}
+              onChange={() => set(["Database", "ConnectionMode"], "local")} />
+              {t("settings.admin.db.local")}</label>
+          </div>
+          <small>{t("settings.admin.db.connectionMode.hint")}</small>
+        </div>
+        <div className="settings-admin-db-actions">
+          <button type="button" className="btn btn--ghost" onClick={() => void onSyncDatabase()}
+            disabled={busy} aria-disabled={!canManageAdminConfig} title={t("settings.admin.db.sync.title")}>
+            <Icon name="refresh" tone="accent" />{t("settings.admin.db.sync")}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => {
+              if (!canManageAdminConfig) {
+                showPrivilegeNotice();
+                return;
+              }
+              void onApplyDatabase();
+            }}
+            disabled={busy}
+            aria-disabled={!canManageAdminConfig}
+            title={t("settings.admin.db.apply.title")}
+          >
+            <Icon name="tools" />
+            {t("settings.admin.db.apply")}
+          </button>
+        </div>
+      </fieldset>
       <div className="field-row">
         <TextField
           label={t("settings.admin.db.provider")}
@@ -2430,26 +2508,6 @@ function AdminTab({
           value={numberField(draft, ["Database", "CommandTimeoutMs"], 30000)}
           onChange={(v) => set(["Database", "CommandTimeoutMs"], v)}
         />
-      </div>
-      <div className="settings-form__group-row settings-form__group-row--db-apply">
-        <span />
-        <button
-          type="button"
-          className="btn btn--primary"
-          onClick={() => {
-            if (!canManageAdminConfig) {
-              showPrivilegeNotice();
-              return;
-            }
-            void onApplyDatabase();
-          }}
-          disabled={busy}
-          aria-disabled={!canManageAdminConfig}
-          title={t("settings.admin.db.apply.title")}
-        >
-          <Icon name="tools" />
-          {t("settings.admin.db.apply")}
-        </button>
       </div>
 
         </>
@@ -2754,7 +2812,63 @@ function AdminTab({
           </div>
         </>
       )}
+      {dbSyncConfirmOpen && <DatabaseSyncConfirmation
+        onCancel={() => setDbSyncConfirmOpen(false)}
+        onConfirm={() => void onConfirmSyncDatabase()}
+      />}
     </div>
+  );
+}
+
+function DatabaseSyncConfirmation({ onCancel, onConfirm }: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    cancelRef.current?.focus();
+    return () => previousFocus?.focus();
+  }, []);
+
+  return createPortal(
+    <div className="modal-backdrop admin-db-sync-confirm-backdrop"
+      onClick={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
+      <div className="modal admin-db-sync-confirm" role="alertdialog" aria-modal="true"
+        aria-labelledby="admin-db-sync-confirm-title" aria-describedby="admin-db-sync-confirm-message"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            onCancel();
+          } else if (event.key === "Tab") {
+            event.preventDefault();
+            event.stopPropagation();
+            (document.activeElement === cancelRef.current ? confirmRef : cancelRef).current?.focus();
+          }
+        }}>
+        <div className="modal__header">
+          <div className="modal__title" id="admin-db-sync-confirm-title">
+            <Icon name="alertTriangle" tone="warn" />
+            {t("settings.admin.db.sync.dialogTitle")}
+          </div>
+        </div>
+        <div className="modal__body">
+          <p id="admin-db-sync-confirm-message">{t("settings.admin.db.sync.confirm")}</p>
+        </div>
+        <div className="frame-blank-confirm__actions">
+          <button ref={cancelRef} type="button" className="btn btn--cancel" onClick={onCancel}>
+            <Icon name="x" />{t("settings.confirm.cancel")}
+          </button>
+          <button ref={confirmRef} type="button" className="btn btn--warn" onClick={onConfirm}>
+            <Icon name="refresh" />{t("settings.admin.db.sync")}
+          </button>
+        </div>
+      </div>
+    </div>, document.body,
   );
 }
 

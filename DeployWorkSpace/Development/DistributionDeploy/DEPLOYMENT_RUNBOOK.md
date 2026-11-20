@@ -142,9 +142,8 @@ deployment: the installation runs without it and the log ends with a
 "Not configured" summary:
 
 - no shared admin database login: the application resolves to its local
-  fallback. The fallback database is provisioned only when
-  `provisionLocalAdminDb.skip` is set to `false` in
-  `Json/DistributionDeploy.json`;
+  fallback. The local fallback is provisioned by default; if local DB setup
+  fails, installation continues and logs that the fallback is unavailable;
 - no FTP login: scan upload to FTP is disabled.
 
 Set them later without redeploying, in the web app (Settings > Admin >
@@ -153,19 +152,28 @@ Database or FTP) or with `python3 -m secretstore set NAME` followed by
 The same launcher also accepts `bash Development/Scripts/manage-local-system.sh restart`
 or `python Development/Scripts/manage-local-system.sh restart`; Python hands off to Bash.
 
-### Optional local admin database fallback
+### Local admin database fallback
 
-The `provisionLocalAdminDb` workstate is skipped by default. Set its `skip`
-value to `false` when this target should keep a local fallback for the remote
-admin database. The installer creates the local database and roles, then
-refreshes its contents from the remote database when that connection is
-available. A remote connection failure leaves the initialized local database
-in place. At runtime, admin database operations retry against the local
-fallback after a remote connectivity failure. Refreshing the local database
-replaces its matching objects and data with the remote snapshot.
-With the state skipped, deployment installs the PostgreSQL client for remote
-checks and snapshot export, but does not install or start the local PostgreSQL
-server.
+The `provisionLocalAdminDb` workstate runs by default. The installer creates
+the local database and roles, then refreshes its contents from the remote
+database when that connection is available. If local database creation or
+setup fails, the install continues and reports that the fallback is
+unavailable. If the remote connection fails, the initialized local database
+is retained and active accounts in its `iobeam_admin.auditor` table receive
+local database owner access. At runtime, all admin database operations,
+including recipe and SQL-script operations, retry against the local fallback
+after a remote connectivity failure. Refreshing the local database replaces
+its matching objects and data with the remote snapshot.
+
+In Settings > Admin > Configuration > Database, choose Remote or Local under
+“Connection with” and Save to select the runtime connection. Remote mode falls
+back to Local after a connectivity failure. The Sync button copies the
+configured remote database into Local and asks for confirmation before
+replacing local contents.
+
+Setting the workstate's `skip` value to `true` disables the local server;
+deployment then installs the PostgreSQL client for remote checks and snapshot
+export only.
 
 To provide values up front on a host that has none of the above, prepare a
 file readable only by you and pass it:

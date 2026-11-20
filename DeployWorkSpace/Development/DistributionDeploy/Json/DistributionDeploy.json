@@ -289,13 +289,13 @@
         },
         {
             "provisionLocalAdminDb": {
-                "skip": true,
+                "skip": false,
                 "transactionComplete": false,
                 "actionData": {
                     "Comment": [
-                        "Optional local admin DB fallback, skipped by default.",
-                        "Set skip=false to provision it and refresh its contents from the remote admin DB when reachable.",
-                        "Runtime admin DB requests retry localhost only after a remote connectivity failure."
+                        "Provision a local admin DB fallback; local DB provisioning failures are non-fatal to installation.",
+                        "Refresh local contents from the remote admin DB when reachable; on remote failure, grant active auditor accounts local owner access.",
+                        "Runtime admin DB requests automatically retry localhost after a remote connectivity failure."
                     ],
                     "provisionLocal": true,
                     "syncFromRemote": true,

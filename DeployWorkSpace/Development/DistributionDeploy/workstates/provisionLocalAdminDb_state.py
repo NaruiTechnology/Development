@@ -11,7 +11,7 @@ from .setupIobeamAdminDb_state import setupIobeamAdminDb_state
 
 
 class provisionLocalAdminDb_state(setupIobeamAdminDb_state):
-    """Create the local fallback database when this optional step is enabled."""
+    """Create the local fallback database without blocking the deployment."""
 
     def deploymentConfig(self):
         # Reuse the provisioning implementation, but pin its target to the
@@ -29,15 +29,40 @@ class provisionLocalAdminDb_state(setupIobeamAdminDb_state):
     async def DoWork(self):
         stateConfig = self.ParentWorkThread.GetStateConfig(self)
         actionData = dict(stateConfig.get(Consts.ACTION_DATA, {}) or {})
+        self._localFallbackProvisioned = False
         await super(provisionLocalAdminDb_state, self).DoWork()
 
         if not self._success:
             return
+        if not self._localFallbackProvisioned:
+            self.warn("[{}] local admin DB is unavailable; continuing the remaining installation steps."
+                      .format(type(self).__name__))
+            return
         try:
             await self._syncFromRemote(actionData, float(stateConfig.get(Consts.TIMEOUT, 0) or 0))
         except Exception as exc:
-            self.error("[{}][sync] unexpected error: {}".format(type(self).__name__, exc))
-            self._success = False
+            self.warn("[{}][sync] remote refresh failed; keeping the local fallback and continuing: {}"
+                      .format(type(self).__name__, exc))
+
+    async def _provisionLocalDatabase(self, dbName, dbRole, dbPassword, ownerRole,
+                                      memberRoles, readRoles, schemaFile, seedFile,
+                                      timeout, actionData):
+        """Attempt local setup, but let the installer continue if it fails."""
+        try:
+            self._localFallbackProvisioned = await super(
+                provisionLocalAdminDb_state, self
+            )._provisionLocalDatabase(
+                dbName, dbRole, dbPassword, ownerRole, memberRoles, readRoles,
+                schemaFile, seedFile, timeout, actionData,
+            )
+        except Exception as exc:
+            self._localFallbackProvisioned = False
+            self.warn("[{}] local admin DB provisioning failed; continuing installation: {}"
+                      .format(type(self).__name__, exc))
+        if not self._localFallbackProvisioned:
+            self.warn("[{}] local admin DB provisioning did not complete; continuing installation."
+                      .format(type(self).__name__))
+        return True
 
     async def _provisionLocalDatabase(self, dbName, dbRole, dbPassword, ownerRole,
                                       memberRoles, readRoles, schemaFile, seedFile,
@@ -129,6 +154,11 @@ class provisionLocalAdminDb_state(setupIobeamAdminDb_state):
             if not ok:
                 self.warn("[{}][sync] remote export failed; keeping the local database: {}"
                           .format(type(self).__name__, stderr or "pg_dump failed"))
+                await self._grantLocalAuditorAdminAccess(
+                    localDb,
+                    str(actionData.get("databaseOwnerRole") or "iobeam_admin_owner"),
+                    timeout,
+                )
                 return
 
             restore = [
@@ -164,8 +194,46 @@ class provisionLocalAdminDb_state(setupIobeamAdminDb_state):
                 if not await self._ensureReadRoleAndGrants(localDb, roleName, timeout):
                     self._success = False
                     return
+            if not await self._grantLocalAuditorAdminAccess(localDb, ownerRole, timeout):
+                self.warn("[{}][local-auditors] some active auditor accounts may lack local owner access."
+                          .format(type(self).__name__))
             self.info("[{}][sync] local database refreshed from remote."
                       .format(type(self).__name__))
         finally:
             if dumpPath and os.path.exists(dumpPath):
                 os.remove(dumpPath)
+
+    async def _grantLocalAuditorAdminAccess(self, dbName, ownerRole, timeout):
+        """Give active auditor accounts owner-role access to the local fallback."""
+        query = [
+            "sudo", "-u", "postgres", "psql", "-d", dbName, "-Atq",
+            "-v", "ON_ERROR_STOP=1",
+            "-c", "SELECT DISTINCT btrim(email) FROM iobeam_admin.auditor "
+                  "WHERE is_active IS TRUE AND btrim(email) <> '' ORDER BY 1",
+        ]
+        try:
+            ok, stdout, stderr = await self._runExec(query, timeout)
+        except Exception as exc:
+            self.warn("[{}][local-auditors] could not query auditor accounts: {}"
+                      .format(type(self).__name__, exc))
+            return False
+        if not ok:
+            self.warn("[{}][local-auditors] could not read local auditor accounts: {}"
+                      .format(type(self).__name__, stderr or "psql failed"))
+            return False
+
+        accounts = list(dict.fromkeys(line.strip() for line in stdout.splitlines() if line.strip()))
+        if not accounts:
+            self.info("[{}][local-auditors] no active auditor accounts to grant.".format(type(self).__name__))
+            return True
+
+        if not await self._ensureDatabaseAccess(dbName, ownerRole, accounts, timeout):
+            return False
+        if not await self._ensureOwnerRoleAndMembership(dbName, ownerRole, accounts, timeout):
+            return False
+        for account in accounts:
+            if not await self._ensureRoleAndGrants(dbName, account, timeout, ownerRole):
+                return False
+        self.info("[{}][local-auditors] granted local admin DB owner access to {} active auditor accounts."
+                  .format(type(self).__name__, len(accounts)))
+        return True
