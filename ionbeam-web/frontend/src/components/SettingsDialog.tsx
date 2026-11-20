@@ -1499,6 +1499,13 @@ async function fetchAdminDatabaseConnection(includePassword = false): Promise<Ad
   return await readJsonResponse<AdminDatabaseConnectionResponse>(r, "fetch admin database connection");
 }
 
+async function testAdminDatabaseFallback(): Promise<NonNullable<AdminDatabaseConnectionResponse["runtime"]>> {
+  const r = await fetch(apiUrl("/api/admin/iobeam/db/test-fallback"), { method: "POST", headers: scanAuthHeaders() });
+  if (!r.ok) throw new Error(`test local database fallback: HTTP ${r.status} ${await r.text()}`);
+  return (await readJsonResponse<{ ok: boolean; runtime: NonNullable<AdminDatabaseConnectionResponse["runtime"]> }>(r,
+    "test local database fallback")).runtime;
+}
+
 async function restoreAdminConfig(): Promise<void> {
   const r = await fetch(apiUrl("/api/admin/iobeam/config/restore"), { method: "POST" });
   if (!r.ok) {
@@ -1607,6 +1614,8 @@ interface AdminDatabaseConnectionResponse {
     connectionString: string;
     commandTimeoutMs: number;
   };
+  runtime?: { configured_mode: "remote" | "local"; active_mode: "remote" | "local"; fallback_active: boolean;
+    fallback_error: string | null; local_reachable: boolean; simulated: boolean };
 }
 
 interface AllowedHostsResponse {
@@ -1881,6 +1890,8 @@ function AdminTab({
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
   const [dbPasswordVisible, setDbPasswordVisible] = useState(false);
   const [dbPasswordConfigured, setDbPasswordConfigured] = useState(false);
+  const [dbRuntimeStatus, setDbRuntimeStatus] = useState<AdminDatabaseConnectionResponse["runtime"]>(undefined);
+  const [dbFallbackTesting, setDbFallbackTesting] = useState(false);
   // Equipment is read from the database only; null while it is reachable.
   const [equipmentError, setEquipmentError] = useState<string | null>(null);
   const [ftpSource, setFtpSource] = useState<unknown | null>(null);
@@ -1934,6 +1945,7 @@ function AdminTab({
       if (dbConnection?.ok) {
         data = writeAdminDatabaseConnection(data, dbConnection.connection, false);
         setDbPasswordConfigured(dbConnection.connection.password_configured);
+        setDbRuntimeStatus(dbConnection.runtime);
       }
       setEquipmentError(info.equipment_source === "unavailable"
         ? info.equipment_error || t("settings.admin.equipment.unavailable.unknown")
@@ -1949,6 +1961,18 @@ function AdminTab({
       setLocalError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function runDbFallbackCase() {
+    setDbFallbackTesting(true);
+    try {
+      setDbRuntimeStatus(await testAdminDatabaseFallback());
+      setNotice(t("settings.admin.db.testFallback.ok"));
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDbFallbackTesting(false);
     }
   }
 
@@ -2412,17 +2436,31 @@ function AdminTab({
         <div className="settings-admin-db-mode__options">
           <div className="settings-admin-db-mode__choices">
             <label><input type="radio" name="admin-db-connection-mode" value="remote"
-              checked={stringField(draft, ["Database", "ConnectionMode"], "remote") !== "local"}
+              checked={(dbRuntimeStatus?.fallback_active ? dbRuntimeStatus.active_mode
+                : stringField(draft, ["Database", "ConnectionMode"], "remote")) !== "local"}
               onChange={() => set(["Database", "ConnectionMode"], "remote")} />
               {t("settings.admin.db.remote")}</label>
             <label><input type="radio" name="admin-db-connection-mode" value="local"
-              checked={stringField(draft, ["Database", "ConnectionMode"], "remote") === "local"}
+              checked={(dbRuntimeStatus?.fallback_active ? dbRuntimeStatus.active_mode
+                : stringField(draft, ["Database", "ConnectionMode"], "remote")) === "local"}
               onChange={() => set(["Database", "ConnectionMode"], "local")} />
               {t("settings.admin.db.local")}</label>
           </div>
           <small>{t("settings.admin.db.connectionMode.hint")}</small>
+          {dbRuntimeStatus?.fallback_active && (
+            <small role="status" className="settings-admin-db-mode__status">
+              {t("settings.admin.db.fallbackActive", { mode: t("settings.admin.db.local"),
+                reason: dbRuntimeStatus.simulated ? t("settings.admin.db.testFallback.simulated") : dbRuntimeStatus.fallback_error ?? "" })}
+            </small>
+          )}
         </div>
         <div className="settings-admin-db-actions">
+          <button type="button" className="btn btn--ghost" onClick={() => void runDbFallbackCase()}
+            disabled={busy || dbFallbackTesting} aria-disabled={!canManageAdminConfig}
+            title={t("settings.admin.db.testFallback.title")}>
+            <Icon name="refresh" tone="accent" />{dbFallbackTesting ? t("settings.admin.db.testFallback.running")
+              : t("settings.admin.db.testFallback")}
+          </button>
           <button type="button" className="btn btn--ghost" onClick={() => void onSyncDatabase()}
             disabled={busy} aria-disabled={!canManageAdminConfig} title={t("settings.admin.db.sync.title")}>
             <Icon name="refresh" tone="accent" />{t("settings.admin.db.sync")}

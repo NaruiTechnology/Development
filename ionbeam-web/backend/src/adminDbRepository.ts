@@ -1,6 +1,7 @@
 import {
   applyAdminDatabaseSetup,
   isDbConnectivityError,
+  pgConnectionFromAdminConfig,
   pgConnectionFromAdminConfigMode,
   pgConnectionFromRuntimeConfig,
   runPsql,
@@ -55,6 +56,18 @@ export type RegisterAdminUserDbResult =
   | { ok: false; error: string };
 
 const schemaReadyByConnection = new Map<string, Promise<void>>();
+let runtimeDbFallback: { remoteKey: string; error: string; since: number; simulatedUntil?: number } | null = null;
+const ROLE_ADMIN = 3;
+const ROLE_AUDIT = 4;
+
+export interface AdminDbRuntimeStatus {
+  configured_mode: "remote" | "local";
+  active_mode: "remote" | "local";
+  fallback_active: boolean;
+  fallback_error: string | null;
+  local_reachable: boolean;
+  simulated: boolean;
+}
 
 export async function ensureAdminSchema(connection?: PgConnection): Promise<void> {
   const resolved = connection ?? (await resolveCurrentAdminDbConnection());
@@ -286,13 +299,16 @@ async function queryStored(sqlTemplate: string, payload: unknown = null, fallbac
     try {
       await ensureAdminSchema(connection);
       const out = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
+      if (index === 0) noteRemoteAvailable(connection);
       if (index > 0) {
+        await activateLocalFallback(targets[0], "Remote database connection is unavailable.", connection);
         console.warn(`[admin-db] remote connection failed; using local fallback at ${connection.host}`);
       }
       return out.trim() || fallback;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (index === 0 && targets.length > 1 && isDbConnectivityError(message)) {
+        await activateLocalFallback(connection, message, localFallback);
         continue;
       }
       throw error;
@@ -313,13 +329,18 @@ export async function runAdminSqlScript(sql: string): Promise<void> {
     try {
       await ensureAdminSchema(connection);
       await runPsql(["-q", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
+      if (index === 0) noteRemoteAvailable(connection);
       if (index > 0) {
+        await activateLocalFallback(targets[0], "Remote database connection is unavailable.", connection);
         console.warn(`[admin-db] remote connection failed; using local fallback at ${connection.host}`);
       }
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (index === 0 && targets.length > 1 && isDbConnectivityError(message)) continue;
+      if (index === 0 && targets.length > 1 && isDbConnectivityError(message)) {
+        await activateLocalFallback(connection, message, localFallback);
+        continue;
+      }
       throw error;
     }
   }
@@ -367,7 +388,125 @@ function jsonbLiteral(value: unknown): string {
 
 export async function resolveCurrentAdminDbConnection(): Promise<PgConnection> {
   const info = await readAdminWithBackup();
-  return pgConnectionFromAdminConfigMode(info.data, pgConnectionFromRuntimeConfig());
+  const local = pgConnectionFromRuntimeConfig();
+  const mode = adminDbConfiguredMode(info.data);
+  if (mode === "local") {
+    runtimeDbFallback = null;
+    return local;
+  }
+  const remote = pgConnectionFromAdminConfigMode(info.data, local);
+  if (connectionKey(remote) === connectionKey(local)) return local;
+  if (runtimeDbFallback && runtimeDbFallback.remoteKey !== connectionKey(remote)) runtimeDbFallback = null;
+  return runtimeDbFallback ? local : remote;
+}
+
+/** Force the normal failover state for a short, in-memory UI verification case. */
+export async function simulateAdminDbRemoteUnavailable(durationMs = 30_000): Promise<AdminDbRuntimeStatus> {
+  const info = await readAdminWithBackup();
+  const local = pgConnectionFromRuntimeConfig();
+  const remote = pgConnectionFromAdminConfig(info.data, local);
+  const error = "Remote connection intentionally marked unavailable for verification.";
+  await activateLocalFallback(remote, error, local);
+  runtimeDbFallback = { remoteKey: connectionKey(remote), error, since: Date.now(),
+    simulatedUntil: Date.now() + Math.max(5_000, Math.min(120_000, durationMs)) };
+  let localReachable = false;
+  try {
+    await runPsql(["-Atq", "-c", "SELECT 1"], local.database,
+      undefined, { ...local, commandTimeoutMs: Math.min(local.commandTimeoutMs, 4_000) });
+    localReachable = true;
+  } catch { /* the UI still reports the selected fallback and its reachability */ }
+  return {
+    configured_mode: adminDbConfiguredMode(info.data),
+    active_mode: "local",
+    fallback_active: true,
+    fallback_error: error,
+    local_reachable: localReachable,
+    simulated: true,
+  };
+}
+
+/** Probe the configured remote and expose the effective runtime connection. */
+export async function getAdminDbRuntimeStatus(): Promise<AdminDbRuntimeStatus> {
+  const info = await readAdminWithBackup();
+  const local = pgConnectionFromRuntimeConfig();
+  const configuredMode = adminDbConfiguredMode(info.data);
+  if (configuredMode === "local") {
+    runtimeDbFallback = null;
+    let localReachable = false;
+    try {
+      await runPsql(["-Atq", "-c", "SELECT 1"], local.database,
+        undefined, { ...local, commandTimeoutMs: Math.min(local.commandTimeoutMs, 4_000) });
+      localReachable = true;
+    } catch { /* report local unavailable */ }
+    return { configured_mode: "local", active_mode: "local", fallback_active: false,
+      fallback_error: null, local_reachable: localReachable, simulated: false };
+  }
+
+  const remote = pgConnectionFromAdminConfig(info.data, local);
+  if (connectionKey(remote) === connectionKey(local)) {
+    return { configured_mode: "remote", active_mode: "local", fallback_active: false,
+      fallback_error: null, local_reachable: true, simulated: false };
+  }
+  if (runtimeDbFallback?.remoteKey === connectionKey(remote)
+      && runtimeDbFallback.simulatedUntil && runtimeDbFallback.simulatedUntil > Date.now()) {
+    return { configured_mode: "remote", active_mode: "local", fallback_active: true,
+      fallback_error: runtimeDbFallback.error, local_reachable: true, simulated: true };
+  }
+  if (runtimeDbFallback?.simulatedUntil && runtimeDbFallback.simulatedUntil <= Date.now()) runtimeDbFallback = null;
+  try {
+    await runPsql(["-Atq", "-c", "SELECT 1"], remote.database,
+      undefined, { ...remote, commandTimeoutMs: Math.min(remote.commandTimeoutMs, 4_000) });
+    runtimeDbFallback = null;
+    return { configured_mode: "remote", active_mode: "remote", fallback_active: false,
+      fallback_error: null, local_reachable: true, simulated: false };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!isDbConnectivityError(message)) {
+      return { configured_mode: "remote", active_mode: runtimeDbFallback ? "local" : "remote",
+        fallback_active: runtimeDbFallback !== null, fallback_error: runtimeDbFallback?.error ?? message,
+        local_reachable: runtimeDbFallback !== null, simulated: Boolean(runtimeDbFallback?.simulatedUntil) };
+    }
+    await activateLocalFallback(remote, message, local);
+    let localReachable = false;
+    try {
+      await runPsql(["-Atq", "-c", "SELECT 1"], local.database,
+        undefined, { ...local, commandTimeoutMs: Math.min(local.commandTimeoutMs, 4_000) });
+      localReachable = true;
+    } catch { /* report local unavailable */ }
+    return { configured_mode: "remote", active_mode: "local", fallback_active: true,
+      fallback_error: message, local_reachable: localReachable, simulated: false };
+  }
+}
+
+function adminDbConfiguredMode(data: unknown): "remote" | "local" {
+  const root = data && typeof data === "object" ? data as Record<string, unknown> : {};
+  const database = root.Database && typeof root.Database === "object"
+    ? root.Database as Record<string, unknown> : {};
+  return String(database.ConnectionMode ?? database.connectionMode ?? "remote").toLowerCase() === "local"
+    ? "local" : "remote";
+}
+
+async function activateLocalFallback(remote: PgConnection, error: string, local = pgConnectionFromRuntimeConfig()): Promise<void> {
+  const remoteKey = connectionKey(remote);
+  const isNewFallback = runtimeDbFallback?.remoteKey !== remoteKey;
+  runtimeDbFallback = { remoteKey, error, since: Date.now() };
+  if (!isNewFallback) return;
+  console.warn(`[admin-db] remote ${remote.host}:${remote.port} is unavailable; switching to local database: ${error}`);
+  try {
+    await ensureAdminSchema(local);
+    const sql = `UPDATE iobeam_admin."user" AS u
+      SET role = GREATEST(u.role, ${ROLE_ADMIN}, ${ROLE_AUDIT})
+      FROM iobeam_admin.auditor AS a
+      WHERE lower(btrim(u.email)) = lower(btrim(a.email))
+         OR lower(btrim(u.login_name)) = lower(btrim(a.user_name));`;
+    await runPsql(["-v", "ON_ERROR_STOP=1"], local.database, sql, local);
+  } catch (grantError) {
+    console.error("[admin-db] could not grant local admin access to auditor accounts during failover:", grantError);
+  }
+}
+
+function noteRemoteAvailable(connection: PgConnection): void {
+  if (runtimeDbFallback?.remoteKey === connectionKey(connection)) runtimeDbFallback = null;
 }
 
 function connectionKey(connection: PgConnection): string {
@@ -387,13 +526,18 @@ export async function queryAdminStoredStrict(sqlTemplate: string, payload: unkno
     try {
       await ensureAdminSchema(connection);
       const result = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
+      if (index === 0) noteRemoteAvailable(connection);
       if (index > 0) {
+        await activateLocalFallback(targets[0], "Remote database connection is unavailable.", connection);
         console.warn(`[admin-db] remote connection failed; using local fallback at ${connection.host}`);
       }
       return result.trim();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (index === 0 && targets.length > 1 && isDbConnectivityError(message)) continue;
+      if (index === 0 && targets.length > 1 && isDbConnectivityError(message)) {
+        await activateLocalFallback(connection, message, localFallback);
+        continue;
+      }
       throw error;
     }
   }

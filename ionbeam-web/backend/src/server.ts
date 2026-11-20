@@ -57,6 +57,8 @@ import {
   recordAdminSessionInDb,
   registerAdminUserInDb,
   resolveCurrentAdminDbConnection,
+  getAdminDbRuntimeStatus,
+  simulateAdminDbRemoteUnavailable,
   syncAdminUsersToDb,
   syncEquipmentToDb,
   type AdminUser,
@@ -159,6 +161,7 @@ interface DbStatusResponse {
 
 interface AdminDbConnectionResponse {
   ok: boolean;
+  runtime?: Awaited<ReturnType<typeof getAdminDbRuntimeStatus>>;
   connection: {
     host: string;
     port: number;
@@ -563,6 +566,7 @@ app.get(
       await requireAdminPrivilege(req, "only Admin or Auditor accounts can view database connection settings");
       const info = await readAdminWithBackup();
       const connection = pgConnectionFromAdminConfig(info.data);
+      const runtime = await getAdminDbRuntimeStatus();
       const includePassword = String(req.query.include_password ?? "").trim() === "1";
       res.json({
         ok: true,
@@ -577,6 +581,7 @@ app.get(
           connectionString: adminDbConnectionString(connection, includePassword),
           commandTimeoutMs: connection.commandTimeoutMs,
         },
+        runtime,
       });
     } catch (err) {
       sendConfigError(res, err);
@@ -591,6 +596,16 @@ app.post("/api/admin/iobeam/db/sync", async (req, res) => {
     const remote = pgConnectionFromAdminConfig(info.data);
     await syncAdminDatabaseToLocal(remote);
     res.json({ ok: true });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.post("/api/admin/iobeam/db/test-fallback", async (req, res) => {
+  try {
+    await requireAdminPrivilege(req, "only Admin or Auditor accounts can test database fallback");
+    const status = await simulateAdminDbRemoteUnavailable(30_000);
+    res.json({ ok: true, runtime: status });
   } catch (err) {
     sendConfigError(res, err);
   }

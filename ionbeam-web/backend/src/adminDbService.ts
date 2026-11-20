@@ -115,6 +115,12 @@ export async function syncAdminDatabaseToLocal(remote: PgConnection, local: PgCo
       "--no-password", "--format=custom", "--no-owner", "--no-acl", "--file", dumpPath,
       "-h", remote.host, "-p", String(remote.port), "-U", remote.user, "-d", remote.database,
     ], remote);
+    // The local schema may have objects created after the remote snapshot,
+    // including functions that depend on the schema itself. pg_restore's
+    // generated DROP SCHEMA lacks CASCADE, so remove that schema explicitly
+    // before restoring the snapshot.
+    await runPsql(["-v", "ON_ERROR_STOP=1"], local.database,
+      "DROP SCHEMA IF EXISTS iobeam_admin CASCADE;", local);
     await runPostgresTool("pg_restore", [
       "--no-password", "--single-transaction", "--exit-on-error", "--clean", "--if-exists",
       "--no-owner", "--no-acl", "--role=iobeam_admin_owner",

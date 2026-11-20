@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { workflowElapsedMs, formatWorkflowElapsed, type WorkflowProgress } from "../lib/processingWorkflows";
 import { plannedPatternExposureMetrics } from "../lib/patternExposure";
 import { formatPatternTime } from "../lib/processingPatterns";
+import { useTranslation } from "../i18n";
 import { useAppSelector } from "../store";
 
 /** Orbit's numbered timeline, adapted to scan stream completion events. */
 export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) {
+  const { t } = useTranslation();
   const { workflowProgress, specs, instances, workflows, materials, lensLookup, stairReceipes } = useAppSelector(s => s.processing);
   const {progress: exposureProgress, phase: exposurePhase} = useAppSelector(s => s.exposure);
   const field = useAppSelector(s => s.scan.roi);
@@ -80,7 +82,7 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
     const pass = node.status === "completed" ? plan.passes
       : Math.min(plan.passes, Math.max(1,
         Math.ceil((node.exposure?.receivedSamples ?? 0) / Math.max(1, plan.count))));
-    return `Pass - ${pass} / ${plan.passes}`;
+    return t("processing.workflow.pass", { current: pass, total: plan.passes });
   };
   const currentNodeRef = useRef<HTMLLIElement | null>(null);
   useEffect(() => {
@@ -88,7 +90,7 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
   }, [currentNode?.id]);
   const caption = specs.find(spec => spec.key === patternKey)?.caption ?? patternKey;
   return <section className="processing-workflow" aria-label={`${caption}: Workflow progress`}>
-    <p className="processing-workflow__elapsed"><span>Time left:</span><time>{formatPatternTime(timeLeftMs)}</time></p>
+    <p className="processing-workflow__elapsed"><span>{t("processing.workflow.timeLeft")}</span><time>{formatPatternTime(timeLeftMs)}</time></p>
     {!nodes.length && <p>{selectedWorkflow && selectedWorkflow.steps.length === 0
       ? "This workflow has no steps configured."
       : "Enable a pattern and draw its ROI to preview the workflow."}</p>}
