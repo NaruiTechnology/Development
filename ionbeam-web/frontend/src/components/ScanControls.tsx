@@ -22,6 +22,7 @@ import {
   finishROITargetGrayRun,
   streamErrored,
   streamReset,
+  updateROI,
   type ScanKind,
 } from "../store/scanSlice";
 import {

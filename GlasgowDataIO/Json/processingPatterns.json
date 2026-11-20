@@ -1,8 +1,7 @@
 {
     "Header": {
         "Application": "Ion Beam Processing Patterns",
-        "Description": "Pattern catalogue for the native app's Processing tab. Each entry of Patterns is a one,key object: the key is the pattern name, the value selects the data model (a class registered in ionbeam_native.processing.models) and its parameters. Entries with skip=true are not instantiated and get no card. Order is the order of the icons and cards.",
-        "LoadImage": "../IobeamControl/unittest/testData/PS4 FIB Xsection.jpg"
+        "Description": "Pattern catalogue for the native app's Processing tab. Each entry of Patterns is a one,key object: the key is the pattern name, the value selects the data model (a class registered in ionbeam_native.processing.models) and its parameters. Entries with skip=true are not instantiated and get no card. Order is the order of the icons and cards."
     },
     "Message": [
         "The following table is derived from the user,supplied Google AI table of Ga+ image brightness for common materials. It is illustrative only, not a calibrated secondary,electron yield or universal material constant. Beam conditions, charging, surface geometry and detector gain/offset affect contrast.",

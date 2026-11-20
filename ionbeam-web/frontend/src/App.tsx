@@ -276,7 +276,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(imageWorkspace, null);
-  const [autoLoadLastScanToPatterns, setAutoLoadLastScanToPatterns] = useWorkspaceState<boolean>(imageWorkspace, true);
+  const [autoLoadLastScanToPatterns, setAutoLoadLastScanToPatterns] = useWorkspaceState<boolean>(imageWorkspace, false);
   const [mostRecentScanImage, setMostRecentScanImage] = useState<{ imageUrl: string } | null>(() => {
     const result = getWorkspaceStore("scan").getState().scan.lastResult;
     const imageUrl = result?.artifacts?.figureDataUrl;
@@ -323,6 +323,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     );
   }, [imagePanelLayout, imagePanelLocked, kind, phase, selectedImagePane, streamRestarting]);
   const suppressedROIScanImageUrlRef = useWorkspaceRef<string | null>(imageWorkspace, null);
+  const suppressedProcessingLastScanImageUrlRef = useWorkspaceRef<string | null>(imageWorkspace, null);
   const previousROIImageRef = useWorkspaceRef(imageWorkspace, {
     imageDataUrl: roiState.imageDataUrl,
   });
@@ -1246,6 +1247,13 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
       if (activeTopTab === "processing") {
         processingImageInitialized.current = true;
         setProcessingImageError(null);
+        if (imageUrl === null && availableLastScanImageUrl) {
+          // Clearing the Patterns source must also suppress the cached scan
+          // that would otherwise be offered back by the auto-load effect.
+          suppressedProcessingLastScanImageUrlRef.current = availableLastScanImageUrl;
+          suppressedROIScanImageUrlRef.current = availableLastScanImageUrl;
+          setSuppressedROIScanImageUrl(availableLastScanImageUrl);
+        }
       }
       if (kind !== "raster" && kind !== "vector") return;
       const scanKind = kind;
@@ -1265,7 +1273,9 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
         setScanTargetImagePane((current) => ({ ...current, [scanKind]: pane }));
       }
     },
-    [imagePanelLayout, kind, selectedImagePane, activeTopTab, imageWorkspace],
+    [imagePanelLayout, kind, selectedImagePane, activeTopTab, availableLastScanImageUrl,
+      imageWorkspace, setSuppressedROIScanImageUrl, suppressedProcessingLastScanImageUrlRef,
+      suppressedROIScanImageUrlRef],
   );
 
   useEffect(() => {
@@ -1286,15 +1296,20 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
             probe.onerror = () => reject(new Error(t("processing.imageInvalid")));
             probe.src = image.data_url;
           });
-          if (cancelled || processingImageInitialized.current) return;
-          clearBitmapSelectionCache();
-          dispatch(updateROI({ imageName: image.name, imageDataUrl: image.data_url,
-            imageKind: "file", imageBounds: null, roiScanResultUrl: null, scanImageDataUrl: null }));
+          if (cancelled) return;
+          if (!processingImageInitialized.current) {
+            clearBitmapSelectionCache();
+            dispatch(updateROI({ imageName: image.name, imageDataUrl: image.data_url,
+              imageKind: "file", imageBounds: null, roiScanResultUrl: null, scanImageDataUrl: null }));
+          }
         }
         if (cancelled) return;
         processingImageInitialized.current = true;
       } catch (error) {
-        if (!cancelled) setProcessingImageError(error instanceof Error ? error.message : String(error));
+        if (!cancelled) {
+          setProcessingImageError(error instanceof Error ? error.message : String(error));
+          processingImageInitialized.current = true;
+        }
       }
     })();
     return () => { cancelled = true; controller.abort(); };
@@ -1434,6 +1449,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     if (!scanImageUrl) return;
     const sourceScan = getWorkspaceStore("scan").getState().scan;
     const sourceROI = sourceScan.roi;
+    suppressedProcessingLastScanImageUrlRef.current = null;
     suppressedROIScanImageUrlRef.current = null;
     setSuppressedROIScanImageUrl(null);
     resetROIContext({ clearSelection: true });
@@ -1455,10 +1471,25 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
         scan_zoom: sourceROI.scan_zoom,
       })
     );
-  }, [dispatch, resetROIContext, roiScanImageUrl, t, imageWorkspace]);
+  }, [dispatch, resetROIContext, roiScanImageUrl, t, imageWorkspace,
+    suppressedProcessingLastScanImageUrlRef]);
+
+  const handleAutoLoadLastScanChange = useCallback((enabled: boolean) => {
+    setAutoLoadLastScanToPatterns(enabled);
+    if (!enabled) return;
+    // Explicitly enabling auto-load overrides a previous Clear suppression.
+    suppressedProcessingLastScanImageUrlRef.current = null;
+    suppressedROIScanImageUrlRef.current = null;
+    setSuppressedROIScanImageUrl(null);
+  }, [setAutoLoadLastScanToPatterns, setSuppressedROIScanImageUrl,
+    suppressedProcessingLastScanImageUrlRef, suppressedROIScanImageUrlRef]);
 
   useEffect(() => {
     if (activeTopTab !== "processing" || !autoLoadLastScanToPatterns || !availableLastScanImageUrl) return;
+    if (suppressedProcessingLastScanImageUrlRef.current === availableLastScanImageUrl) return;
+    if (suppressedProcessingLastScanImageUrlRef.current !== null) {
+      suppressedProcessingLastScanImageUrlRef.current = null;
+    }
     if (roiState.imageKind === "lastScan" && roiState.imageDataUrl === availableLastScanImageUrl) {
       processingImageInitialized.current = true;
       return;
@@ -1466,7 +1497,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     processingImageInitialized.current = true;
     handleLoadLastScan(availableLastScanImageUrl);
   }, [activeTopTab, autoLoadLastScanToPatterns, availableLastScanImageUrl, roiState.imageKind,
-    roiState.imageDataUrl, handleLoadLastScan]);
+    roiState.imageDataUrl, handleLoadLastScan, suppressedProcessingLastScanImageUrlRef]);
 
   function selectKind(nextKind: ScanKind) {
     if (nextKind === storedKind) return;
@@ -1556,7 +1587,15 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
 
   // Processing: pattern ROIs are drawn on the ROI canvas, so it runs on the "roi" kind like the dimension view.
   function activateProcessingTopTab() {
+    if (autoLoadLastScanToPatterns) {
+      // Auto-load ON means entering PATTERNS should restore the latest scan,
+      // even if that same scan was cleared earlier.
+      suppressedProcessingLastScanImageUrlRef.current = null;
+      suppressedROIScanImageUrlRef.current = null;
+      setSuppressedROIScanImageUrl(null);
+    }
     setActiveTopTab("processing");
+    processingImageInitialized.current = false;
     setProcessingEntryRequest((value) => value + 1);
   }
 
@@ -1945,7 +1984,8 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
                   lastScanImageUrl={availableLastScanImageUrl}
                   onLoadLastScan={handleLoadLastScan}
                   autoLoadLastScan={autoLoadLastScanToPatterns}
-                  onAutoLoadLastScanChange={setAutoLoadLastScanToPatterns}
+                  onAutoLoadLastScanChange={handleAutoLoadLastScanChange}
+                  autoLoadLastScanLabel={t("roi.loadLastScan")}
                   onImageChange={handleSimulationImageChange}
                 />
                 {processingImageError && <p className="scan-inline-error" role="alert">{t("processing.imageError", { error: processingImageError })}</p>}

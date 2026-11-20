@@ -115,6 +115,7 @@ export function ROIEditor({
   onLoadLastScan,
   autoLoadLastScan,
   onAutoLoadLastScanChange,
+  autoLoadLastScanLabel,
   onImageChange,
 }: {
   disabled: boolean;
@@ -138,6 +139,7 @@ export function ROIEditor({
   onLoadLastScan?: (imageUrl?: string | null) => void;
   autoLoadLastScan?: boolean;
   onAutoLoadLastScanChange?: (enabled: boolean) => void;
+  autoLoadLastScanLabel?: string;
   onImageChange?: (imageUrl: string | null) => void;
 }) {
   const dispatch = useAppDispatch();
@@ -1582,10 +1584,10 @@ export function ROIEditor({
       {autoLoadLastScan !== undefined ? (
         <label className="checkbox vacuum-switch app-switch roi-image-autoload" title={t("roi.autoLoadLastScan.help")}>
           <input type="checkbox" role="switch" checked={autoLoadLastScan} disabled={disabled}
-            aria-label={t("roi.autoLoadLastScan")}
+            aria-label={autoLoadLastScanLabel ?? t("roi.autoLoadLastScan")}
             onChange={event => onAutoLoadLastScanChange?.(event.target.checked)} />
           <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-          <span>{t("roi.autoLoadLastScan")}</span>
+          <span>{autoLoadLastScanLabel ?? t("roi.autoLoadLastScan")}</span>
         </label>
       ) : (
         <button
@@ -1602,7 +1604,7 @@ export function ROIEditor({
       )}
       <button
         className="btn"
-        disabled={disabled || (roi.imageKind === "none" && !roi.imageDataUrl)}
+        disabled={disabled || !imageSource}
         onClick={() => {
           if (fileRef.current) fileRef.current.value = "";
           clearLoadedImage();

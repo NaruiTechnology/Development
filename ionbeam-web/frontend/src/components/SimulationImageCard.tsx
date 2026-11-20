@@ -16,6 +16,7 @@ export function SimulationImageCard({
   onLoadLastScan,
   autoLoadLastScan,
   onAutoLoadLastScanChange,
+  autoLoadLastScanLabel,
   onImageChange,
   calibration = false,
   defaultCollapsed,
@@ -28,6 +29,7 @@ export function SimulationImageCard({
   onLoadLastScan?: (imageUrl?: string | null) => void;
   autoLoadLastScan?: boolean;
   onAutoLoadLastScanChange?: (enabled: boolean) => void;
+  autoLoadLastScanLabel?: string;
   onImageChange?: (imageUrl: string | null) => void;
 }) {
   const { t } = useTranslation();
@@ -60,6 +62,7 @@ export function SimulationImageCard({
           onLoadLastScan={onLoadLastScan}
           autoLoadLastScan={autoLoadLastScan}
           onAutoLoadLastScanChange={onAutoLoadLastScanChange}
+          autoLoadLastScanLabel={autoLoadLastScanLabel}
           onImageChange={onImageChange}
         />
       </div>
