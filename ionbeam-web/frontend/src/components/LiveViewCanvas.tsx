@@ -34,16 +34,34 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
   const [deltaSetting,setDeltaSetting]=useLevelSetting("milling-change");
   const setting=mode==="change"?deltaSetting:rawSetting;
   const setSetting=mode==="change"?setDeltaSetting:setRawSetting;
-  const [minimumADC,setMinimumADC]=useState(8),[strength,setStrength]=useState(75);
+  const [strength,setStrength]=useState(75);
   const [band,setBand]=useState<[number,number]>([0,16383]),[bandEnabled,setBandEnabled]=useState(true);
   const [autoEpoch,setAutoEpoch]=useState(0);
-  const minimumWindow=minimumADC*4;
+  const minimumWindow=8*4;
   const rawStats=useMemo(()=>liveStatistics(frame?.pixels??[],frame?.valid??[]),[frame]);
   const changes=useMemo(()=>liveChanges(frame?.pixels??[],frame?.valid??[],frame?.sums,frame?.counts,frame?.previousMeans,frame?.previousValid,frame?.previousCounts),[frame]);
   const changeStats=useMemo(()=>liveStatistics(changes.values,changes.valid,[0,LIVE_FULL_SCALE*2],LIVE_FULL_SCALE*2),[changes]);
   const sampleBand: [number,number]=bandEnabled?[band[0]*4,band[1]*4]:[0,LIVE_FULL_SCALE];
   const selectedStats=useMemo(()=>liveStatistics(frame?.pixels??[],frame?.valid??[],sampleBand),[frame,band[0],band[1],bandEnabled]);
   const stats=mode==="change"?changeStats:rawStats;
+  // Keep the wedge spectrum in sync with the white pixels promoted by the
+  // Change threshold in the LiveView image. Auto levels still use the
+  // unmodified detector statistics so moving the threshold cannot shift them.
+  const spectrumStats=useMemo(()=>{
+    const sourceValues=mode==="change"?changes.values:frame?.pixels??[];
+    const valid=mode==="change"?changes.valid:frame?.valid??[];
+    const values=new Float64Array(sourceValues.length);
+    const fullScale=mode==="change"?LIVE_FULL_SCALE*2:LIVE_FULL_SCALE;
+    let highlighted=0,total=0;
+    for(let i=0;i<sourceValues.length;i++)if(valid[i])
+      {
+        total++;
+        const change=frame?.changePercent[i]??-1;
+        if(change>=0&&change>=threshold){values[i]=fullScale;highlighted++;}
+        else values[i]=sourceValues[i];
+      }
+    return {...liveStatistics(values,valid,[0,fullScale],fullScale),highlighted,total};
+  },[frame,mode,changes,threshold]);
   const target=liveAutoLevels(stats,minimumWindow,mode==="change");
   const context=`${frame?.key}:${shapeKey}:${mode}:${stats.count>0}:${autoEpoch}:${setting.mode}`;
   const [autoLevels,setAutoLevels]=useState<ResolvedLevels>(target);
@@ -62,7 +80,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
   },[target.low,target.high,context]);
   const levels=setting.mode==="auto"?autoLevels:setting;
   const aroundMean=()=>{
-    const mean=rawStats.mean/4,radius=Math.max(minimumADC,rawStats.deviation/4);
+    const mean=rawStats.mean/4,radius=Math.max(8,rawStats.deviation/4);
     setBand([Math.max(0,Math.floor(mean-radius)),Math.min(16383,Math.ceil(mean+radius))]);setBandEnabled(true);
   };
   const coverage=useMemo(()=>frame?.lattice&&frame.projection ? {
@@ -73,7 +91,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
   const display=useMemo(()=>frame&&coverage ? millingDisplaySamples(
     mode==="change"?changes.valid:frame.valid,frame.changePercent,frame.resolution,
     coverage.mask,coverage.resolution,coverage.radius):null,[frame,coverage,mode,changes]);
-  const histogram=stats.histogram;
+  const histogram=spectrumStats.histogram;
   const cx=(x:number)=>worldToCanvasX(x,field,viewport),cy=(y:number)=>worldToCanvasY(y,field,viewport);
   useEffect(()=> {
     const canvas=canvasRef.current,ctx=canvas?.getContext("2d");
@@ -122,11 +140,8 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
         fullScale={mode==="change"?LIVE_FULL_SCALE*2:LIVE_FULL_SCALE} codeOffset={mode==="change"?CHANGE_ZERO:0}
         auto={setting.mode==="auto"} onChange={next=>setSetting({mode:"manual",...next})} onAuto={()=>{setSetting({mode:"auto"});setAutoEpoch(n=>n+1);}}
         disabled={!stats.count||!source}/>
-      <label className="live-contrast-floor" title="Smallest Auto contrast window, in ADC codes. Raise it to suppress noise amplification.">
-        Min window <input type="number" aria-label="Minimum Auto window in ADC codes" min={1} max={1024} value={minimumADC}
-          onChange={e=>{const v=Number(e.target.value);if(Number.isInteger(v)&&v>=1&&v<=1024)setMinimumADC(v);}} /> ADC
-      </label>
       {mode==="change"&&!stats.count&&<small role="status">{frame?.previousMeans?"Waiting for matching pixels":"First pass establishes reference"}</small>}
+      {frame?.pass&&frame.pass>1&&<small role="status">Change threshold highlights · {spectrumStats.highlighted.toLocaleString()} / {spectrumStats.total.toLocaleString()} samples · {threshold}%</small>}
       {mode==="change"&&stats.count>0&&<small>Preview-pixel change · pass {frame?.pass??1}</small>}
       {mode==="change"&&frame?.completedMeans&&<small>{referenceSaved?"Reference saved locally":"Reference retained in session"}</small>}
     </div>,contrastHost)}
@@ -142,7 +157,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
       </div>
       <button type="button" className="btn btn--ghost" disabled={!rawStats.count} onClick={aroundMean}>Around mean</button>
       <label>Brightness <input type="range" min={0} max={100} value={strength} aria-label="LiveView normalization brightness" onChange={e=>setStrength(Number(e.target.value))}/><output>{strength}%</output></label>
-      <button type="button" className="btn btn--ghost" onClick={()=>{setBand([0,16383]);setBandEnabled(true);setStrength(75);setMinimumADC(8);setSetting({mode:"auto"});}}>Reset</button>
+      <button type="button" className="btn btn--ghost" onClick={()=>{setBand([0,16383]);setBandEnabled(true);setStrength(75);setSetting({mode:"auto"});}}>Reset</button>
       <span role="status">{!bandEnabled?"Range brightening off":selectedStats.count?`Mean ${(selectedStats.mean/4).toFixed(1)} ADC · ${selectedStats.count.toLocaleString()} preview pixels`:"No acquired pixels in range"}</span>
     </div>,toolsHost)}
   </>;
