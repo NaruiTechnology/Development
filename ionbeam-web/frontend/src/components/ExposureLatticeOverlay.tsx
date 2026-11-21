@@ -186,6 +186,8 @@ export function ExposureViewCanvasOverlay({ transforms, processingViewport = fal
 export function ExposureLatticeProgress() {
   const { t } = useTranslation();
   const progress = useAppSelector(s => s.exposure.progress);
+  const hasPattern = useAppSelector(s => Object.values(s.processing.instances).some(instance => instance.roi !== null));
+  if (!hasPattern) return null;
   let total = 0, received = 0;
   for (const node of progress) {
     if (!node.exposure) continue;
@@ -207,6 +209,8 @@ export function ExposureLatticeMessage() {
   const { t } = useTranslation();
   const progress = useAppSelector(selectExposurePreview);
   const { error, viewPhase, viewError, viewReceivedSamples, viewReceivedChunks, viewExpectedSamples } = useAppSelector(s => s.exposure);
+  const hasPattern = useAppSelector(s => Object.values(s.processing.instances).some(instance => instance.roi !== null));
+  if (!hasPattern) return null;
   const steps = progress.filter(n => n.exposure);
   const viewing = viewPhase === "queued" || viewPhase === "scanning";
   const node = steps.find(n => n.status === "current") ?? [...steps].reverse().find(n => n.status !== "upcoming") ?? steps[0];

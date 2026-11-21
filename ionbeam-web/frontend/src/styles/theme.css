@@ -8214,9 +8214,9 @@ body {
 #processing-image-panel-grid .image-panel-grid__target--single { border: 0; }
 #processing-image-panel-grid .roi-canvas-wrap { width: 100%; }
 #processing-image-panel-grid .roi-canvas-stage {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  height: 100%;
+  height: var(--processing-canvas-height, max(240px, calc(100dvh - 160px)));
   justify-content: flex-start;
   padding-inline-start: 15px;
   container-type: normal;
@@ -8237,8 +8237,8 @@ body {
 .image-panel-card--processing {
   display: flex;
   flex-direction: column;
-  height: var(--processing-panel-height, max(360px, calc(100dvh - 128px)));
-  max-height: var(--processing-panel-height, calc(100dvh - 24px));
+  height: auto;
+  max-height: none;
   min-height: 0;
   resize: horizontal;
   overflow: auto;
@@ -8250,6 +8250,7 @@ body {
   min-height: 0;
   overflow: hidden;
 }
+.image-panel-card--processing > .card__header { flex: 0 0 auto; }
 .image-panel-card--processing [data-workspace="processing"]:not([hidden]) {
   display: flex;
   flex: 1 1 auto;
@@ -8276,7 +8277,7 @@ body {
 }
 #processing-image-panel-grid .processing-image-panel__content > .roi-canvas-root {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   flex-direction: column;
   min-height: 0;
 }
@@ -8285,7 +8286,9 @@ body {
   flex: 0 0 auto;
   flex-direction: column;
   min-height: 0;
+  overflow: visible;
 }
+.processing-image-panel__messages:empty { display: none; }
 .image-panel-card--processing .processing-scan-status,
 .image-panel-card--processing .exposure-lattice-message {
   flex: 0 0 auto;

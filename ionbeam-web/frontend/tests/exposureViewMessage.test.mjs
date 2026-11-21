@@ -13,12 +13,20 @@ test("one-time View shows a message pane with chunk progress while queued and sc
     const {store} = await vite.ssrLoadModule("/src/store/index.ts");
     const {ExposureLatticeMessage} = await vite.ssrLoadModule("/src/components/ExposureLatticeOverlay.tsx");
     const x = await vite.ssrLoadModule("/src/store/exposureSlice.ts");
+    const processing = await vite.ssrLoadModule("/src/store/processingSlice.ts");
     let r;
     await act(async () => { r = create(React.createElement(Provider, {store}, React.createElement(ExposureLatticeMessage))); });
     const text = () => JSON.stringify(r.toJSON());
     const pane = () => r.root.findAll(n => typeof n.props.className === "string" && n.props.className.includes("exposure-lattice-message--view"));
     assert.equal(pane().length, 0, "no pane while idle");
     await act(async () => { store.dispatch(x.exposureViewChanged({phase: "queued"})); });
+    assert.equal(pane().length, 0, "no message panel before a pattern is drawn");
+    await act(async () => {
+      store.dispatch(processing.fetchProcessingPatterns.fulfilled({patterns:[{
+        key:"box",caption:"Box",model:"SolidBoxModel",roi:"rect",parameters:[],
+      }],lensLookup:null},"message-test"));
+      store.dispatch(processing.createPatternRoi({key:"box",roi:{x_start:10,x_end:20,y_start:10,y_end:20}}));
+    });
     assert.equal(pane().length > 0, true, "queued View is announced");
     await act(async () => { store.dispatch(x.exposureViewChanged({phase: "scanning"})); store.dispatch(x.exposureViewExpectedSamples(1000)); });
     assert.match(text(), /1,000/, "waiting for the first chunk reports the expected samples");
@@ -30,5 +38,8 @@ test("one-time View shows a message pane with chunk progress while queued and sc
     assert.equal(pane().length, 0, "completed View is drawn on the canvas, no pane");
     await act(async () => { store.dispatch(x.exposureViewChanged({phase: "error", error: "boom"})); });
     assert.match(text(), /boom/);
+    await act(async () => { store.dispatch(processing.clearPatternRoi(store.getState().processing.activeKey)); });
+    assert.equal(r.toJSON(), null, "clearing the last drawn pattern hides all messages");
+    await act(async () => { r.unmount(); });
   } finally { await vite.close(); }
 });

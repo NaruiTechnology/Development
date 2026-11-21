@@ -612,14 +612,22 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     const card = imagePanelCardRef.current;
     if (!patternsLayout || !card) return;
     const fitHeight = () => {
-      // Use document position so scrolling the controls cannot change the
-      // canvas height. Leave room for the bottom edge and resize handle.
-      const top = card.getBoundingClientRect().top + window.scrollY;
-      card.style.setProperty("--processing-panel-height", `${Math.max(360, window.innerHeight - top - 16)}px`);
+      const stage = card.querySelector<HTMLElement>(".roi-canvas-stage");
+      if (!stage) return;
+      // Size the canvas itself to the viewport bottom. Status messages extend
+      // the card below it and never take height away from the image.
+      const top = stage.getBoundingClientRect().top + window.scrollY;
+      card.style.setProperty("--processing-canvas-height", `${Math.max(240, window.innerHeight - top - 4)}px`);
     };
     fitHeight();
+    const header = card.querySelector(".card__header");
+    const resize = new ResizeObserver(fitHeight);
+    if (header) resize.observe(header);
     window.addEventListener("resize", fitHeight);
-    return () => window.removeEventListener("resize", fitHeight);
+    return () => {
+      resize.disconnect();
+      window.removeEventListener("resize", fitHeight);
+    };
   }, [patternsLayout, route]);
 
   useLayoutEffect(() => {
