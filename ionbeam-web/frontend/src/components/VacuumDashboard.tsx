@@ -9,7 +9,7 @@ import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
-import { vacuumPumpPowerState, vacuumReadingsAreFresh, vacuumStatusForDisplay } from "../lib/vacuumPolicy";
+import { vacuumPumpPowerState, vacuumStatusForDisplay } from "../lib/vacuumPolicy";
 import type { VacuumPumpState, VacuumSystemStatus } from "../types/api";
 
 const MECHANICAL_PUMP = "MechanicalVacuumPump";
@@ -35,17 +35,13 @@ const GROUP_TRANSLATION_KEYS: Record<string, TranslationKey> = {
   UltraHighVacuum: "vacuum.group.uh",
 };
 
-export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivityChange, onClose }: { open: boolean; minimized: boolean; onMinimizedChange: (minimized: boolean) => void; onActivityChange: (active: boolean) => void; onClose: () => void }) {
+export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivityChange, onStatusRefreshed, onClose }: { open: boolean; minimized: boolean; onMinimizedChange: (minimized: boolean) => void; onActivityChange: (active: boolean) => void; onStatusRefreshed: (status: VacuumSystemStatus) => void; onClose: () => void }) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<VacuumSystemStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [windowOffset, setWindowOffset] = useState({ x: 0, y: 0 });
-  const mutationRef = useRef(false);
-  const refreshInFlightRef = useRef(false);
-  const lastSuccessAtRef = useRef<number | null>(null);
-  const statusVersionRef = useRef(0);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -115,66 +111,35 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     }
   }
 
-  const refresh = useCallback(async (signal?: AbortSignal) => {
-    if (mutationRef.current || refreshInFlightRef.current) return;
-    refreshInFlightRef.current = true;
-    const statusVersion = statusVersionRef.current;
+  const retryConnection = useCallback(async () => {
+    setPending("acquire");
+    setError(null);
+    setErrorDetails(null);
     try {
-      const response = await fetch(apiUrl("/api/vacuum"), {
-        cache: "no-store", headers: scanAuthHeaders(),
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),
+      const response = await fetch(apiUrl("/api/vacuum/initialize"), {
+        method: "POST",
+        headers: scanAuthHeaders(),
+        signal: AbortSignal.timeout(5000),
       });
-      if (!response.ok) {
-        // Show the SBC's own reason (e.g. "vacuum controller is disabled").
-        let detail = "";
-        try {
-          const body = (await response.json()) as { detail?: unknown; error?: unknown };
-          detail = String(body?.detail ?? body?.error ?? "");
-        } catch {
-          // Not JSON: fall back to the status line.
-        }
-        throw new Error(detail
-          ? `${detail} (HTTP ${response.status})`
-          : `${response.status} ${response.statusText}`);
-      }
-      const refreshed = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
-      if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
+      const refreshed = await readJsonResponse<VacuumSystemStatus>(response, "vacuum initialization");
       setStatus(vacuumStatusForDisplay(refreshed));
-      lastSuccessAtRef.current = Date.now();
-      setErrorDetails(null);
-      setError(!vacuumReadingsAreFresh(refreshed.updated_at) && !refreshed.last_error
-        ? "Vacuum readings are unavailable or stale" : null);
+      onStatusRefreshed(refreshed);
     } catch (cause) {
-      if (cause instanceof DOMException && cause.name === "AbortError") return;
-      if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
-      // Keep the last known readings during a brief SBC/network interruption.
-      // Once they are more than 10 seconds old, return to the reconnect view.
-      if (lastSuccessAtRef.current === null || Date.now() - lastSuccessAtRef.current > 10_000) {
-        setStatus(null);
-      }
       reportError(cause);
     } finally {
-      refreshInFlightRef.current = false;
+      setPending(null);
     }
-  }, [reportError]);
+  }, [onStatusRefreshed, reportError]);
 
   useEffect(() => {
     if (!open) return;
     setWindowOffset({ x: 0, y: 0 });
-    const pollController = new AbortController();
-    lastSuccessAtRef.current = null;
     setStatus(null);
     setError(null);
     setErrorDetails(null);
     setPending(null);
-    void refresh(pollController.signal);
-    const timer = window.setInterval(() => void refresh(pollController.signal), 1000);
-
-    return () => {
-      pollController.abort();
-      window.clearInterval(timer);
-    };
-  }, [open, refresh]);
+    void retryConnection();
+  }, [open, retryConnection]);
 
   const closeDashboard = useCallback(() => onClose(), [onClose]);
 
@@ -186,54 +151,6 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeDashboard, open]);
-
-  async function updatePower(name: string, power: boolean) {
-    mutationRef.current = true;
-    statusVersionRef.current += 1;
-    setPending(name);
-    setError(null);
-    setErrorDetails(null);
-    try {
-      const response = await fetch(apiUrl(`/api/vacuum/pumps/${encodeURIComponent(name)}/power`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
-        body: JSON.stringify({ power }),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null) as { detail?: unknown; error?: unknown } | null;
-        const detail = String(body?.error ?? body?.detail ?? "").trim();
-        throw new Error(detail || `${response.status} ${response.statusText}`);
-      }
-      setStatus(vacuumStatusForDisplay(await readJsonResponse<VacuumSystemStatus>(response, "vacuum power")));
-    } catch (cause) {
-      reportError(cause);
-    } finally {
-      mutationRef.current = false;
-      setPending(null);
-      void refresh();
-    }
-  }
-
-  async function resumeController() {
-    mutationRef.current = true;
-    statusVersionRef.current += 1;
-    setPending("resume");
-    setError(null);
-    setErrorDetails(null);
-    try {
-      const response = await fetch(apiUrl("/api/vacuum/resume"), {
-        method: "POST", headers: scanAuthHeaders(), signal: AbortSignal.timeout(10000),
-      });
-      if (!response.ok) throw new Error(await response.text());
-      setStatus(vacuumStatusForDisplay(await readJsonResponse<VacuumSystemStatus>(response, "vacuum resume")));
-    } catch (cause) {
-      reportError(cause);
-    } finally {
-      mutationRef.current = false;
-      setPending(null);
-      void refresh();
-    }
-  }
 
   if (!open) return null;
 
@@ -294,11 +211,10 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
                 className="vacuum-power-button"
                 data-state={powerState}
                 data-locked={mechanical ? "true" : "false"}
-                disabled={mechanical || !status?.running || !status.connected || pending !== null}
+                disabled
                 aria-pressed={pump.power}
                 aria-label={`${pumpLabel} ${t("vacuum.power")}`}
                 title={mechanical ? t("vacuum.mechanicalAlwaysOn") : `${t("vacuum.power")} ${pump.power ? "off" : "on"}`}
-                onClick={() => void updatePower(pump.name, !pump.power)}
               >
                 <svg className="vacuum-power-button__icon" viewBox="0 0 24 24" aria-hidden>
                   <path d="M12 3v8" />
@@ -334,6 +250,9 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
         <><div className="modal__body vacuum-dashboard__body">
           {error && <div className="vacuum-dashboard__error" role="alert">
             <div>{error}</div>
+            <button type="button" className="button" disabled={pending !== null} onClick={() => void retryConnection()}>
+              {t("vacuum.connection.retry")}
+            </button>
             {errorDetails && <details className="vacuum-dashboard__error-details">
               <summary>{t("vacuum.errorDetails")}</summary>
               <code>{errorDetails}</code>
@@ -374,7 +293,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
         <div className="vacuum-dashboard__footer">
           {status && <span>{status.cascade_stopped ? t("vacuum.cascadeStopped") : t("vacuum.cascadeRunning")}</span>}
           {status?.running && status.cascade_stopped && (
-            <button type="button" className="button" disabled={pending !== null} onClick={() => void resumeController()}>
+            <button type="button" className="button" disabled>
               {t("scan.resume")}
             </button>
           )}

@@ -208,11 +208,17 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     setVacuumControllerBusy(active);
   }, [imageWorkspace]);
   const previousVacuumWindowState = useRef<VacuumWindowState | null>(null);
+  const handleVacuumStatusRefreshed = useCallback((status: VacuumSystemStatus) => {
+    const invalid = shouldShowVacuumControllerError(status, null, null);
+    previousVacuumWindowState.current = vacuumWindowState(status);
+    setIsVacuumSystemReady(vacuumIsReadyForControls(status));
+    setVacuumControllerError(invalid);
+    setHighVoltagePower(!invalid && status.high_voltage_power === true);
+  }, []);
   const serviceStatus = useAppSelector((s) => s.status.service);
   const vacuumEnabled = serviceStatus?.vacuum_enabled === true;
   const [isVacuumSystemReady, setIsVacuumSystemReady] = useState(false);
   const [highVoltagePower, setHighVoltagePower] = useState(false);
-  const [highVoltagePending, setHighVoltagePending] = useState(false);
   const [highVoltageError, setHighVoltageError] = useState<string | null>(null);
   const storedKind = useAppSelector((s) => s.scan.kind);
   const [scanSubTab, setScanSubTab] = useWorkspaceState<ScanSubTab>(imageWorkspace, "vector");
@@ -526,47 +532,11 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
     }
 
     void refreshVacuumReadiness();
-    const timer = window.setInterval(() => void refreshVacuumReadiness(), 1000);
     return () => {
       cancelled = true;
       controller.abort();
-      window.clearInterval(timer);
     };
   }, [vacuumEnabled]);
-
-  const toggleHighVoltage = useCallback(async () => {
-    if (!isVacuumSystemReady || highVoltagePending) return;
-    setHighVoltagePending(true);
-    setHighVoltageError(null);
-    try {
-      const response = await fetch(apiUrl("/api/vacuum/high-voltage/power"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
-        body: JSON.stringify({ power: !highVoltagePower }),
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null) as {
-          detail?: unknown;
-          error?: unknown;
-        } | null;
-        if (response.status === 401) {
-          window.localStorage.setItem(LAST_ADMIN_LOGIN_STORAGE_KEY, signedInUser?.login_name ?? "");
-          window.localStorage.removeItem("ionbeam:adminUser");
-          setSignedInUser(null);
-          throw new Error(t("auth.sessionExpired"));
-        }
-        const detail = String(payload?.error ?? payload?.detail ?? "").trim();
-        throw new Error(detail || `${response.status} ${response.statusText}`);
-      }
-      const status = await readJsonResponse<VacuumSystemStatus>(response, "high-voltage power");
-      setIsVacuumSystemReady(vacuumIsReadyForControls(status));
-      setHighVoltagePower(status.high_voltage_power === true);
-    } catch (cause) {
-      setHighVoltageError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setHighVoltagePending(false);
-    }
-  }, [highVoltagePending, highVoltagePower, isVacuumSystemReady, signedInUser?.login_name, t, imageWorkspace]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1766,10 +1736,10 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
         }}
         sampleStageControllerBusy={sampleStageControllerBusy}
         highVoltagePower={highVoltagePower}
-        highVoltageReady={vacuumEnabled && isVacuumSystemReady}
-        highVoltagePending={highVoltagePending}
+        highVoltageReady={false}
+        highVoltagePending={false}
         highVoltageError={highVoltageError}
-        onToggleHighVoltage={() => void toggleHighVoltage()}
+        onToggleHighVoltage={() => {}}
         scanLocked={scanActive || adcActive}
         adcTestActive={adcActive}
       />
@@ -2294,6 +2264,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
           open={route === "vacuum"}
           minimized={vacuumMinimized}
           onActivityChange={handleVacuumActivityChange}
+          onStatusRefreshed={handleVacuumStatusRefreshed}
           onMinimizedChange={setVacuumMinimized}
           onClose={() => {
             setVacuumMinimized(true);

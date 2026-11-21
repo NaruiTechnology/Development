@@ -79,43 +79,74 @@ export function readVacuumEnabled(configPath: string): boolean {
  */
 type SbcStatusProbe = (url: string, token: string | null) => Promise<boolean | null>;
 
-let sbcCache: { url: string; at: number; value: boolean | null } | null = null;
-const SBC_STATUS_CACHE_MS = 2_000;
+type SbcInitializationResult = { url: string; value: boolean | null; status: Record<string, unknown> | null } | null;
+let sbcCache: SbcInitializationResult = null;
+let sbcInitialization: Promise<SbcInitializationResult> | null = null;
 
-/** The SBC's own vacuum_enabled, or null when it cannot be read. */
+/** Whether the SBC controller is available, or null when reachability is unknown. */
 export const probeSbcVacuumEnabled: SbcStatusProbe = async (url, token) => {
   try {
-    const response = await fetch(`${url.replace(/\/+$/, "")}/status`, {
+    const response = await fetch(`${url.replace(/\/+$/, "")}/vacuum`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       signal: AbortSignal.timeout(1_500),
     });
-    if (!response.ok) return null;
-    const status = (await response.json()) as { vacuum_enabled?: unknown };
-    return typeof status?.vacuum_enabled === "boolean" ? status.vacuum_enabled : null;
+    if (response.status === 404) return false;
+    return response.ok;
   } catch {
     return null;
   }
 };
 
+/** Read SBC state once for this host process. Runtime status refresh belongs to the standalone SBC. */
+export function initializeSbcVacuum(url: string, token: string | null): Promise<SbcInitializationResult> {
+  if (sbcInitialization) return sbcInitialization;
+  sbcInitialization = (async () => {
+    let value: boolean | null = null;
+    let status: Record<string, unknown> | null = null;
+    try {
+      const response = await fetch(`${url.replace(/\/+$/, "")}/vacuum`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        signal: AbortSignal.timeout(1_500),
+      });
+      if (response.ok) {
+        const body = await response.json() as Record<string, unknown>;
+        status = body;
+        value = true;
+      } else if (response.status === 404) {
+        value = false;
+      }
+    } catch { /* The initialization result records SBC unavailable. */ }
+    sbcCache = { url, value, status };
+    return sbcCache;
+  })();
+  return sbcInitialization;
+}
+
+export async function readInitialSbcVacuumStatus(url: string, token: string | null): Promise<Record<string, unknown> | null> {
+  return (await initializeSbcVacuum(url, token))?.status ?? null;
+}
+
+/** Re-read the status snapshot only when the operator explicitly requests it. */
+export async function retrySbcVacuumInitialization(url: string, token: string | null): Promise<SbcInitializationResult> {
+  if (sbcInitialization) await sbcInitialization;
+  sbcCache = null;
+  sbcInitialization = null;
+  return initializeSbcVacuum(url, token);
+}
+
 export async function readEffectiveVacuumEnabled(
   configPath: string,
   sbcUrl: string,
   token: string | null,
-  probe: SbcStatusProbe = probeSbcVacuumEnabled,
+  _probe: SbcStatusProbe = probeSbcVacuumEnabled,
 ): Promise<boolean> {
   if (!readVacuumEnabled(configPath)) return false;
-  const now = Date.now();
-  let sbcEnabled: boolean | null;
-  if (sbcCache && sbcCache.url === sbcUrl && now - sbcCache.at < SBC_STATUS_CACHE_MS) {
-    sbcEnabled = sbcCache.value;
-  } else {
-    sbcEnabled = await probe(sbcUrl, token);
-    sbcCache = { url: sbcUrl, at: now, value: sbcEnabled };
-  }
-  return sbcEnabled !== false;
+  const initialized = await initializeSbcVacuum(sbcUrl, token);
+  return initialized?.value !== false;
 }
 
 /** Tests only. */
 export function resetSbcStatusCache(): void {
   sbcCache = null;
+  sbcInitialization = null;
 }

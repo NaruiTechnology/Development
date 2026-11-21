@@ -47,6 +47,12 @@ class VacuumAcquireRequest(BaseModel):
     expected_channels: dict[str, float] = Field(default_factory=dict)
 
 
+class VacuumExposureLockRequest(BaseModel):
+    active: bool
+    owner: str = Field(min_length=1, max_length=128)
+    lease_seconds: float = Field(default=8.0, ge=3.0, le=30.0)
+
+
 class VacuumPumpState(BaseModel):
     name: str
     power: bool

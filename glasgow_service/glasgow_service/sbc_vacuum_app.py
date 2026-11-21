@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
@@ -19,6 +22,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from .execution_authority import AuthorityDenied, remote_authority_from_environment
 from .models import (
     VacuumAcquireRequest,
+    VacuumExposureLockRequest,
     VacuumPowerRequest,
     VacuumSimulationRequest,
     VacuumSystemStatus,
@@ -32,6 +36,54 @@ from .vacuum import (
 from .sd_notify import notify, watchdog_interval
 from .vacuum_health import sbc_controller_is_ready, vacuum_service_problems
 
+
+def _maintenance_lock_path() -> Path | None:
+    value = os.environ.get("SBC_EXPOSURE_LOCK_STATE", "").strip()
+    return Path(value) if value else None
+
+
+def _read_maintenance_lock() -> dict[str, float | str | None]:
+    empty: dict[str, float | str | None] = {"owner": None, "expires_at": 0.0}
+    path = _maintenance_lock_path()
+    if path is None:
+        return empty
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        owner = saved.get("owner")
+        expires_at = float(saved.get("expires_at", 0))
+        if isinstance(owner, str) and owner.startswith("maintenance-") and expires_at > time.time():
+            return {"owner": owner, "expires_at": expires_at}
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    _clear_maintenance_lock()
+    return empty
+
+
+def _write_maintenance_lock(owner: str, expires_at: float) -> None:
+    path = _maintenance_lock_path()
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(json.dumps({"owner": owner, "expires_at": expires_at}), encoding="utf-8")
+        temporary.chmod(0o600)
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _clear_maintenance_lock() -> None:
+    path = _maintenance_lock_path()
+    if path is not None:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
 log = logging.getLogger("glasgow_service.sbc_vacuum_app")
 
 #: A control-loop iteration older than this withholds the watchdog ping.
@@ -42,6 +94,8 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
     holder: dict[str, VacuumController] = {}
     activation = {"enabled": False}
     lock = asyncio.Lock()
+    exposure_lock: dict[str, float | str | None] = {"owner": None, "expires_at": 0.0}
+    maintenance_lock = _read_maintenance_lock()
     bearer = HTTPBearer(auto_error=False)
 
     def require_sbc_token(
@@ -162,7 +216,22 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         except (AuthorityDenied, ValueError) as exc:
             raise HTTPException(409, str(exc)) from exc
 
-    mutation_dependencies = [Depends(require_sbc_token), Depends(execution_permit)]
+    async def protect_exposure_mutation():
+        async with lock:
+            now = asyncio.get_running_loop().time()
+            owner = exposure_lock["owner"] if now < float(exposure_lock["expires_at"] or 0) else None
+            if owner is None and maintenance_lock["owner"] and time.time() < float(maintenance_lock["expires_at"] or 0):
+                owner = maintenance_lock["owner"]
+            if owner is not None:
+                raise HTTPException(409, "vacuum controls are locked while pattern exposure is active")
+            yield
+
+    async def serialize_mutation():
+        async with lock:
+            yield
+
+    mutation_dependencies = [Depends(require_sbc_token), Depends(execution_permit), Depends(protect_exposure_mutation)]
+    emergency_mutation_dependencies = [Depends(require_sbc_token), Depends(execution_permit), Depends(serialize_mutation)]
 
     @app.get("/status")
     async def service_status() -> dict[str, object]:
@@ -249,26 +318,54 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
     async def vacuum_status():
         return controller().status()
 
+    @app.post("/vacuum/exposure-lock", dependencies=[Depends(require_sbc_token), Depends(execution_permit)])
+    async def set_exposure_lock(req: VacuumExposureLockRequest):
+        """Lease the vacuum controls for an active pattern exposure."""
+        now = asyncio.get_running_loop().time()
+        wall_now = time.time()
+        async with lock:
+            current_owner = exposure_lock["owner"] if float(exposure_lock["expires_at"] or 0) > now else None
+            maintenance_owner = maintenance_lock["owner"]
+            if not maintenance_owner or float(maintenance_lock["expires_at"] or 0) <= wall_now:
+                maintenance_lock.update(owner=None, expires_at=0.0)
+                _clear_maintenance_lock()
+                maintenance_owner = None
+            if current_owner is None:
+                current_owner = maintenance_owner
+            if req.active:
+                if current_owner is not None and current_owner != req.owner:
+                    raise HTTPException(409, "another pattern exposure currently owns the vacuum controls")
+                expiry = now + req.lease_seconds
+                exposure_lock.update(owner=req.owner, expires_at=expiry)
+                if req.owner.startswith("maintenance-"):
+                    maintenance_lock.update(owner=req.owner, expires_at=wall_now + req.lease_seconds)
+                    _write_maintenance_lock(req.owner, wall_now + req.lease_seconds)
+                return {"active": True, "owner": req.owner, "lease_seconds": req.lease_seconds}
+            if exposure_lock["owner"] == req.owner:
+                exposure_lock.update(owner=None, expires_at=0.0)
+            if maintenance_lock["owner"] == req.owner:
+                maintenance_lock.update(owner=None, expires_at=0.0)
+                _clear_maintenance_lock()
+            return {"active": False, "owner": None, "lease_seconds": 0}
+
     @app.post("/vacuum/acquire", response_model=VacuumSystemStatus,
               dependencies=mutation_dependencies)
     async def acquire(req: VacuumAcquireRequest | None = None):
         target = controller()
-        async with lock:
-            try:
-                if req is not None:
-                    target.configure_expected_channels(req.expected_channels)
-                await target.start()
-            except AuthorityDenied as exc:
-                raise HTTPException(409, str(exc)) from exc
-            except (ValueError, RuntimeError) as exc:
-                raise HTTPException(503, str(exc)) from exc
+        try:
+            if req is not None:
+                target.configure_expected_channels(req.expected_channels)
+            await target.start()
+        except AuthorityDenied as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except (ValueError, RuntimeError) as exc:
+            raise HTTPException(503, str(exc)) from exc
         return target.status()
 
     @app.post("/vacuum/release", response_model=VacuumSystemStatus,
               dependencies=mutation_dependencies)
     async def release():
-        async with lock:
-            await controller().close()
+        await controller().close()
         return controller().status()
 
     @app.post("/vacuum/pumps/{name}/power", response_model=VacuumSystemStatus,
@@ -321,7 +418,7 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         return target.status()
 
     @app.post("/vacuum/stop", response_model=VacuumSystemStatus,
-              dependencies=mutation_dependencies)
+              dependencies=emergency_mutation_dependencies)
     async def stop():
         try:
             await controller().stop_non_mechanical()

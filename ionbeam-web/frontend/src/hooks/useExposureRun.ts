@@ -322,6 +322,7 @@ export function useExposureRun() {
 
   async function start() {
     if (running.current) return;
+    const recoverLiveView = store.getState().exposure.phase === "error";
     const release = claimWorkspaceRun(workspace, "exposure");
     if (!release) return;
     running.current = true; cancelled.current = false; pendingStop.current = null; stopError.current = null;
@@ -346,7 +347,36 @@ export function useExposureRun() {
       const selected = snapshot.processing.activeKey;
       const patterns = milling ? {...snapshot.processing, instances: Object.fromEntries(Object.entries(snapshot.processing.instances).map(([key,instance]) => [key,{...instance,enabled:key===selected && instance.enabled && instance.roi!==null}]))} : snapshot.processing;
       const plannedEntries = prepareExposureSequence(patterns, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
-      if (milling && plannedEntries[0]?.node.exposure) dispatch(resetMillingFrame({resolution:millingPreviewResolution(snapshot.scan),key:plannedEntries[0].node.id,...millingPreviewGeometry(plannedEntries[0].request.lattice!,snapshot.scan.roi),referenceKey:millingReference(plannedEntries[0].key,plannedEntries[0].request,{x:snapshot.scan.roi.x_origin,xEnd:snapshot.scan.roi.x_end,y:snapshot.scan.roi.y_origin,yEnd:snapshot.scan.roi.y_end,geometry:snapshot.scan.roi.scanGeometry,simulation:!scansUseHardware(snapshot.status.defaults?.is_production,snapshot.status.sessionSimulation),adc:snapshot.status.defaults?.adc,equipment:snapshot.processing.recipeEquipmentId,resolution:millingPreviewResolution(snapshot.scan)})}));
+      const millingConfig = new Map<string, {geometry: ReturnType<typeof millingPreviewGeometry>; referenceKey:string; aggregate:boolean}>();
+      if (milling) {
+        const field={x:snapshot.scan.roi.x_origin,xEnd:snapshot.scan.roi.x_end,y:snapshot.scan.roi.y_origin,yEnd:snapshot.scan.roi.y_end,
+          geometry:snapshot.scan.roi.scanGeometry,simulation:!scansUseHardware(snapshot.status.defaults?.is_production,snapshot.status.sessionSimulation),
+          adc:snapshot.status.defaults?.adc,equipment:snapshot.processing.recipeEquipmentId,resolution:millingPreviewResolution(snapshot.scan)};
+        for(const entry of plannedEntries) {
+          if(!entry.node.exposure||!entry.request.lattice)continue;
+          const siblings=plannedEntries.filter(candidate=>candidate.key===entry.key&&candidate.node.exposure?.model==="StairCutModel");
+          const aggregate=entry.node.exposure.model==="StairCutModel";
+          const ownGeometry=millingPreviewGeometry(entry.request.lattice,snapshot.scan.roi);
+          let geometry=ownGeometry;
+          let referenceKey=millingReference(entry.key,entry.request,field);
+          if(aggregate) {
+            const allGeometries=siblings.map(candidate=>millingPreviewGeometry(candidate.request.lattice!,snapshot.scan.roi));
+            const bounds={x_start:Math.min(...allGeometries.map(item=>item.bounds.x_start)),x_end:Math.max(...allGeometries.map(item=>item.bounds.x_end)),
+              y_start:Math.min(...allGeometries.map(item=>item.bounds.y_start)),y_end:Math.max(...allGeometries.map(item=>item.bounds.y_end))};
+            geometry={...ownGeometry,bounds};
+            referenceKey=JSON.stringify(["milling-stair-preview-v1",entry.key,siblings.map(candidate=>{
+              const lattice=candidate.request.lattice!;return [lattice.shape,lattice.pitch_x,lattice.pitch_y,lattice.axis,lattice.dwell];
+            }),field]);
+          }
+          millingConfig.set(entry.node.id,{geometry,referenceKey,aggregate});
+        }
+      }
+      const resetMillingForEntry=(entry:typeof plannedEntries[number],preserveDisplay:boolean)=>{
+        const config=millingConfig.get(entry.node.id);if(!config||!entry.request.lattice)return;
+        dispatch(resetMillingFrame({resolution:millingPreviewResolution(snapshot.scan),key:entry.node.id,...config.geometry,
+          referenceKey:config.referenceKey,aggregate:config.aggregate,preserveDisplay,restoreDisplay:config.aggregate}));
+      };
+      if (milling && plannedEntries[0]?.node.exposure) resetMillingForEntry(plannedEntries[0],recoverLiveView);
       const totalSpots = totalExposureSpots(plannedEntries);
       if (totalSpots > MAX_EXPOSURE_SPOTS)
         throw new Error(t("processing.exposure.totalLimit", {count: totalSpots.toLocaleString(), limit: MAX_EXPOSURE_SPOTS.toLocaleString()}));
@@ -368,7 +398,7 @@ export function useExposureRun() {
           : [{...run.request.lattice!, passes: 1}])[Symbol.iterator]()}));
         if (milling) for(const {run} of queues) {
           if(store.getState().image.millingFrame?.key!==run.entry.node.id && run.entry.node.exposure)
-            dispatch(resetMillingFrame({resolution:millingPreviewResolution(snapshot.scan),key:run.entry.node.id,...millingPreviewGeometry(run.request.lattice!,snapshot.scan.roi),referenceKey:millingReference(run.entry.key,run.request,{x:snapshot.scan.roi.x_origin,xEnd:snapshot.scan.roi.x_end,y:snapshot.scan.roi.y_origin,yEnd:snapshot.scan.roi.y_end,geometry:snapshot.scan.roi.scanGeometry,simulation:!scansUseHardware(snapshot.status.defaults?.is_production,snapshot.status.sessionSimulation),adc:snapshot.status.defaults?.adc,equipment:snapshot.processing.recipeEquipmentId,resolution:millingPreviewResolution(snapshot.scan)})}));
+            resetMillingForEntry(run.entry,true);
           dispatch(beginMillingPass(run.entry.node.id));
         }
         const skipped = new Set<string>();
@@ -377,7 +407,7 @@ export function useExposureRun() {
           const next = queue.requests.next();
           if (next.done) return false;
           if (snapshot.exposure.mode === "milling" && store.getState().image.millingFrame?.key !== queue.run.entry.node.id && queue.run.entry.node.exposure)
-            dispatch(resetMillingFrame({resolution:millingPreviewResolution(snapshot.scan),key:queue.run.entry.node.id,...millingPreviewGeometry(queue.run.request.lattice!,snapshot.scan.roi),referenceKey:millingReference(queue.run.entry.key,queue.run.request,{x:snapshot.scan.roi.x_origin,xEnd:snapshot.scan.roi.x_end,y:snapshot.scan.roi.y_origin,yEnd:snapshot.scan.roi.y_end,geometry:snapshot.scan.roi.scanGeometry,simulation:!scansUseHardware(snapshot.status.defaults?.is_production,snapshot.status.sessionSimulation),adc:snapshot.status.defaults?.adc,equipment:snapshot.processing.recipeEquipmentId,resolution:millingPreviewResolution(snapshot.scan)})}));
+            resetMillingForEntry(queue.run.entry,true);
           dispatch(exposureStepStarted(queue.run.entry.node.id));
           let sourceRequest: VectorRequest = {...queue.run.request,
             ...(snapshot.status.sessionSimulation ? {simulation:snapshot.status.sessionSimulation} : {})};

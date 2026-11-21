@@ -26,7 +26,10 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
   const active=patterns.instances[patterns.activeKey??""]?.roi;
   const shapeKey=JSON.stringify([patterns.activeKey,active]);
   useEffect(()=>{setOffset(null);},[shapeKey]);
-  const source=frame?.bounds ?? (active?patternBounds(active):null);
+  // Stair cut runs each recipe step as a smaller lattice. Keep the LiveView
+  // window anchored to the drawn pattern ROI; frame.bounds is only the area
+  // sampled for the current step and changes as the exposure advances.
+  const source=active?patternBounds(active):(frame?.bounds ?? null);
   const field=imageWorldBounds(roi),viewport=viewportBounds(roi);
   const sizing=source && active && "cx" in active ? circularLiveViewBounds(source,field,viewport,zoom) : source;
   const placement=offset ?? (sizing?defaultLiveViewOffset(sizing,zoom,field):{x:0,y:0});
@@ -89,7 +92,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
   };
   const coverage=useMemo(()=>frame?.lattice&&frame.projection ? {
     resolution:Math.min(frame.resolution,640),
-    mask:millingPreviewMask(frame.lattice,frame.projection,frame.bounds,Math.min(frame.resolution,640)),
+    mask:frame.aggregate?new Uint8Array(Math.min(frame.resolution,640)**2).fill(1):millingPreviewMask(frame.lattice,frame.projection,frame.bounds,Math.min(frame.resolution,640)),
     radius:millingPreviewRadius(frame.lattice,frame.projection,frame.bounds,Math.min(frame.resolution,640)),
   }:null,[frame?.lattice,frame?.projection,frame?.bounds,frame?.resolution]);
   const display=useMemo(()=>frame&&coverage ? millingDisplaySamples(

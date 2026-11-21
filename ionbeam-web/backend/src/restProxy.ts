@@ -9,24 +9,23 @@
 import { Router } from "express";
 import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import { config } from "./config";
-import { readEffectiveVacuumEnabled } from "./vacuumConfig";
+import { initializeSbcVacuum, readEffectiveVacuumEnabled, readInitialSbcVacuumStatus, retrySbcVacuumInitialization } from "./vacuumConfig";
 
 /** Host setting AND the SBC's own report (see vacuumConfig.ts). */
 const effectiveVacuumEnabled = () => readEffectiveVacuumEnabled(
   config.vacuumConfigPath, config.vacuumControllerUrl, config.sbcVacuumToken);
+
+// Establish availability once when the host backend starts. No runtime poll or
+// control request is sent to the standalone SBC after this initialization.
+void initializeSbcVacuum(config.vacuumControllerUrl, config.sbcVacuumToken);
 
 export function buildRestProxy(): Router {
   const router = Router();
   type RoutedRequest = {
     url?: string;
     originalUrl?: string;
-    vacuumProxyTarget?: boolean;
     sampleStageProxyTarget?: boolean;
   };
-  const isVacuumRequest = (req: RoutedRequest): boolean =>
-    req.vacuumProxyTarget === true ||
-    req.url?.startsWith("/vacuum") === true ||
-    req.originalUrl?.startsWith("/api/vacuum") === true;
   const isSampleStageRequest = (req: RoutedRequest): boolean =>
     req.sampleStageProxyTarget === true ||
     req.url?.startsWith("/stage") === true ||
@@ -76,13 +75,32 @@ export function buildRestProxy(): Router {
     }
   });
 
-  router.use("/vacuum", async (req, res, next) => {
-    if (await effectiveVacuumEnabled()) {
-      (req as RoutedRequest).vacuumProxyTarget = true;
-      next();
+  router.get("/vacuum", async (_req, res) => {
+    if (!await effectiveVacuumEnabled()) {
+      res.status(404).json({ detail: "vacuum controller is unavailable or disabled" });
       return;
     }
-    res.status(404).json({ detail: "vacuum controller is disabled" });
+    const status = await readInitialSbcVacuumStatus(config.vacuumControllerUrl, config.sbcVacuumToken);
+    if (!status) {
+      res.status(503).json({ detail: "SBC vacuum controller was unavailable during host initialization" });
+      return;
+    }
+    res.json(status);
+  });
+  router.post("/vacuum/initialize", async (_req, res) => {
+    if (!await effectiveVacuumEnabled()) {
+      res.status(404).json({ detail: "vacuum controller is unavailable or disabled" });
+      return;
+    }
+    const initialized = await retrySbcVacuumInitialization(config.vacuumControllerUrl, config.sbcVacuumToken);
+    if (!initialized?.status) {
+      res.status(initialized?.value === false ? 404 : 503).json({ detail: "SBC vacuum controller is still unavailable" });
+      return;
+    }
+    res.json(initialized.status);
+  });
+  router.use("/vacuum", (_req, res) => {
+    res.status(409).json({ detail: "SBC vacuum control is standalone; runtime commands are disabled in this app" });
   });
 
   router.use("/stage", (req, _res, next) => {
@@ -92,22 +110,16 @@ export function buildRestProxy(): Router {
 
   const proxy = createProxyMiddleware({
     target: config.proxyTargetHttp,
-    router: (req) => isVacuumRequest(req)
-      ? config.vacuumControllerUrl
-      : isSampleStageRequest(req)
-        ? config.sampleStageControllerUrl
-        : config.proxyTargetHttp,
+    router: (req) => isSampleStageRequest(req)
+      ? config.sampleStageControllerUrl
+      : config.proxyTargetHttp,
     changeOrigin: true,
     pathRewrite: { "^/api": "" },
     selfHandleResponse: true,
     on: {
       // Inject the bearer token if configured. Browsers must not see it.
       proxyReq: (proxyReq, req) => {
-        // The SBC vacuum API has its own token; everything else uses the
-        // glasgow_service token.
-        const token = isVacuumRequest(req) && config.sbcVacuumToken
-          ? config.sbcVacuumToken
-          : config.glasgowToken;
+        const token = config.glasgowToken;
         if (token) {
           proxyReq.setHeader("Authorization", `Bearer ${token}`);
         }
@@ -162,9 +174,7 @@ export function buildRestProxy(): Router {
           JSON.stringify({
             error: "upstream_unreachable",
             detail: err.message,
-            target: isVacuumRequest(req)
-              ? config.vacuumControllerUrl
-              : isSampleStageRequest(req)
+            target: isSampleStageRequest(req)
                 ? config.sampleStageControllerUrl
                 : config.proxyTargetHttp,
           })

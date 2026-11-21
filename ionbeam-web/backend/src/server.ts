@@ -131,6 +131,10 @@ interface AdminSession {
 }
 
 type ScanAuthRequest = express.Request | IncomingMessage;
+type CachedScanActorRequest = express.Request & { scanActor?: AdminUser };
+const ADMIN_ACTOR_CACHE_TTL_MS = 1_500;
+const adminActorCache = new Map<string, { expiresAt: number; actor: AdminUser | null }>();
+const adminActorLookups = new Map<string, Promise<AdminUser | null>>();
 
 interface SmsChallenge {
   code: string;
@@ -2009,21 +2013,35 @@ function readAuditorEmails(data: unknown): Set<string> {
   );
 }
 
-async function currentAdminActor(req?: ScanAuthRequest): Promise<AdminUser | null> {
-  const info = await readAdminWithBackup();
+async function currentAdminActor(req?: ScanAuthRequest, cacheTtlMs = ADMIN_ACTOR_CACHE_TTL_MS): Promise<AdminUser | null> {
+  // Scan privilege middleware has already resolved this actor for protected
+  // scan routes. Reuse it instead of querying the admin database a second time.
+  if (req && "scanActor" in req) {
+    return (req as CachedScanActorRequest).scanActor ?? null;
+  }
   const session = verifyAdminSessionToken(readScanAuthToken(req));
   const login = session?.login || currentLoginName();
-  const dbUser =
-    session?.userId && session.userId > 0
-      ? await findAdminUserInDbById(session.userId).catch(() => null)
-      : await findAdminUserInDb(login).catch(() => null);
-  const configUser =
-    dbUser
-      ? null
-      : session?.userId && session.userId > 0
+  const identityKey = session?.userId && session.userId > 0 ? `id:${session.userId}` : `login:${login.toLowerCase()}`;
+  const cacheKey = `${cacheTtlMs}:${identityKey}`;
+  const cached = adminActorCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.actor;
+  let lookup = adminActorLookups.get(cacheKey);
+  if (!lookup) {
+    lookup = (async () => {
+      const info = await readAdminWithBackup();
+      const dbUser = session?.userId && session.userId > 0
+        ? await findAdminUserInDbById(session.userId).catch(() => null)
+        : await findAdminUserInDb(login).catch(() => null);
+      const configUser = dbUser ? null : session?.userId && session.userId > 0
         ? findAdminUserById(info.data, session.userId)
         : findAdminUser(info.data, login);
-  return dbUser ?? configUser;
+      const actor = dbUser ?? configUser;
+      adminActorCache.set(cacheKey, { actor, expiresAt: Date.now() + cacheTtlMs });
+      return actor;
+    })().finally(() => adminActorLookups.delete(cacheKey));
+    adminActorLookups.set(cacheKey, lookup);
+  }
+  return lookup;
 }
 
 async function authorizeAdminConfigSave(req: ScanAuthRequest, nextData: unknown): Promise<void> {
@@ -2087,7 +2105,10 @@ async function requireScanPrivilege(
   next: express.NextFunction,
 ): Promise<void> {
   try {
-    const actor = await currentAdminActor(req);
+    // Queue status is read repeatedly during long exposures. Cache only GET
+    // authorization briefly so those polls don't spawn a psql login for each
+    // workspace; scan mutations still validate against the live account row.
+    const actor = await currentAdminActor(req, req.method === "GET" ? 7_000 : ADMIN_ACTOR_CACHE_TTL_MS);
     if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
       res.status(403).json({
         ok: false,
@@ -2095,6 +2116,7 @@ async function requireScanPrivilege(
       });
       return;
     }
+    (req as CachedScanActorRequest).scanActor = actor;
     next();
   } catch (err) {
     sendConfigError(res, err);
