@@ -25,13 +25,14 @@ export function* millingSpotPositions(l: LatticeRequest): Generator<[number,numb
   else if(s.kind==="ellipse") {x0=s.cx-s.rx;x1=s.cx+s.rx;y0=s.cy-s.ry;y1=s.cy+s.ry;}
   else {const p=s.kind==="frame"?s.outer:s.points;x0=Math.min(...p.map(v=>v[0]));x1=Math.max(...p.map(v=>v[0]));y0=Math.min(...p.map(v=>v[1]));y1=Math.max(...p.map(v=>v[1]));}
   const nx=Math.max(1,Math.round((x1-x0)/l.pitch_x)),ny=Math.max(1,Math.round((y1-y0)/(l.pitch_y??l.pitch_x)));
+  const pitchX=(x1-x0)/nx,pitchY=(y1-y0)/ny;
   const axis=l.axis==="long"?((x1-x0)>=(y1-y0)?"x":"y"):l.axis, fast=axis==="x"?nx:ny;
   for(let pass=0;pass<l.passes;pass++) {
     let pending:[number,number]|null=null, dwell=0;
     for(let cell=l.cell_start??0;cell<Math.min(l.cell_end??nx*ny,nx*ny);cell++) {
       const row=Math.floor(cell/fast),f=cell%fast,k=row%2?fast-1-f:f;
       const i=axis==="x"?k:row,j=axis==="x"?row:(row%2?ny-1-k:k);
-      const cx=x0+(i+0.5)*(x1-x0)/nx,cy=y0+(j+0.5)*(y1-y0)/ny;
+      const cx=x0+(i+0.5)*pitchX,cy=y0+(j+0.5)*pitchY;
       if(!millingShapeContains(s,cx,cy)) continue;
       const x=Math.max(0,Math.min(16383,Math.round(cx))),y=Math.max(0,Math.min(16383,Math.round(cy)));
       if(pending && pending[0]===x && pending[1]===y && dwell+l.dwell+1<=65535) {dwell+=l.dwell+1;continue;}
@@ -76,10 +77,12 @@ export function circularLiveViewBounds(bounds: ROIRequest, field: {x_origin:numb
 }
 
 
-/** LiveView follows the resolution selected for the active Scan-tab scan type. */
-export function millingPreviewResolution(scan: {kind: string; raster: {resolution: number}; vector: {vector_resolution: number}}): number {
-  const selected = scan.kind === "raster" ? scan.raster.resolution : scan.vector.vector_resolution;
-  return Number.isFinite(selected) ? Math.max(1, Math.min(2048, Math.trunc(selected))) : 512;
+/** Exposure-only display sampling: derive density from the emitted lattice. */
+export function millingPreviewResolution(lattice: LatticeRequest): number {
+  const b=millingDacBounds(lattice);
+  return Math.max(64,Math.min(640,Math.max(
+    Math.round((b.x_end-b.x_start)/lattice.pitch_x),
+    Math.round((b.y_end-b.y_start)/(lattice.pitch_y??lattice.pitch_x)))));
 }
 
 export function millingPixelIndex(x: number, y: number, bounds: ROIRequest, resolution: number): number {
@@ -98,7 +101,7 @@ export function millingDacBounds(lattice: LatticeRequest): ROIRequest {
   return {x_start:Math.min(...points.map(p=>p[0])),x_end:Math.max(...points.map(p=>p[0])),
     y_start:Math.min(...points.map(p=>p[1])),y_end:Math.max(...points.map(p=>p[1]))};
 }
-function projectedDac(x:number,y:number,p:MillingProjection):[number,number] {
+export function projectedDac(x:number,y:number,p:MillingProjection):[number,number] {
   return p.scanGeometry?.enabled ? transform(p.scanGeometry.forward,[x,y]) : [
     Math.min(p.x_origin,p.x_end)+x/16383*Math.abs(p.x_end-p.x_origin),
     Math.min(p.y_origin,p.y_end)+y/16383*Math.abs(p.y_end-p.y_origin)];
@@ -142,6 +145,17 @@ export function millingPreviewRadius(lattice:LatticeRequest,p:MillingProjection,
   const c=projectedDac(0,0,p),ex=projectedDac(sx,0,p),ey=projectedDac(0,sy,p);
   const px=n/(b.x_end-b.x_start),py=n/(b.y_end-b.y_start);
   return Math.ceil((Math.hypot((ex[0]-c[0])*px,(ex[1]-c[1])*py)+Math.hypot((ey[0]-c[0])*px,(ey[1]-c[1])*py))/2)+1;
+}
+/** Coverage belongs to the emitted exposure shapes, including all recipe steps. */
+export function millingPreviewCoverage(lattices:LatticeRequest[],p:MillingProjection,b:ROIRequest,resolution:number) {
+  const mask=new Uint8Array(resolution*resolution);
+  let radius=0;
+  for(const lattice of lattices) {
+    const shape=millingPreviewMask(lattice,p,b,resolution);
+    for(let i=0;i<mask.length;i++)if(shape[i])mask[i]=1;
+    radius=Math.max(radius,millingPreviewRadius(lattice,p,b,resolution));
+  }
+  return {resolution,mask,radius};
 }
 /** Display-only bounded nearest-sample reconstruction. Raw samples and validity are untouched. */
 export function millingSampleOwners(valid:ArrayLike<number>,mask:Uint8Array,n:number,radius:number):Int32Array {

@@ -8220,15 +8220,16 @@ body {
   justify-content: flex-start;
   padding-inline-start: 15px;
   container-type: normal;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 #processing-image-panel-grid .roi-canvas-frame {
   flex: 0 0 auto;
   width: auto;
-  height: min(100%, 768px);
+  height: 100%;
   aspect-ratio: 1 / 1;
-  max-width: calc(100% - 106px);
+  max-width: none;
 }
-#processing-image-panel-grid .roi-canvas-stage--view .roi-canvas-frame { max-width: 100%; }
 #processing-image-panel-grid .roi-canvas-wrap {
   height: 100%;
   aspect-ratio: auto;
@@ -8236,10 +8237,10 @@ body {
 .image-panel-card--processing {
   display: flex;
   flex-direction: column;
-  height: max(360px, calc(100dvh - 128px));
-  max-height: calc(100dvh - 24px);
+  height: var(--processing-panel-height, max(360px, calc(100dvh - 128px)));
+  max-height: var(--processing-panel-height, calc(100dvh - 24px));
   min-height: 0;
-  resize: both;
+  resize: horizontal;
   overflow: auto;
 }
 .image-panel-card--processing > .card__body {

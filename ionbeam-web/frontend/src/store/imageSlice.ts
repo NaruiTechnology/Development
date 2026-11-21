@@ -25,7 +25,7 @@ import { fullFrameAxisMaps, scanPixelAxisMaps, scanRegionPixelBounds, type ScanP
 export type VectorPattern = "default" | "custom";
 export type VectorSource = "vector" | "roi";
 
-export interface MillingFrame { lattice?:LatticeRequest; projection?:MillingProjection; aggregate?:boolean; changePercent: Float32Array; key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array; valid: Uint8Array; revision: number;
+export interface MillingFrame { lattice?:LatticeRequest; lattices?:LatticeRequest[]; projection?:MillingProjection; aggregate?:boolean; changePercent: Float32Array; key: string; bounds: ROIRequest; resolution: number; pixels: Uint16Array; valid: Uint8Array; revision: number;
   referenceKey: string; pass: number; passComplete: boolean; sums: Float64Array; counts: Uint32Array;
   previousMeans: Float64Array | null; previousValid: Uint8Array | null; previousCounts: Uint32Array|null;
   completedMeans: Float64Array | null; completedValid: Uint8Array | null; completedCounts: Uint32Array|null;
@@ -197,7 +197,7 @@ const slice = createSlice({
     markMillingHistorySaved(state,a:PayloadAction<{referenceKey:string;saved:boolean}>) {
       if(state.millingHistory?.referenceKey===a.payload.referenceKey)state.millingHistoryPersisted=a.payload.saved;
     },
-    resetMillingFrame(state, a: PayloadAction<{key: string; bounds: ROIRequest; referenceKey?:string; resolution?:number; lattice?:LatticeRequest; projection?:MillingProjection; aggregate?:boolean; preserveDisplay?:boolean; restoreDisplay?:boolean} | null>) {
+    resetMillingFrame(state, a: PayloadAction<{key: string; bounds: ROIRequest; referenceKey?:string; resolution?:number; lattice?:LatticeRequest; lattices?:LatticeRequest[]; projection?:MillingProjection; aggregate?:boolean; preserveDisplay?:boolean; restoreDisplay?:boolean} | null>) {
       if(!a.payload){state.millingFrame=null;return;}
       const selected = a.payload?.resolution ?? 256;
       const resolution = Number.isFinite(selected) ? Math.max(1, Math.min(2048, Math.trunc(selected))) : 512;

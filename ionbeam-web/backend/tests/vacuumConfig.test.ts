@@ -64,15 +64,19 @@ test("invalid or omitted vacuum flag never changes the configuration", async () 
   assert.equal(readVacuumEnabled("missing.json"), false);
 });
 
-test("the host follows the SBC: vacuum is on only when the SBC also enables it", async () => {
+test("the host follows the SBC: vacuum is on only when the SBC also enables it", async (t) => {
   const { readEffectiveVacuumEnabled, resetSbcStatusCache } = await import("../src/vacuumConfig");
   await withDirectory(async (directory) => {
     const profile = path.join(directory, "vacuumSystem.json");
     await fs.writeFile(profile, JSON.stringify({ Enable: true }));
     const calls: string[] = [];
-    const probeWith = (answer: boolean | null) => async (url: string) => {
-      calls.push(url);
-      return answer;
+    const probeWith = (answer: boolean | null) => {
+      t.mock.method(globalThis, "fetch", async (url: string | URL | Request) => {
+        calls.push(String(url));
+        if (answer === null) throw new Error("SBC unavailable");
+        return new Response(JSON.stringify({ running: true }), { status: answer ? 200 : 404 });
+      });
+      return async () => answer;
     };
     resetSbcStatusCache();
     assert.equal(await readEffectiveVacuumEnabled(profile, "http://sbc-a", null, probeWith(true)), true);
@@ -97,4 +101,36 @@ test("the host follows the SBC: vacuum is on only when the SBC also enables it",
     await readEffectiveVacuumEnabled(profile, "http://sbc-b", null, probeWith(false));
     assert.equal(calls.length, 1);
   });
+});
+
+test("SBC snapshots refresh automatically through pumping, readiness, failure and recovery", async (t) => {
+  const { readInitialSbcVacuumStatus, resetSbcStatusCache } = await import("../src/vacuumConfig");
+  resetSbcStatusCache();
+  let now = 10000, requests = 0, ready = false, unavailable = false;
+  t.mock.method(Date, "now", () => now);
+  t.mock.method(globalThis, "fetch", async () => {
+    requests++;
+    if (unavailable) throw new Error("SBC unavailable");
+    return new Response(JSON.stringify({ isVacuumSystemReady: ready }));
+  });
+  try {
+    const read = () => readInitialSbcVacuumStatus("http://sbc", null);
+    const pumping = await Promise.all([read(), read()]);
+    assert.equal(pumping[0]?.isVacuumSystemReady, false);
+    assert.equal(requests, 1, "concurrent reads share one SBC request");
+    ready = true;
+    now += 999;
+    assert.equal((await read())?.isVacuumSystemReady, false);
+    now++;
+    assert.equal((await read())?.isVacuumSystemReady, true, "readiness arrives without an operator refresh");
+    unavailable = true;
+    now += 1000;
+    assert.equal(await read(), null, "failures invalidate previously ready status");
+    unavailable = false;
+    now += 1000;
+    assert.equal((await read())?.isVacuumSystemReady, true, "a failed SBC read is retried automatically");
+    assert.equal(requests, 4);
+  } finally {
+    resetSbcStatusCache();
+  }
 });

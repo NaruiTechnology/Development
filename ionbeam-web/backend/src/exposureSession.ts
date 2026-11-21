@@ -10,7 +10,7 @@ export function handleExposureSession(client: WebSocket): void {
   let segments = 0, bytes = 0;
   let upstream: WebSocket | null = null;
   let done: string | null = null;
-  let alive = true;
+  let lastPongAt = Date.now();
   const fail = (detail: string) => {
     console.warn("[exposure-session] failed", {sessionId, segments, bytes, elapsedMs: Date.now() - startedAt, detail});
     if (client.readyState === WebSocket.OPEN) {
@@ -22,17 +22,28 @@ export function handleExposureSession(client: WebSocket): void {
   // Transport liveness is distinct from acquisition progress. A responsive
   // browser must still enforce its dwell-aware acquisition deadline.
   const heartbeat = setInterval(() => {
-    if (!alive) { client.terminate(); return; }
-    alive = false;
+    // Large detector frames can delay a pong behind queued socket data.
+    // Allow the same liveness window as the browser instead of dropping an
+    // otherwise healthy acquisition after one ten-second interval.
+    if (Date.now() - lastPongAt > 35_000) {
+      console.warn("[exposure-session] heartbeat timeout", {
+        sessionId, segments, bytes, elapsedMs: Date.now() - startedAt,
+        lastPongAgeMs: Date.now() - lastPongAt,
+      });
+      client.terminate();
+      return;
+    }
+    if (client.readyState !== WebSocket.OPEN) return;
     client.ping();
     if (client.readyState === WebSocket.OPEN)
       client.send(JSON.stringify({event: "heartbeat"}));
   }, 10_000);
   heartbeat.unref();
-  client.on("pong", () => { alive = true; });
-  client.on("close", () => {
+  client.on("pong", () => { lastPongAt = Date.now(); });
+  client.on("close", (code, reason) => {
     clearInterval(heartbeat); upstream?.terminate();
-    console.info("[exposure-session] closed", {sessionId, segments, bytes, elapsedMs: Date.now() - startedAt});
+    console.info("[exposure-session] closed", {sessionId, segments, bytes, elapsedMs: Date.now() - startedAt,
+      code, reason: reason.toString(), completed: done !== null});
   });
   client.on("error", () => { clearInterval(heartbeat); upstream?.terminate(); });
   client.on("message", (raw, binary) => {

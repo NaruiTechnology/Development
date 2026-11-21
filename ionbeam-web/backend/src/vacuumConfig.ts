@@ -82,6 +82,7 @@ type SbcStatusProbe = (url: string, token: string | null) => Promise<boolean | n
 type SbcInitializationResult = { url: string; value: boolean | null; status: Record<string, unknown> | null } | null;
 let sbcCache: SbcInitializationResult = null;
 let sbcInitialization: Promise<SbcInitializationResult> | null = null;
+let sbcCacheExpiresAt = 0;
 
 /** Whether the SBC controller is available, or null when reachability is unknown. */
 export const probeSbcVacuumEnabled: SbcStatusProbe = async (url, token) => {
@@ -97,9 +98,10 @@ export const probeSbcVacuumEnabled: SbcStatusProbe = async (url, token) => {
   }
 };
 
-/** Read SBC state once for this host process. Runtime status refresh belongs to the standalone SBC. */
+/** Share concurrent reads and briefly cache SBC status, including failures. */
 export function initializeSbcVacuum(url: string, token: string | null): Promise<SbcInitializationResult> {
-  if (sbcInitialization) return sbcInitialization;
+  if (sbcInitialization && (!sbcCache || (sbcCache.url === url && Date.now() < sbcCacheExpiresAt))) return sbcInitialization;
+  sbcCache = null;
   sbcInitialization = (async () => {
     let value: boolean | null = null;
     let status: Record<string, unknown> | null = null;
@@ -117,6 +119,7 @@ export function initializeSbcVacuum(url: string, token: string | null): Promise<
       }
     } catch { /* The initialization result records SBC unavailable. */ }
     sbcCache = { url, value, status };
+    sbcCacheExpiresAt = Date.now() + 1000;
     return sbcCache;
   })();
   return sbcInitialization;
@@ -126,7 +129,7 @@ export async function readInitialSbcVacuumStatus(url: string, token: string | nu
   return (await initializeSbcVacuum(url, token))?.status ?? null;
 }
 
-/** Re-read the status snapshot only when the operator explicitly requests it. */
+/** Bypass the brief status cache when the operator requests a refresh. */
 export async function retrySbcVacuumInitialization(url: string, token: string | null): Promise<SbcInitializationResult> {
   if (sbcInitialization) await sbcInitialization;
   sbcCache = null;
@@ -149,4 +152,5 @@ export async function readEffectiveVacuumEnabled(
 export function resetSbcStatusCache(): void {
   sbcCache = null;
   sbcInitialization = null;
+  sbcCacheExpiresAt = 0;
 }

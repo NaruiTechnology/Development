@@ -79,10 +79,10 @@ test("LiveImage remains visible between passes and fresh pixels replace it progr
 });
 
 
-test("LiveView resolution follows the active Scan tab and maps samples into its selected grid",()=>{
- const scan={kind:"raster",raster:{resolution:512},vector:{vector_resolution:1024}};
- assert.equal(millingPreviewResolution(scan),512);
- assert.equal(millingPreviewResolution({...scan,kind:"vector"}),1024);
+test("LiveView resolution is derived only from exposure lattice density",()=>{
+ assert.equal(millingPreviewResolution(rect),64);
+ assert.equal(millingPreviewResolution({...rect,pitch_x:.01}),400);
+ assert.equal(millingPreviewResolution({...rect,pitch_x:.001}),640);
  const bounds={x_start:10,x_end:20,y_start:30,y_end:50};
  for(const resolution of [128,512,1024]) {
    assert.equal(millingPixelIndex(10,30,bounds,resolution),0);

@@ -1,8 +1,6 @@
 import { MillingSpotChanges } from "../lib/millingChange";
 import { millingHistoryStorage } from "../lib/millingHistoryStore";
-import { millingSpotPositions, millingPreviewResolution, millingPixelIndex, millingPreviewGeometry } from "../lib/millingLiveView";
-import { patternBounds } from "../lib/processingPatterns";
-import { transform } from "../lib/scanGeometry";
+import { millingSpotPositions, millingPreviewResolution, millingPixelIndex, millingPreviewGeometry, projectedDac } from "../lib/millingLiveView";
 import { useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector, useAppStore, useAppWorkspace } from "../store";
 import { claimWorkspaceRun } from "./useScanWorkspace";
@@ -15,7 +13,7 @@ import { selectPattern } from "../store/processingSlice";
 import { exposurePreparing, exposurePrepared, exposureStepStarted, exposureStepCompleted,
   exposureSamplesReceived, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
   exposureViewSamplesReceived, exposurePaused, exposureResumed } from "../store/exposureSlice";
-import type { RasterRequest, VectorRequest } from "../types/api";
+import type { LatticeRequest, RasterRequest, VectorRequest } from "../types/api";
 import { decodeScanSamples } from "../lib/scanSamples";
 import { millingRequestWithSourceImage, rasterRequestWithBitmapSelection } from "../lib/bitmapVector";
 import { prepareScanAssets } from "../lib/scanAssets";
@@ -101,10 +99,11 @@ export function useExposureRun() {
     const snapshot = store.getState();
     const liveNode = snapshot.exposure.progress.find(n => n.id === exposureStepId);
     const liveKey = snapshot.exposure.mode === "milling" && liveNode?.exposure ? exposureStepId! : null;
-    const liveBounds = snapshot.image.millingFrame?.key === liveKey ? snapshot.image.millingFrame.bounds
-      : liveNode?.exposure ? patternBounds(liveNode.exposure.shape) : null;
-    const liveResolution = snapshot.image.millingFrame?.resolution ?? millingPreviewResolution(snapshot.scan);
+    const liveFrame = snapshot.image.millingFrame?.key === liveKey ? snapshot.image.millingFrame : null;
+    const liveBounds = liveFrame?.bounds;
+    const liveResolution = liveFrame?.resolution ?? 640;
     const positions = liveKey && "lattice" in request && request.lattice ? millingSpotPositions(request.lattice) : null;
+    if (liveKey && (!liveFrame?.projection || !positions)) throw new Error("Exposure feedback has no lattice geometry snapshot");
     if (liveKey) spotChanges.current.beginPass(liveKey, snapshot.image.millingFrame?.pass ?? 1);
     let pendingChanges: number[] = [];
     let pendingPixels: number[] = [];
@@ -143,26 +142,25 @@ export function useExposureRun() {
           dispatch(exposureViewSamplesReceived(pixels.length));
           onViewChunk?.();
         } else {
+          const values=decodeScanSamples(buffer, request.output_mode);
           if (positions && liveBounds) {
-            const geometry = snapshot.scan.roi.scanGeometry;
-            const field = snapshot.scan.roi;
-            for (const value of decodeScanSamples(buffer, request.output_mode)) {
+            for (const value of values) {
               const next = positions.next();
               if (next.done) throw new Error("Exposure feedback exceeds its lattice positions");
               const [dx,dy] = next.value;
               pendingChanges.push(spotChanges.current.observe(dx,dy,value));
-              const [x,y] = geometry?.enabled ? transform(geometry.forward,[dx,dy]) : [
-                Math.min(field.x_origin,field.x_end)+dx/16383*Math.abs(field.x_end-field.x_origin),
-                Math.min(field.y_origin,field.y_end)+dy/16383*Math.abs(field.y_end-field.y_origin)];
+              const [x,y] = projectedDac(dx,dy,liveFrame!.projection!);
               pendingPixels.push(millingPixelIndex(x, y, liveBounds, liveResolution), value);
             }
           }
-          pendingSamples += buffer.byteLength / 2;
+          pendingSamples += values.length;
           sampleTimer ??= setTimeout(flush, 50);
         }
       });
       if (viewFrames?.length && viewFrames[0].cursor !== viewFrames[0].pixels.length * viewFrames.length)
         throw new Error("Parallel View ended with an incomplete frame");
+      if (positions && !positions.next().done)
+        throw new Error("Exposure feedback ended before all lattice spots were received");
     } finally { flush(); }
   }
 
@@ -347,15 +345,17 @@ export function useExposureRun() {
       const selected = snapshot.processing.activeKey;
       const patterns = milling ? {...snapshot.processing, instances: Object.fromEntries(Object.entries(snapshot.processing.instances).map(([key,instance]) => [key,{...instance,enabled:key===selected && instance.enabled && instance.roi!==null}]))} : snapshot.processing;
       const plannedEntries = prepareExposureSequence(patterns, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
-      const millingConfig = new Map<string, {geometry: ReturnType<typeof millingPreviewGeometry>; referenceKey:string; aggregate:boolean}>();
+      const millingConfig = new Map<string, {geometry: ReturnType<typeof millingPreviewGeometry>; referenceKey:string; aggregate:boolean; lattices:LatticeRequest[]; resolution:number}>();
       if (milling) {
         const field={x:snapshot.scan.roi.x_origin,xEnd:snapshot.scan.roi.x_end,y:snapshot.scan.roi.y_origin,yEnd:snapshot.scan.roi.y_end,
           geometry:snapshot.scan.roi.scanGeometry,simulation:!scansUseHardware(snapshot.status.defaults?.is_production,snapshot.status.sessionSimulation),
-          adc:snapshot.status.defaults?.adc,equipment:snapshot.processing.recipeEquipmentId,resolution:millingPreviewResolution(snapshot.scan)};
+          adc:snapshot.status.defaults?.adc,equipment:snapshot.processing.recipeEquipmentId};
         for(const entry of plannedEntries) {
           if(!entry.node.exposure||!entry.request.lattice)continue;
           const siblings=plannedEntries.filter(candidate=>candidate.key===entry.key&&candidate.node.exposure?.model==="StairCutModel");
           const aggregate=entry.node.exposure.model==="StairCutModel";
+          const lattices=aggregate?siblings.map(candidate=>candidate.request.lattice!):[entry.request.lattice];
+          const resolution=Math.max(...lattices.map(millingPreviewResolution));
           const ownGeometry=millingPreviewGeometry(entry.request.lattice,snapshot.scan.roi);
           let geometry=ownGeometry;
           let referenceKey=millingReference(entry.key,entry.request,field);
@@ -368,12 +368,13 @@ export function useExposureRun() {
               const lattice=candidate.request.lattice!;return [lattice.shape,lattice.pitch_x,lattice.pitch_y,lattice.axis,lattice.dwell];
             }),field]);
           }
-          millingConfig.set(entry.node.id,{geometry,referenceKey,aggregate});
+          referenceKey=JSON.stringify(["exposure-lattice-preview-v3",referenceKey,resolution]);
+          millingConfig.set(entry.node.id,{geometry,referenceKey,aggregate,lattices,resolution});
         }
       }
       const resetMillingForEntry=(entry:typeof plannedEntries[number],preserveDisplay:boolean)=>{
         const config=millingConfig.get(entry.node.id);if(!config||!entry.request.lattice)return;
-        dispatch(resetMillingFrame({resolution:millingPreviewResolution(snapshot.scan),key:entry.node.id,...config.geometry,
+        dispatch(resetMillingFrame({resolution:config.resolution,lattices:config.lattices,key:entry.node.id,...config.geometry,
           referenceKey:config.referenceKey,aggregate:config.aggregate,preserveDisplay,restoreDisplay:config.aggregate}));
       };
       if (milling && plannedEntries[0]?.node.exposure) resetMillingForEntry(plannedEntries[0],recoverLiveView);

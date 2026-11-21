@@ -7,14 +7,13 @@ import { useAppSelector } from "../store";
 import { useTranslation } from "../i18n";
 import { useLevelSetting } from "../hooks/useLevelSetting";
 import { levelGray, type ResolvedLevels } from "../lib/displayLevels";
-import { patternBounds } from "../lib/processingPatterns";
-import { liveViewWindow, defaultLiveViewOffset, circularLiveViewBounds, millingPreviewMask, millingPreviewRadius, millingDisplaySamples } from "../lib/millingLiveView";
+import { liveViewWindow, defaultLiveViewOffset, circularLiveViewBounds, millingPreviewCoverage, millingDisplaySamples } from "../lib/millingLiveView";
 import { imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { LevelWedge } from "./LevelWedge";
 
 type Point = {x:number;y:number};
 /** Transparent, detector-only preview. Dragging relocates its display, never the milling path. */
-export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld}: {contrastHost: HTMLElement|null; toolsHost:HTMLElement|null; roiLevels:ResolvedLevels; pointerWorld:(x:number,y:number)=>Point}) {
+export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contrastHost: HTMLElement|null; toolsHost:HTMLElement|null; pointerWorld:(x:number,y:number)=>Point}) {
   const {t}=useTranslation();
   const roi=useAppSelector(s=>s.scan.roi),patterns=useAppSelector(s=>s.processing);
   const threshold=useAppSelector(s=>s.exposure.millingChangeThresholdPercent);
@@ -23,22 +22,22 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
   const canvasRef=useRef<HTMLCanvasElement|null>(null);
   const [offset,setOffset]=useState<Point|null>(null);
   const drag=useRef<{start:Point;offset:Point}|null>(null);
-  const active=patterns.instances[patterns.activeKey??""]?.roi;
-  const shapeKey=JSON.stringify([patterns.activeKey,active]);
+  const shapeKey=JSON.stringify([frame?.key,frame?.bounds,frame?.lattice?.shape]);
   useEffect(()=>{setOffset(null);},[shapeKey]);
-  // Stair cut runs each recipe step as a smaller lattice. Keep the LiveView
-  // window anchored to the drawn pattern ROI; frame.bounds is only the area
-  // sampled for the current step and changes as the exposure advances.
-  const source=active?patternBounds(active):(frame?.bounds ?? null);
+  // Content geometry is frozen with the exposure lattice. The regular image
+  // supplies only the coordinate system for placing this movable overlay.
+  const source=frame?.bounds ?? null;
   const field=imageWorldBounds(roi),viewport=viewportBounds(roi);
-  const sizing=source && active && "cx" in active ? circularLiveViewBounds(source,field,viewport,zoom) : source;
+  const sizing=source && frame?.lattice?.shape.kind==="ellipse" ? circularLiveViewBounds(source,field,viewport,zoom) : source;
   const placement=offset ?? (sizing?defaultLiveViewOffset(sizing,zoom,field):{x:0,y:0});
   const window=sizing?liveViewWindow(sizing,zoom,field,placement):null;
   const [mode,setMode]=useState<"auto"|"change"|"normalize">("auto");
+  const deltaEnhancementAvailable=Boolean(frame && frame.pass>1 && threshold>0);
+  const effectiveMode=deltaEnhancementAvailable?mode:"auto";
   const [rawSetting,setRawSetting]=useLevelSetting("milling-live");
   const [deltaSetting,setDeltaSetting]=useLevelSetting("milling-change");
-  const setting=mode==="change"?deltaSetting:rawSetting;
-  const setSetting=mode==="change"?setDeltaSetting:setRawSetting;
+  const setting=effectiveMode==="change"?deltaSetting:rawSetting;
+  const setSetting=effectiveMode==="change"?setDeltaSetting:setRawSetting;
   const [strength,setStrength]=useState(75);
   const [sharpness,setSharpness]=useState(25);
   const [band,setBand]=useState<[number,number]>([0,16383]),[bandEnabled,setBandEnabled]=useState(true);
@@ -49,8 +48,6 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
   const changeStats=useMemo(()=>liveStatistics(changes.values,changes.valid,[0,LIVE_FULL_SCALE*2],LIVE_FULL_SCALE*2),[changes]);
   const sampleBand: [number,number]=bandEnabled?[band[0]*4,band[1]*4]:[0,LIVE_FULL_SCALE];
   const selectedStats=useMemo(()=>liveStatistics(frame?.pixels??[],frame?.valid??[],sampleBand),[frame,band[0],band[1],bandEnabled]);
-  const deltaEnhancementAvailable=Boolean(frame && frame.pass>1 && threshold>0);
-  const effectiveMode=deltaEnhancementAvailable?mode:"auto";
   const stats=effectiveMode==="change"?changeStats:rawStats;
   // Keep the wedge spectrum in sync with the white pixels promoted by the
   // Change threshold in the LiveView image. Auto levels still use the
@@ -85,16 +82,14 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
     };
     id=requestAnimationFrame(tick);return()=>cancelAnimationFrame(id);
   },[target.low,target.high,context]);
-  const levels=deltaEnhancementAvailable?(setting.mode==="auto"?autoLevels:setting):roiLevels;
+  const levels=setting.mode==="auto"?autoLevels:setting;
   const aroundMean=()=>{
     const mean=rawStats.mean/4,radius=Math.max(8,rawStats.deviation/4);
     setBand([Math.max(0,Math.floor(mean-radius)),Math.min(16383,Math.ceil(mean+radius))]);setBandEnabled(true);
   };
-  const coverage=useMemo(()=>frame?.lattice&&frame.projection ? {
-    resolution:Math.min(frame.resolution,640),
-    mask:frame.aggregate?new Uint8Array(Math.min(frame.resolution,640)**2).fill(1):millingPreviewMask(frame.lattice,frame.projection,frame.bounds,Math.min(frame.resolution,640)),
-    radius:millingPreviewRadius(frame.lattice,frame.projection,frame.bounds,Math.min(frame.resolution,640)),
-  }:null,[frame?.lattice,frame?.projection,frame?.bounds,frame?.resolution]);
+  const coverage=useMemo(()=>frame?.lattice&&frame.projection ? millingPreviewCoverage(
+    frame.lattices??[frame.lattice],frame.projection,frame.bounds,Math.min(frame.resolution,640))
+    :null,[frame?.lattice,frame?.lattices,frame?.projection,frame?.bounds,frame?.resolution]);
   const display=useMemo(()=>frame&&coverage ? millingDisplaySamples(
     effectiveMode==="change"?changes.valid:frame.valid,frame.changePercent,frame.resolution,
     coverage.mask,coverage.resolution,coverage.radius):null,[frame,coverage,effectiveMode,changes]);
@@ -104,7 +99,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
     const canvas=canvasRef.current,ctx=canvas?.getContext("2d");
     if(!canvas||!ctx)return;
     ctx.clearRect(0,0,640,640);
-    if(!frame||!window||!source || !frame.key.startsWith(`${patterns.activeKey}:`))return;
+    if(!frame||!window||!source||!display || !frame.key.startsWith(`${patterns.activeKey}:`))return;
     const edge=display?.resolution??frame.resolution;
     const scratch=document.createElement("canvas");scratch.width=scratch.height=edge;
     const c=scratch.getContext("2d");if(!c)return;
@@ -112,7 +107,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
     for(let pIndex=0;pIndex<edge*edge;pIndex++) {
       const i=display?display.owners[pIndex]:((effectiveMode==="change"?changes.valid[pIndex]:frame.valid[pIndex])?pIndex:-1);
       if(i<0)continue;
-      const gray=!deltaEnhancementAvailable?levelGray(frame.pixels[i],roiLevels.low,roiLevels.high):effectiveMode==="change"?levelGray(changes.values[i],levels.low,levels.high):effectiveMode==="normalize"&&bandEnabled?
+      const gray=effectiveMode==="change"?levelGray(changes.values[i],levels.low,levels.high):effectiveMode==="normalize"&&bandEnabled?
         normalizedLiveGray(frame.pixels[i],levels,selectedStats,sampleBand,strength,minimumWindow):levelGray(frame.pixels[i],levels.low,levels.high),p=pIndex*4;
       const changePercent=display?.highlight[pIndex]??frame.changePercent[i];
       if(deltaEnhancementAvailable&&isMillingChangeHighlighted(changePercent,threshold)) {
@@ -130,12 +125,18 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
       }
     }
     c.putImageData(image,0,0);
-    // Recipe sub-bands occupy the same relative position inside the magnified window.
-    const mapX=(x:number)=>window.x_start+(x-source.x_start)/(source.x_end-source.x_start)*(window.x_end-window.x_start);
-    const mapY=(y:number)=>window.y_start+(y-source.y_start)/(source.y_end-source.y_start)*(window.y_end-window.y_start);
+    // The scratch image already spans frame.bounds, including the shared
+    // union bounds used by stair-cut steps. Fit that complete image into the
+    // display window; mapping through the UI pattern bounds crops calibrated
+    // circles when the physical X/Y scales differ.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cx(window.x_start),cy(window.y_start),cx(window.x_end)-cx(window.x_start),cy(window.y_end)-cy(window.y_start));
+    ctx.clip();
     ctx.imageSmoothingEnabled=false;
-    ctx.drawImage(scratch,cx(mapX(frame.bounds.x_start)),cy(mapY(frame.bounds.y_start)),cx(mapX(frame.bounds.x_end))-cx(mapX(frame.bounds.x_start)),cy(mapY(frame.bounds.y_end))-cy(mapY(frame.bounds.y_start)));
-  },[frame,display,threshold,sharpness,levels.low,levels.high,roiLevels.low,roiLevels.high,deltaEnhancementAvailable,shapeKey,zoom,offset,roi,effectiveMode,changes,selectedStats,band[0],band[1],bandEnabled,strength,minimumWindow]);
+    ctx.drawImage(scratch,cx(window.x_start),cy(window.y_start),cx(window.x_end)-cx(window.x_start),cy(window.y_end)-cy(window.y_start));
+    ctx.restore();
+  },[frame,display,threshold,sharpness,levels.low,levels.high,deltaEnhancementAvailable,shapeKey,zoom,offset,roi,effectiveMode,changes,selectedStats,band[0],band[1],bandEnabled,strength,minimumWindow]);
   return <>
     <div className="milling-live-layer" aria-label="LiveViewCanvas">
       <canvas ref={canvasRef} width={640} height={640} aria-label="Milling spot feedback image" />
@@ -157,8 +158,8 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
       </label>
       <LevelWedge histogram={histogram} levels={levels}
         fullScale={effectiveMode==="change"?LIVE_FULL_SCALE*2:LIVE_FULL_SCALE} codeOffset={effectiveMode==="change"?CHANGE_ZERO:0}
-        auto={deltaEnhancementAvailable?setting.mode==="auto":true} onChange={next=>setSetting({mode:"manual",...next})} onAuto={()=>{setSetting({mode:"auto"});setAutoEpoch(n=>n+1);}}
-        disabled={!deltaEnhancementAvailable||!stats.count||!source}/>
+        auto={setting.mode==="auto"} onChange={next=>setSetting({mode:"manual",...next})} onAuto={()=>{setSetting({mode:"auto"});setAutoEpoch(n=>n+1);}}
+        disabled={!stats.count||!source}/>
       <div className="live-sharpen-control" role="group" aria-label={t("processing.liveView.sharpness")}>
         <div className="live-sharpen-control__label">
           <span>{t("processing.liveView.sharpness.short")}</span><output aria-live="off">{sharpness}%</output>

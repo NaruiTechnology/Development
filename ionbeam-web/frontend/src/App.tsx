@@ -171,6 +171,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const mainRef = useRef<HTMLElement | null>(null);
+  const imagePanelCardRef = useRef<HTMLDivElement | null>(null);
   const route = useAppRoute();
   // Both hardware controllers start docked. Their header buttons restore the
   // corresponding popup without requiring an initial open/close cycle.
@@ -493,6 +494,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
 
     let cancelled = false;
     const controller = new AbortController();
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
     setVacuumControllerError(true);
 
@@ -528,12 +530,17 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
           setVacuumControllerError(true);
           setHighVoltagePower(false);
         }
+      } finally {
+        // Readiness must keep updating even while the controller is docked.
+        // Schedule after completion so slow requests cannot overlap.
+        if (!cancelled) refreshTimer = setTimeout(() => void refreshVacuumReadiness(), 1000);
       }
     }
 
     void refreshVacuumReadiness();
     return () => {
       cancelled = true;
+      clearTimeout(refreshTimer);
       controller.abort();
     };
   }, [vacuumEnabled]);
@@ -600,6 +607,20 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
       setLastScanKind(kind);
     }
   }, [kind]);
+
+  useLayoutEffect(() => {
+    const card = imagePanelCardRef.current;
+    if (!patternsLayout || !card) return;
+    const fitHeight = () => {
+      // Use document position so scrolling the controls cannot change the
+      // canvas height. Leave room for the bottom edge and resize handle.
+      const top = card.getBoundingClientRect().top + window.scrollY;
+      card.style.setProperty("--processing-panel-height", `${Math.max(360, window.innerHeight - top - 16)}px`);
+    };
+    fitHeight();
+    window.addEventListener("resize", fitHeight);
+    return () => window.removeEventListener("resize", fitHeight);
+  }, [patternsLayout, route]);
 
   useLayoutEffect(() => {
     const main = mainRef.current;
@@ -2121,7 +2142,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
 
         {/* right column */}
         <section>
-            <div className={`card image-panel-card${activeTopTab === "processing" ? " image-panel-card--processing" : ""}`}>
+            <div ref={imagePanelCardRef} className={`card image-panel-card${activeTopTab === "processing" ? " image-panel-card--processing" : ""}`}>
               <div className={`card__header image-panel-card__header${scanPathToggle ? " image-panel-card__header--scan-path" : ""}${kind === "roi" ? " image-panel-card__header--roi" : ""}${headerSecondRow ? " image-panel-card__header--two-row" : ""}`}>
                 <div className="image-panel-card__header-main">
                   <span className="card__title">{t(

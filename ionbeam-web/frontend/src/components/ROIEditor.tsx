@@ -2033,7 +2033,7 @@ export function ROIEditor({
             sampleGrayAtClient: rawGrayAtClient,
           })}
           {milling && <LiveViewCanvas contrastHost={liveContrastHost} toolsHost={liveToolsHost}
-            roiLevels={levels} pointerWorld={(x,y)=>toDut(canvasPointFromClient(x,y,true))} />}
+            pointerWorld={(x,y)=>toDut(canvasPointFromClient(x,y,true))} />}
           {ctrlCursor && !roi.calibration_enabled && (
               <span
               className="roi-corner-cursor"

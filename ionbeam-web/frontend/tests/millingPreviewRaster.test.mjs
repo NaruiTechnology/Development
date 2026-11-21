@@ -1,8 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {millingSpotPositions,millingPreviewGeometry,millingPreviewMask,millingPreviewRadius,millingPixelIndex,millingSampleOwners,millingDisplaySamples} from "../.test-dist/lib/millingLiveView.js";
+import {millingSpotPositions,millingPreviewGeometry,millingPreviewMask,millingPreviewRadius,millingPreviewCoverage,millingPixelIndex,millingSampleOwners,millingDisplaySamples} from "../.test-dist/lib/millingLiveView.js";
 const projection={x_origin:0,x_end:259.1,y_origin:0,y_end:502,scanGeometry:null};
 const lattice={shape:{kind:"ellipse",cx:10572.1546875,cy:5580.459375,rx:768.3796471795085,ry:768.3796471795085},pitch_x:1.1063781816839575,pitch_y:.5710736879817975,axis:"x",dwell:7,passes:1};
+
+test("recipe coverage is the union of exposure shapes and preserves holes and gaps",()=>{
+ const p={x_origin:0,x_end:16383,y_origin:0,y_end:16383,scanGeometry:null};
+ const ring={...lattice,shape:{kind:"ellipse",cx:30,cy:30,rx:20,ry:20,inner_rx:10,inner_ry:10},pitch_x:2,pitch_y:2};
+ const box={...lattice,shape:{kind:"rect",x0:70,x1:90,y0:70,y1:90},pitch_x:2,pitch_y:2};
+ const b={x_start:0,x_end:100,y_start:0,y_end:100};
+ const {mask}=millingPreviewCoverage([ring,box],p,b,100);
+ assert.equal(mask[millingPixelIndex(30,30,b,100)],0,"ring hole stays transparent");
+ assert.equal(mask[millingPixelIndex(45,30,b,100)],1,"ring exposure is covered");
+ assert.equal(mask[millingPixelIndex(80,80,b,100)],1,"the other recipe step is covered");
+ assert.equal(mask[millingPixelIndex(60,60,b,100)],0,"space between emitted shapes is never filled");
+});
 
 test("logged unequal-axis circle maps every actual sample inside preview bounds without edge clamping",()=>{
  const {bounds}=millingPreviewGeometry(lattice,projection);
@@ -50,7 +62,7 @@ test("ring hole, polygon exterior and unacquired regions remain transparent",()=
 });
 
 
-test("display gathering removes decimation stripes and retains qualifying highlights at Scan resolution",()=>{
+test("display gathering removes decimation stripes and retains qualifying exposure highlights",()=>{
  const n=2048,r=640,{bounds}=millingPreviewGeometry(lattice,projection),valid=new Uint8Array(n*n),change=new Float32Array(n*n).fill(-1);
  for(const [dx,dy] of millingSpotPositions(lattice))valid[millingPixelIndex(dx/16383*259.1,dy/16383*502,bounds,n)]=1;
  const mask=millingPreviewMask(lattice,projection,bounds,r),radius=millingPreviewRadius(lattice,projection,bounds,r);
