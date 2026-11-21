@@ -137,7 +137,7 @@
                     "skipPrivateGitEditable": true,
                     "editableInstall": true,
                     "editableTarget": ".",
-                    "verifyImports": ["amaranth", "gpiozero", "smbus2", "serial", "httpx", "redis", "uvicorn", "numpy", "PyQt6.QtCore"],
+                    "verifyImports": ["amaranth", "gpiozero", "smbus2", "serial", "httpx", "redis", "uvicorn", "numpy", "PIL.Image", "PyQt6.QtCore"],
                     "requiredExecutables": {
                         "uvicorn": "uvicorn[standard]>=0.27"
                     },

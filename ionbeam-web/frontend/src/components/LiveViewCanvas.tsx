@@ -1,4 +1,5 @@
-import { promotedMillingGray } from "../lib/millingChange";
+import { isMillingChangeHighlighted } from "../lib/millingChange";
+import { sharpenGrayImage } from "../lib/sharpenGray";
 import { CHANGE_ZERO, LIVE_FULL_SCALE, liveAutoLevels, liveChanges, liveStatistics, normalizedLiveGray } from "../lib/liveContrast";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -19,7 +20,6 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
   const threshold=useAppSelector(s=>s.exposure.millingChangeThresholdPercent);
   const zoom=useAppSelector(s=>s.exposure.viewZoom),rawFrame=useAppSelector(s=>s.image.millingFrame);
   const frame=rawFrame?.key.startsWith(`${patterns.activeKey}:`)?rawFrame:null;
-  const referenceSaved=useAppSelector(s=>s.image.millingHistoryPersisted);
   const canvasRef=useRef<HTMLCanvasElement|null>(null);
   const [offset,setOffset]=useState<Point|null>(null);
   const drag=useRef<{start:Point;offset:Point}|null>(null);
@@ -37,6 +37,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
   const setting=mode==="change"?deltaSetting:rawSetting;
   const setSetting=mode==="change"?setDeltaSetting:setRawSetting;
   const [strength,setStrength]=useState(75);
+  const [sharpness,setSharpness]=useState(25);
   const [band,setBand]=useState<[number,number]>([0,16383]),[bandEnabled,setBandEnabled]=useState(true);
   const [autoEpoch,setAutoEpoch]=useState(0);
   const minimumWindow=8*4;
@@ -56,15 +57,14 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
     const valid=effectiveMode==="change"?changes.valid:frame?.valid??[];
     const values=new Float64Array(sourceValues.length);
     const fullScale=effectiveMode==="change"?LIVE_FULL_SCALE*2:LIVE_FULL_SCALE;
-    let highlighted=0,total=0;
+    
     for(let i=0;i<sourceValues.length;i++)if(valid[i])
       {
-        total++;
         const change=frame?.changePercent[i]??-1;
-        if(threshold>0&&change>=0&&change>=threshold){values[i]=fullScale;highlighted++;}
+        if(isMillingChangeHighlighted(change,threshold))values[i]=fullScale;
         else values[i]=sourceValues[i];
       }
-    return {...liveStatistics(values,valid,[0,fullScale],fullScale),highlighted,total};
+    return liveStatistics(values,valid,[0,fullScale],fullScale);
   },[frame,effectiveMode,changes,threshold]);
   const target=liveAutoLevels(stats,minimumWindow,effectiveMode==="change");
   const context=`${frame?.key}:${shapeKey}:${effectiveMode}:${stats.count>0}:${autoEpoch}:${setting.mode}`;
@@ -111,10 +111,20 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
       if(i<0)continue;
       const gray=!deltaEnhancementAvailable?levelGray(frame.pixels[i],roiLevels.low,roiLevels.high):effectiveMode==="change"?levelGray(changes.values[i],levels.low,levels.high):effectiveMode==="normalize"&&bandEnabled?
         normalizedLiveGray(frame.pixels[i],levels,selectedStats,sampleBand,strength,minimumWindow):levelGray(frame.pixels[i],levels.low,levels.high),p=pIndex*4;
-      const displayedGray=deltaEnhancementAvailable
-        ? promotedMillingGray(gray,display?.highlight[pIndex]??frame.changePercent[i],threshold)
-        : gray;
-      image.data[p]=image.data[p+1]=image.data[p+2]=displayedGray;image.data[p+3]=255;
+      const changePercent=display?.highlight[pIndex]??frame.changePercent[i];
+      if(deltaEnhancementAvailable&&isMillingChangeHighlighted(changePercent,threshold)) {
+        image.data[p]=124;image.data[p+1]=252;image.data[p+2]=0; // LawnGreen
+      } else image.data[p]=image.data[p+1]=image.data[p+2]=gray;
+      image.data[p+3]=255;
+    }
+    sharpenGrayImage(image.data,edge,edge,sharpness);
+    if(deltaEnhancementAvailable&&threshold>0)for(let pIndex=0;pIndex<edge*edge;pIndex++) {
+      const i=display?display.owners[pIndex]:(frame.valid[pIndex]?pIndex:-1);
+      if(i<0)continue;
+      const changePercent=display?.highlight[pIndex]??frame.changePercent[i];
+      if(isMillingChangeHighlighted(changePercent,threshold)) {
+        const p=pIndex*4;image.data[p]=124;image.data[p+1]=252;image.data[p+2]=0;
+      }
     }
     c.putImageData(image,0,0);
     // Recipe sub-bands occupy the same relative position inside the magnified window.
@@ -122,7 +132,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
     const mapY=(y:number)=>window.y_start+(y-source.y_start)/(source.y_end-source.y_start)*(window.y_end-window.y_start);
     ctx.imageSmoothingEnabled=false;
     ctx.drawImage(scratch,cx(mapX(frame.bounds.x_start)),cy(mapY(frame.bounds.y_start)),cx(mapX(frame.bounds.x_end))-cx(mapX(frame.bounds.x_start)),cy(mapY(frame.bounds.y_end))-cy(mapY(frame.bounds.y_start)));
-  },[frame,display,threshold,levels.low,levels.high,roiLevels.low,roiLevels.high,deltaEnhancementAvailable,shapeKey,zoom,offset,roi,effectiveMode,changes,selectedStats,band[0],band[1],bandEnabled,strength,minimumWindow]);
+  },[frame,display,threshold,sharpness,levels.low,levels.high,roiLevels.low,roiLevels.high,deltaEnhancementAvailable,shapeKey,zoom,offset,roi,effectiveMode,changes,selectedStats,band[0],band[1],bandEnabled,strength,minimumWindow]);
   return <>
     <div className="milling-live-layer" aria-label="LiveViewCanvas">
       <canvas ref={canvasRef} width={640} height={640} aria-label="Milling spot feedback image" />
@@ -135,22 +145,37 @@ export function LiveViewCanvas({contrastHost, toolsHost, roiLevels, pointerWorld
       </div>}
     </div>
     {contrastHost && createPortal(<div className="live-contrast-control">
-      <label className="live-contrast-mode">View
+      <label className="live-contrast-mode">
         <select aria-label="LiveView contrast mode" value={effectiveMode} disabled={!deltaEnhancementAvailable} onChange={e=>{
           const next=e.target.value as typeof mode;setMode(next);if(next==="normalize"&&rawStats.count)aroundMean();
         }}>
           <option value="auto">Enhanced Auto</option><option value="change">Change</option><option value="normalize">Normalize range</option>
         </select>
       </label>
-      <LevelWedge scopeLabel={effectiveMode==="change"?"Δ previous pass (ADC)":"ROIContrast"} histogram={histogram} levels={levels}
+      <LevelWedge histogram={histogram} levels={levels}
         fullScale={effectiveMode==="change"?LIVE_FULL_SCALE*2:LIVE_FULL_SCALE} codeOffset={effectiveMode==="change"?CHANGE_ZERO:0}
         auto={deltaEnhancementAvailable?setting.mode==="auto":true} onChange={next=>setSetting({mode:"manual",...next})} onAuto={()=>{setSetting({mode:"auto"});setAutoEpoch(n=>n+1);}}
         disabled={!deltaEnhancementAvailable||!stats.count||!source}/>
-      {!deltaEnhancementAvailable&&<small role="status">{t("processing.exposure.liveViewRoiContrast")}</small>}
-      {effectiveMode==="change"&&!stats.count&&<small role="status">{frame?.previousMeans?"Waiting for matching pixels":"First pass establishes reference"}</small>}
-      {frame?.pass&&frame.pass>1&&<small role="status">Change threshold highlights · {spectrumStats.highlighted.toLocaleString()} / {spectrumStats.total.toLocaleString()} samples · {threshold}%</small>}
-      {effectiveMode==="change"&&stats.count>0&&<small>Preview-pixel change · pass {frame?.pass??1}</small>}
-      {effectiveMode==="change"&&frame?.completedMeans&&<small>{referenceSaved?"Reference saved locally":"Reference retained in session"}</small>}
+      <div className="live-sharpen-control" role="group" aria-label={t("processing.liveView.sharpness")}>
+        <div className="live-sharpen-control__label">
+          <span>{t("processing.liveView.sharpness.short")}</span><output aria-live="off">{sharpness}%</output>
+        </div>
+        <div className="patterns-exposure__pause-slider" onClick={event=>{
+          if(event.button!==0||event.target instanceof HTMLInputElement)return;
+          const rect=event.currentTarget.getBoundingClientRect();
+          const ratio=Math.max(0,Math.min(1,(event.clientX-rect.left-4)/Math.max(1,rect.width-8)));
+          setSharpness(Math.max(0,Math.min(100,sharpness+(ratio<sharpness/100?-1:1))));
+        }}>
+          <div className="patterns-exposure__pause-track" />
+          <div className="patterns-exposure__pause-ticks" aria-hidden="true">
+            {[0,25,50,75,100].map(value=><span key={value} className="patterns-exposure__pause-tick--major"
+              style={{left:`${value}%`}}><i>{value}</i></span>)}
+          </div>
+          <input type="range" min={0} max={100} step={1} value={sharpness}
+            aria-label={t("processing.liveView.sharpness")} aria-valuetext={`${sharpness}%`}
+            onChange={e=>setSharpness(Number(e.target.value))}/>
+        </div>
+      </div>
     </div>,contrastHost)}
     {toolsHost&&effectiveMode==="normalize"&&createPortal(<div className="live-normalize-toolbar">
       <label><input type="checkbox" aria-label="Enable LiveView normalization range" checked={bandEnabled} onChange={e=>setBandEnabled(e.target.checked)}/> Brighten range (ADC)</label>

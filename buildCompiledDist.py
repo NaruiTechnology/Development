@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - Python 3.10 deploy builder fallback
     tomllib = None
 
 
-REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('gpiozero', 'httpx', 'redis')
+REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('gpiozero', 'httpx', 'redis', 'pillow')
 REQUIRED_SBC_RUNTIME_PACKAGES = ('smbus2', 'pyserial')
 REQUIRED_LOCAL_REDIS_APT_PACKAGES = (
     'redis-server', 'redis-sentinel', 'redis-tools')

@@ -8602,9 +8602,9 @@ body {
 .roi-contrast-full { display: flex; width: 100%; }
 .milling-contrast-split { display: flex; flex-direction: column; gap: 18px; flex: 0 0 112px; width: 112px; min-height: 0; }
 .milling-contrast-upper, .milling-contrast-lower { display: flex; flex: 1 1 50%; min-height: 0; padding: 6px; }
-.milling-contrast-lower { border: 1px solid var(--c-border, #294563); border-radius: 4px; box-sizing: border-box; }
+.milling-contrast-lower { flex:1 1 0; border: 1px solid var(--c-border, #294563); border-radius: 4px; box-sizing: border-box; }
 .milling-contrast-lower > .level-wedge { border: 0; padding: 0; }
-.milling-contrast-upper { background: transparent; }
+.milling-contrast-upper { flex:1.25 1 0; background: transparent; }
 .milling-contrast-split .level-wedge { flex: 1 1 auto; width: 100%; }
 .milling-contrast-split .level-wedge__plot { min-height: 100px; }
 .milling-live-layer { position: absolute; inset: 0; z-index: 25; pointer-events: none; }
@@ -8619,6 +8619,11 @@ body {
 .live-contrast-mode { font-size:10px; display:flex; flex-wrap:wrap; align-items:center; gap:3px; }
 .live-contrast-mode select { width:100%; min-width:0; font-size:10px; padding:3px; background:var(--c-bg); color:var(--c-text); border:1px solid var(--c-border); }
 .live-contrast-control small { font-size:9px; }
+.live-sharpen-control { display:flex; flex-direction:column; align-items:stretch; gap:0; min-width:0; font-size:9px; }
+.live-sharpen-control .patterns-exposure__pause-slider { flex:none; width:100%; min-width:0; }
+.live-sharpen-control output { color:lawngreen; font-variant-numeric:tabular-nums; }
+.live-sharpen-control output, .live-sharpen-control .patterns-exposure__pause-ticks i { font-size:9px; }
+.live-sharpen-control__label { display:flex; flex-direction:column; min-width:0; line-height:1.1; font-size:10px; }
 .live-normalize-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:8px; border:1px solid var(--c-border); margin-bottom:8px; font-size:11px; }
 .live-normalize-toolbar label { display:flex; align-items:center; gap:5px; }
 .live-normalize-toolbar .btn { padding:4px 8px; min-height:26px; font-size:11px; }

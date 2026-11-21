@@ -5,6 +5,7 @@ gpiozero>=2.0
 redis<8,>=5.0
 httpx<1,>=0.27
 numpy>=2.0
+pillow>=10
 
 [examples]
 websockets>=12

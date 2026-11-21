@@ -11,6 +11,7 @@ Requires-Dist: gpiozero>=2.0
 Requires-Dist: redis<8,>=5.0
 Requires-Dist: httpx<1,>=0.27
 Requires-Dist: numpy>=2.0
+Requires-Dist: pillow>=10
 Provides-Extra: examples
 Requires-Dist: websockets>=12; extra == "examples"
 Provides-Extra: tests

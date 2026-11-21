@@ -18,6 +18,11 @@ export function promotedMillingGray(gray: number, changePercent: number, thresho
   return threshold > 0 && changePercent >= 0 && changePercent >= threshold ? 255 : gray;
 }
 
+/** A matched pass delta qualifies for highlighting at or above the selected percentage. */
+export function isMillingChangeHighlighted(changePercent: number, threshold: number): boolean {
+  return threshold > 0 && changePercent >= 0 && changePercent >= threshold;
+}
+
 export class MillingSpotChanges {
   private key: string | null = null;
   private pass = 0;

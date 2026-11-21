@@ -154,8 +154,8 @@ install_units() {
     echo "Missing virtual environment executables under ${VENV_DIR}" >&2
     exit 1
   }
-  "${PYTHON_BIN}" -c 'import fastapi, pydantic' >/dev/null 2>&1 || {
-    echo "The virtual environment under ${VENV_DIR} is missing FastAPI/Pydantic. Install glasgow_service/requirements.txt before restarting." >&2
+  "${PYTHON_BIN}" -c 'import fastapi, pydantic, PIL.Image' >/dev/null 2>&1 || {
+    echo "The virtual environment under ${VENV_DIR} is missing FastAPI/Pydantic/Pillow. Install glasgow_service/requirements.txt before restarting." >&2
     exit 1
   }
   [[ -x "${NPM_BIN}" ]] || {

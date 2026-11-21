@@ -92,7 +92,13 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
               </HelpPopover>
             </div>
             <div className="patterns-exposure__pause-shell">
-              <div className="patterns-exposure__pause-slider">
+            <div className="patterns-exposure__pause-slider" onClick={event=>{
+              if(event.button!==0||event.target instanceof HTMLInputElement)return;
+              const rect=event.currentTarget.getBoundingClientRect();
+              const ratio=Math.max(0,Math.min(1,(event.clientX-rect.left-4)/Math.max(1,rect.width-8)));
+              const next=state.millingChangeThresholdPercent+(ratio<state.millingChangeThresholdPercent/100?-1:1);
+              dispatch(setMillingChangeThresholdPercent(Math.max(0,Math.min(100,next))));
+            }}>
                 <div className="patterns-exposure__pause-track" />
                 <div className="patterns-exposure__pause-ticks" aria-hidden="true">
                   {Array.from({length: 21}, (_, index) => {

@@ -89,7 +89,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
       <div className="card patterns-card" aria-busy={exposureActive || patternsLoading}>
         <div className="card__header patterns-card__header">
           <span className="patterns-card__heading">
-            <span className="card__title">{t("processing.patterns")}</span>
+            <span className="card__title">{t("processing.actions")}</span>
             {exposureActive && !patternsLoading && <LoadingSpinner inline size={18} className="patterns-card__spinner"
               ariaLabel={t("processing.exposure.status.current")} />}
           </span>
