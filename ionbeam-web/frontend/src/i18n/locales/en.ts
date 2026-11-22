@@ -235,7 +235,7 @@ export const en = {
   "processing.liveView.sharpness": "Sharpen LiveView",
   "processing.liveView.sharpness.short": "Sharp",
   "processing.workflow.timeLeft": "Time left:",
-  "processing.workflow.pass": "Pass - {current} / {total}",
+  "processing.workflow.pass": "Exposure pass {current}/{total}",
   "processing.exposure.changeThresholdHelp": "On passes after the first, compare each spot with its matching spot on the previous pass. At or above this absolute percentage change, show the spot at the upper contrast limit; spots below it retain their ordinary LiveView grayscale. The first pass has no previous pass, so no change highlights appear. Set the threshold to 0% to turn off change highlighting.",
   "processing.exposure.changeThresholdHelp.aria": "Help for Change threshold",
   "processing.exposure.liveViewRoiContrast": "Showing ROI contrast; change enhancement needs pass 2+ and a threshold above 0%.",

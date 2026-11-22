@@ -225,7 +225,7 @@ export const zhTW: Partial<TranslationTable> = {
   "processing.liveView.sharpness": "LiveView 銳化",
   "processing.liveView.sharpness.short": "銳化",
   "processing.workflow.timeLeft": "剩餘時間：",
-  "processing.workflow.pass": "遍次 - {current} / {total}",
+  "processing.workflow.pass": "曝光遍次 {current}/{total}",
   "processing.exposure.changeThresholdHelp": "從第二遍開始，將每個點與上一遍中位置相同的點比較。灰階絕對變化百分比達到或超過此閾值時，該點會以對比度上限顯示；低於閾值的點保留 LiveView 的一般灰階。第一遍沒有上一遍，因此不會顯示變化高亮。設為 0% 可關閉變化高亮。",
   "processing.exposure.changeThresholdHelp.aria": "變化閾值說明",
   "processing.exposure.liveViewRoiContrast": "目前顯示 ROI 對比；變化增強需要第 2 遍或之後，且閾值大於 0%。",

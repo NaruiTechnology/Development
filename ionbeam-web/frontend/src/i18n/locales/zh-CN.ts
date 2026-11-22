@@ -217,7 +217,7 @@ export const zhCN: Partial<TranslationTable> = {
   "processing.liveView.sharpness": "LiveView 锐化",
   "processing.liveView.sharpness.short": "锐化",
   "processing.workflow.timeLeft": "剩余时间：",
-  "processing.workflow.pass": "遍次 - {current} / {total}",
+  "processing.workflow.pass": "曝光遍次 {current}/{total}",
   "processing.exposure.changeThresholdHelp": "从第二遍开始，将每个点与上一遍中位置匹配的点进行比较。灰度绝对变化百分比达到或超过此阈值时，该点以对比度上限显示；低于阈值的点保留 LiveView 的普通灰阶。第一遍没有上一遍，因此不会显示变化高亮。设为 0% 可关闭变化高亮。",
   "processing.exposure.changeThresholdHelp.aria": "变化阈值帮助",
   "processing.exposure.liveViewRoiContrast": "当前显示 ROI 对比度；变化增强需要第 2 遍或之后，且阈值大于 0%。",
