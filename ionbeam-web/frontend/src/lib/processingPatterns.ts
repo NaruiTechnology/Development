@@ -182,6 +182,24 @@ const polygonDef: PatternModelDef = {
   },
 };
 
+/** Prepare the edges crossing one lattice row, retaining the polygon boundary tolerance. */
+export function polygonScanlineContains(points: readonly (readonly [number, number])[], y: number): (x: number) => boolean {
+  const edges = points.flatMap(([xi, yi], i) => {
+    const [xj, yj] = points[(i + points.length - 1) % points.length];
+    if (y < Math.min(yi, yj) || y > Math.max(yi, yj)) return [];
+    const dx = xj - xi, dy = yj - yi;
+    return [{xi, yi, xj, yj, dx, dy, tolerance: 1e-10 * Math.max(1, Math.hypot(dx, dy))}];
+  });
+  return x => {
+    let inside = false;
+    for (const {xi, yi, xj, yj, dx, dy, tolerance} of edges) {
+      if (x >= Math.min(xi, xj) && x <= Math.max(xi, xj) && Math.abs(dx * (y - yi) - dy * (x - xi)) <= tolerance) return true;
+      if ((yi > y) !== (yj > y) && x < dx * (y - yi) / dy + xi) inside = !inside;
+    }
+    return inside;
+  };
+}
+
 /** A finite-width line uses a four-corner polygon so every existing mask consumer agrees.
  * Points are start+normal, end+normal, end-normal, start-normal; ends are flat.
  */

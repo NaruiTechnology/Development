@@ -1,4 +1,4 @@
-import { MODEL_REGISTRY, patternBounds, type PatternRoi, type PatternSpec } from "./processingPatterns.js";
+import { MODEL_REGISTRY, patternBounds, polygonScanlineContains, type PatternRoi, type PatternSpec } from "./processingPatterns.js";
 import type { VectorPointTuple } from "../types/api";
 
 /**
@@ -110,9 +110,11 @@ export function countSpots(spec: Pick<PatternSpec, "model">, shape: PatternRoi, 
     return { count: Math.max(1, Math.round(model.area(shape, parameters) / (l.pitchX * l.pitchY))), exact: false };
   }
   let count = 0;
-  for (let j = 0; j < l.ny; j++) for (let i = 0; i < l.nx; i++) {
-    const [x, y] = cellCentre(l, i, j);
-    if (model.contains(shape, x, y, parameters)) count++;
+  for (let j = 0; j < l.ny; j++) {
+    const y = cellCentre(l, 0, j)[1];
+    const contains = "points" in shape ? polygonScanlineContains(shape.points, y)
+      : (x: number) => model.contains(shape, x, y, parameters);
+    for (let i = 0; i < l.nx; i++) if (contains(cellCentre(l, i, j)[0])) count++;
   }
   return { count, exact: true };
 }

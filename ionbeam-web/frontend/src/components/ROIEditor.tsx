@@ -501,10 +501,21 @@ export function ROIEditor({
 
   useEffect(() => {
     const canvas = scanPathCanvasRef.current;
-    if (!processingPreview || !canvas) return;
+    if (!canvas) return;
+    const canvasContext = canvas.getContext("2d");
+    if (!processingPreview) {
+      canvasContext?.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+      return;
+    }
     const visible = processingPreview === "raster" ? roi.raster_show_scan_path : roi.vector_show_scan_path;
     if (!visible) {
-      canvas.getContext("2d")?.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+      canvasContext?.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+      return;
+    }
+    // A scan path is a live position aid. Once acquisition ends, the retained
+    // cursor belongs to the previous scan and must not remain over the image.
+    if (vectorPhase !== "running") {
+      canvasContext?.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
       return;
     }
     const regions = processingRegions?.length ? processingRegions : [processingROI];
@@ -551,7 +562,7 @@ export function ROIEditor({
       }
       ctx.clip();
     } : undefined;
-    const running = vectorPhase === "running";
+    const running = true;
     let animationFrame = 0;
     const draw = (now: number) => {
       const edge = Math.max(1, processingEdge);

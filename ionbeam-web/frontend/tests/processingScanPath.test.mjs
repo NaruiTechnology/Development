@@ -107,6 +107,17 @@ for (const kind of ["raster", "vector"]) {
           "workflow marker uses actual point pixels rather than its compact cursor as a raster offset");
       }
 
+      if (kind === "vector") {
+        await act(async () => {
+          store.dispatch(image.setupVector({ pattern: "default", edge: 128 }));
+          store.dispatch(image.appendVectorSamples({ values: new Uint16Array(12).fill(1) }));
+        });
+        operations.length = 0;
+        await act(async () => { store.dispatch(scan.streamCompleted({ chunks: 1, kind: "vector" })); });
+        assert.ok(operations.some(([op]) => op === "clearRect"), "completed scans clear the prior live path overlay");
+        assert.ok(!operations.some(([op]) => op === "stroke"), "a completed scan path does not remain as a vestige");
+      }
+
       operations.length = 0;
       await act(async () => {
         store.dispatch(scan.updateROI(kind === "raster" ? { raster_show_scan_path: false } : { vector_show_scan_path: false }));

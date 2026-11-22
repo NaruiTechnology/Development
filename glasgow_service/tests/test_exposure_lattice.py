@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from glasgow_service.exposure_lattice import (
-    Rect, Ellipse, Polygon, build_lattice, count_spots, spot_centres, lattice_points, total_points, make_shape,
+    Rect, Ellipse, Polygon, Frame, build_lattice, count_spots, spot_centres, lattice_points, total_points, make_shape,
     MAX_COUNT_CELLS,
 )
 
@@ -133,3 +133,35 @@ def test_sub_dac_segments_preserve_delivered_charge_at_boundaries():
         actual.extend(lattice_points(shape, lattice, 7, cell_start=start,
                                      cell_end=min(start + 3, lattice.nx * lattice.ny)))
     assert sum(p[2] + 1 for p in actual) == len(list(spot_centres(shape, lattice))) * 8
+
+
+@pytest.mark.parametrize("points", [
+    ((0, 0), (8, 0), (8, 6), (4, 3), (0, 6)),
+    ((0, 0), (8, 6), (0, 6), (8, 0)),  # crossing outline: even/odd fill
+    ((0, 0), (8, 0), (8, 6), (8, 6), (0, 6)),
+])
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_prepared_scanlines_preserve_clipping_boundaries_and_segment_order(points, axis):
+    polygon = Polygon(points)
+    for shape in [polygon, Frame(polygon, Polygon(((2, 2), (6, 2), (4, 5))))]:
+        lattice = build_lattice(shape, 0.5, axis=axis)
+        expected = [lattice.centre(i, j) for i, j in lattice.cells()
+                    if shape.contains(*lattice.centre(i, j))]
+        assert list(spot_centres(shape, lattice)) == expected
+        assert count_spots(shape, lattice) == (len(expected), True)
+        segmented = []
+        for start in range(0, lattice.nx * lattice.ny, 7):
+            segmented.extend(spot_centres(shape, lattice, start, start + 7))
+        assert segmented == expected
+
+
+def test_large_freehand_preparation_does_not_retest_all_edges_per_spot(monkeypatch):
+    shape = Polygon(tuple((100 + 100 * math.cos(i * 2 * math.pi / 98),
+                           100 + 100 * math.sin(i * 2 * math.pi / 98)) for i in range(98)))
+    lattice = build_lattice(shape, 0.11)
+    def expensive_path(*args):
+        raise AssertionError("Free hand must prepare clipping once per row")
+    monkeypatch.setattr(Polygon, "contains", expensive_path)
+    count, exact = count_spots(shape, lattice)
+    assert exact and count > 2_000_000
+    assert len(list(itertools.islice(lattice_points(shape, lattice, 7), 10))) == 10

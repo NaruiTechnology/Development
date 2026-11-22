@@ -158,6 +158,38 @@ def build_lattice(shape, pitch_x: float, pitch_y: Optional[float] = None, axis: 
     return Lattice(nx, ny, w / nx, h / ny, x0, y0, fast)
 
 
+def _polygon_scanline(points, y):
+    """Prepare only edges intersecting this row; preserve contains' boundary rule."""
+    edges = []
+    for i, (xi, yi) in enumerate(points):
+        xj, yj = points[i - 1]
+        if min(yi, yj) <= y <= max(yi, yj):
+            dx, dy = xj - xi, yj - yi
+            edges.append((xi, yi, xj, yj, dx, dy,
+                          1e-10 * max(1.0, math.hypot(dx, dy))))
+
+    def contains(x):
+        inside = False
+        for xi, yi, xj, yj, dx, dy, tolerance in edges:
+            if (min(xi, xj) <= x <= max(xi, xj)
+                    and abs(dx * (y - yi) - dy * (x - xi)) <= tolerance):
+                return True
+            if (yi > y) != (yj > y) and x < dx * (y - yi) / dy + xi:
+                inside = not inside
+        return inside
+    return contains
+
+
+def _scanline_contains(shape, y):
+    if isinstance(shape, Polygon):
+        return _polygon_scanline(shape.points, y)
+    if isinstance(shape, Frame):
+        outer = _polygon_scanline(shape.outer.points, y)
+        inner = _polygon_scanline(shape.inner.points, y)
+        return lambda x: outer(x) and not inner(x)
+    return lambda x: shape.contains(x, y)
+
+
 @lru_cache(maxsize=64)
 def count_spots(shape, lattice: Lattice) -> Tuple[int, bool]:
     """(spots inside the shape, exact). Large lattices fall back to area / cell area."""
@@ -167,8 +199,10 @@ def count_spots(shape, lattice: Lattice) -> Tuple[int, bool]:
         return lattice.nx * lattice.ny, True
     n = 0
     for j in range(lattice.ny):
+        y = lattice.centre(0, j)[1]
+        contains = _scanline_contains(shape, y)
         for i in range(lattice.nx):
-            if shape.contains(*lattice.centre(i, j)):
+            if contains(lattice.centre(i, j)[0]):
                 n += 1
     return n, True
 
@@ -176,9 +210,26 @@ def count_spots(shape, lattice: Lattice) -> Tuple[int, bool]:
 def spot_centres(shape, lattice: Lattice, start: int = 0, end: Optional[int] = None) -> Iterator[Tuple[float, float]]:
     """Float spot centres inside the shape, in serpentine scan order."""
     rectangular = isinstance(shape, Rect)
+    # Keep one prepared row/column, including when a segment starts mid-row.
+    clipped = shape
+    if lattice.axis == "y" and isinstance(shape, Polygon):
+        clipped = Polygon(tuple((y, x) for x, y in shape.points))
+    elif lattice.axis == "y" and isinstance(shape, Frame):
+        clipped = Frame(Polygon(tuple((y, x) for x, y in shape.outer.points)),
+                        Polygon(tuple((y, x) for x, y in shape.inner.points)))
+    previous = None
+    contains = None
     for i, j in lattice.cells(start, end):
         c = lattice.centre(i, j)
-        if rectangular or shape.contains(*c):
+        if isinstance(clipped, (Polygon, Frame)):
+            fast, slow = c if lattice.axis == "x" else (c[1], c[0])
+            if slow != previous:
+                contains = _scanline_contains(clipped, slow)
+                previous = slow
+            inside = contains(fast)
+        else:
+            inside = rectangular or shape.contains(*c)
+        if inside:
             yield c
 
 

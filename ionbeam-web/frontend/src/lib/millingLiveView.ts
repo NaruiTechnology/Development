@@ -1,4 +1,5 @@
 import { transform } from "./scanGeometry.js";
+import { polygonScanlineContains } from "./processingPatterns.js";
 import type { ROIState } from "../store/scanSlice";
 import type { LatticeRequest, LatticeShapeRequest, ROIRequest } from "../types/api";
 
@@ -27,13 +28,24 @@ export function* millingSpotPositions(l: LatticeRequest): Generator<[number,numb
   const nx=Math.max(1,Math.round((x1-x0)/l.pitch_x)),ny=Math.max(1,Math.round((y1-y0)/(l.pitch_y??l.pitch_x)));
   const pitchX=(x1-x0)/nx,pitchY=(y1-y0)/ny;
   const axis=l.axis==="long"?((x1-x0)>=(y1-y0)?"x":"y"):l.axis, fast=axis==="x"?nx:ny;
+  const orient = (points: [number,number][]): [number,number][] => axis === "x" ? points : points.map(([x,y])=>[y,x]);
+  const outer = s.kind === "polygon" ? orient(s.points) : s.kind === "frame" ? orient(s.outer) : null;
+  const inner = s.kind === "frame" ? orient(s.inner) : null;
+  let previous = NaN, contains: ((x:number)=>boolean) | null = null;
   for(let pass=0;pass<l.passes;pass++) {
     let pending:[number,number]|null=null, dwell=0;
     for(let cell=l.cell_start??0;cell<Math.min(l.cell_end??nx*ny,nx*ny);cell++) {
       const row=Math.floor(cell/fast),f=cell%fast,k=row%2?fast-1-f:f;
       const i=axis==="x"?k:row,j=axis==="x"?row:(row%2?ny-1-k:k);
       const cx=x0+(i+0.5)*pitchX,cy=y0+(j+0.5)*pitchY;
-      if(!millingShapeContains(s,cx,cy)) continue;
+      if (outer) {
+        const slow=axis==="x"?cy:cx;
+        if (slow!==previous) {
+          const outside=polygonScanlineContains(outer,slow),hole=inner?polygonScanlineContains(inner,slow):null;
+          contains=hole?(x=>outside(x)&&!hole(x)):outside;previous=slow;
+        }
+        if (!contains!(axis==="x"?cx:cy)) continue;
+      } else if(!millingShapeContains(s,cx,cy)) continue;
       const x=Math.max(0,Math.min(16383,Math.round(cx))),y=Math.max(0,Math.min(16383,Math.round(cy)));
       if(pending && pending[0]===x && pending[1]===y && dwell+l.dwell+1<=65535) {dwell+=l.dwell+1;continue;}
       if(pending) yield pending;

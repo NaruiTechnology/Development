@@ -116,6 +116,26 @@ test("TypeScript lattice matches the shared golden fixture the Python service is
 });
 
 import { buildLatticeRequest, linearDacMap } from "../.test-dist/lib/latticeRequest.js";
+import { MODEL_REGISTRY, polygonScanlineContains } from "../.test-dist/lib/processingPatterns.js";
+
+test("Free hand scanline clipping preserves corners, horizontal edges and crossing outlines", () => {
+  for (const points of [
+    [[0,0],[8,0],[8,6],[4,3],[0,6]],
+    [[0,0],[8,6],[0,6],[8,0]],
+    [[0,0],[8,0],[8,6],[8,6],[0,6]],
+  ]) {
+    const roi = {points};
+    for (let y=0;y<=6;y+=.25) {
+      const contains=polygonScanlineContains(points,y);
+      for(let x=0;x<=8;x+=.25)
+        assert.equal(contains(x),MODEL_REGISTRY.FreeHandModel.contains(roi,x,y), `${x},${y}`);
+    }
+    const lattice=latticeSpec(roi,.25);
+    assert.equal(countSpots({model:"FreeHandModel"},roi,lattice).count,
+      exposureSpots({model:"FreeHandModel",caption:"Free hand"},roi,lattice).length);
+  }
+});
+
 test("lattice request converts um pitch to DAC codes per axis and keeps shapes round on a linear map", () => {
   const map = linearDacMap({ x_origin: 0, x_end: 1000, y_origin: 0, y_end: 500 });
   const plan = { spacingUM: 0.5, passes: 3 };

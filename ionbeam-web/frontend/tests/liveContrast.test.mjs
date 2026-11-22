@@ -1,9 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { liveStatistics, liveAutoLevels, normalizedLiveGray, liveChanges, CHANGE_ZERO } from "../.test-dist/lib/liveContrast.js";
+import { liveStatistics, liveAutoLevels, normalizedLiveGray, liveChanges, CHANGE_ZERO, retainLiveContrast } from "../.test-dist/lib/liveContrast.js";
 import { levelGray } from "../.test-dist/lib/displayLevels.js";
 import reducer,{resetMillingFrame,beginMillingPass,completeMillingPass,appendMillingSamples,restoreMillingHistory} from "../.test-dist/store/imageSlice.js";
 const stats=values=>liveStatistics(values,new Uint8Array(values.length).fill(1));
+test("automatic contrast gain can only increase across successive passes",()=>{
+ let levels=null;
+ const candidates=[{low:10000,high:50000},{low:20000,high:40000},{low:5000,high:55000},{low:25000,high:35000}];
+ const widths=[];
+ for(const candidate of candidates){levels=retainLiveContrast(levels,candidate);widths.push(levels.high-levels.low);}
+ assert.deepEqual(widths,[40000,20000,20000,10000]);
+ assert.deepEqual(retainLiveContrast(null,candidates[0]),candidates[0],"a new run starts a fresh contrast history");
+ const shifted=retainLiveContrast({low:100,high:200},{low:500,high:900});
+ assert.deepEqual(shifted,{low:650,high:750},"retain the boosted window width while tracking a shifted signal");
+ const pass2=retainLiveContrast({low:10000,high:50000},{low:10000,high:50000},0.85);
+ const pass3=retainLiveContrast(pass2,{low:10000,high:50000},0.85);
+ const restored=retainLiveContrast(null,{low:10000,high:50000},0.85**2);
+ assert.ok(pass2.high-pass2.low < 40000 && pass3.high-pass3.low < pass2.high-pass2.low,
+  "each completed pass strengthens auto contrast");
+ assert.equal(restored.high-restored.low,pass3.high-pass3.low,"a completed run restores its progressive boost");
+});
 test("exact quantiles recover a narrow ADC signal in the presence of extreme outliers",()=>{
  const values=[0,65532,...Array.from({length:10000},(_,i)=>40000+4*(i%25))];
  const s=stats(values),l=liveAutoLevels(s);

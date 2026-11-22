@@ -1,6 +1,6 @@
 import { isMillingChangeHighlighted } from "../lib/millingChange";
 import { sharpenGrayImage } from "../lib/sharpenGray";
-import { CHANGE_ZERO, LIVE_FULL_SCALE, liveAutoLevels, liveChanges, liveStatistics, normalizedLiveGray } from "../lib/liveContrast";
+import { CHANGE_ZERO, LIVE_FULL_SCALE, liveAutoLevels, liveChanges, liveStatistics, normalizedLiveGray, retainLiveContrast } from "../lib/liveContrast";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAppSelector } from "../store";
@@ -41,9 +41,14 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
   const [strength,setStrength]=useState(75);
   const [sharpness,setSharpness]=useState(25);
   const [band,setBand]=useState<[number,number]>([0,16383]),[bandEnabled,setBandEnabled]=useState(true);
-  const [autoEpoch,setAutoEpoch]=useState(0);
   const minimumWindow=8*4;
   const rawStats=useMemo(()=>liveStatistics(frame?.pixels??[],frame?.valid??[]),[frame]);
+  // Use a complete exposure for automatic contrast once it is available.
+  // Mixing retained pixels with a partially replaced pass shifts the quantiles
+  // during acquisition and can undo the enhancement at the next pass boundary.
+  const completedStats=useMemo(()=>frame?.completedMeans&&frame?.completedValid
+    ?liveStatistics(frame.completedMeans,frame.completedValid):null,
+    [frame?.completedMeans,frame?.completedValid]);
   const changes=useMemo(()=>liveChanges(frame?.pixels??[],frame?.valid??[],frame?.sums,frame?.counts,frame?.previousMeans,frame?.previousValid,frame?.previousCounts),[frame]);
   const changeStats=useMemo(()=>liveStatistics(changes.values,changes.valid,[0,LIVE_FULL_SCALE*2],LIVE_FULL_SCALE*2),[changes]);
   const sampleBand: [number,number]=bandEnabled?[band[0]*4,band[1]*4]:[0,LIVE_FULL_SCALE];
@@ -66,22 +71,23 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
       }
     return liveStatistics(values,valid,[0,fullScale],fullScale);
   },[frame,effectiveMode,changes,threshold]);
-  const target=liveAutoLevels(stats,minimumWindow,effectiveMode==="change");
-  const context=`${frame?.key}:${shapeKey}:${effectiveMode}:${stats.count>0}:${autoEpoch}:${setting.mode}`;
-  const [autoLevels,setAutoLevels]=useState<ResolvedLevels>(target);
-  const lastContext=useRef(context),shownLevels=useRef(autoLevels);
-  useEffect(()=>{
-    let id=0;
-    if(lastContext.current!==context){lastContext.current=context;shownLevels.current=target;setAutoLevels(target);return;}
-    const from=shownLevels.current,start=performance.now();
-    const tick=(now:number)=>{
-      const t=Math.min(1,(now-start)/180);
-      const next={low:from.low+(target.low-from.low)*t,high:from.high+(target.high-from.high)*t};
-      shownLevels.current=next;setAutoLevels(next);
-      if(t<1)id=requestAnimationFrame(tick);
-    };
-    id=requestAnimationFrame(tick);return()=>cancelAnimationFrame(id);
-  },[target.low,target.high,context]);
+  const automaticStats=effectiveMode==="change"?changeStats:completedStats??rawStats;
+  const retainedContrast=useRef<{key:string;pass:number;completedPass:number;raw:ResolvedLevels|null;change:ResolvedLevels|null}>({key:"",pass:0,completedPass:0,raw:null,change:null});
+  const contrastKey=JSON.stringify([frame?.key,frame?.referenceKey,frame?.bounds]);
+  if (retainedContrast.current.key!==contrastKey || !rawStats.count || (frame?.pass??0)<retainedContrast.current.pass)
+    retainedContrast.current={key:contrastKey,pass:frame?.pass??0,completedPass:0,raw:null,change:null};
+  retainedContrast.current.pass=frame?.pass??0;
+  const channel=effectiveMode==="change"?"change":"raw";
+  const candidate=liveAutoLevels(automaticStats,minimumWindow,effectiveMode==="change");
+  const completedPass=retainedContrast.current.completedPass??0;
+  const completedPassAdvanced=Boolean(frame?.passComplete&&(frame.pass??0)>completedPass);
+  const passesToStrengthen=completedPassAdvanced
+    ?completedPass>0?(frame?.pass??completedPass)-completedPass:Math.max(0,(frame?.pass??1)-1):0;
+  const progressiveFactor=setting.mode==="auto"?Math.pow(0.85,passesToStrengthen):1;
+  const autoLevels=automaticStats.count?retainLiveContrast(retainedContrast.current[channel],candidate,progressiveFactor)
+    :retainedContrast.current[channel]??candidate;
+  if (automaticStats.count && setting.mode==="auto") retainedContrast.current[channel]=autoLevels;
+  if(completedPassAdvanced)retainedContrast.current.completedPass=frame?.pass??retainedContrast.current.completedPass;
   const levels=setting.mode==="auto"?autoLevels:setting;
   const aroundMean=()=>{
     const mean=rawStats.mean/4,radius=Math.max(8,rawStats.deviation/4);
@@ -158,7 +164,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
       </label>
       <LevelWedge histogram={histogram} levels={levels}
         fullScale={effectiveMode==="change"?LIVE_FULL_SCALE*2:LIVE_FULL_SCALE} codeOffset={effectiveMode==="change"?CHANGE_ZERO:0}
-        auto={setting.mode==="auto"} onChange={next=>setSetting({mode:"manual",...next})} onAuto={()=>{setSetting({mode:"auto"});setAutoEpoch(n=>n+1);}}
+        auto={setting.mode==="auto"} onChange={next=>setSetting({mode:"manual",...next})} onAuto={()=>setSetting({mode:"auto"})}
         disabled={!stats.count||!source}/>
       <div className="live-sharpen-control" role="group" aria-label={t("processing.liveView.sharpness")}>
         <div className="live-sharpen-control__label">

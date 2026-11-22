@@ -20,6 +20,18 @@ export function liveAutoLevels(stats: LiveStatistics, minimumWindow=32, change=f
   const low=Math.max(0,Math.min(full-width,centre-width/2));
   return normalizeLevels(low,Math.min(full,low+width),full);
 }
+/** Accept equal or stronger automatic gain; a weaker candidate cannot undo the boost. */
+export function retainLiveContrast(previous: ResolvedLevels | null, next: ResolvedLevels, progressiveFactor=1): ResolvedLevels {
+  const boundedFactor=Math.max(0,Math.min(1,progressiveFactor));
+  const width=Math.min((previous?previous.high-previous.low:next.high-next.low)*boundedFactor,next.high-next.low);
+  if(width>=next.high-next.low)return next;
+  // Preserve the strongest window width while following a shifted signal.
+  // Freezing the old absolute levels can clip a later pass whose ADC values
+  // moved, making the image appear to lose its contrast enhancement.
+  const centre=(next.low+next.high)/2;
+  const low=Math.max(next.low,Math.min(next.high-width,centre-width/2));
+  return {low,high:low+width};
+}
 /** Monotonic selected-band lift. Outside-band pixels retain the base display mapping. */
 export function normalizedLiveGray(value:number,base:ResolvedLevels,selected:LiveStatistics,range:readonly[number,number],strength:number,minimumWindow=32):number {
   const gray=levelGray(value,base.low,base.high);
