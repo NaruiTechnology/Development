@@ -8087,18 +8087,18 @@ body {
   border: 1px solid var(--c-border);
   border-radius: 6px;
   background: var(--c-bg-elev);
-  color: var(--c-text);
+  color: white;
   cursor: pointer;
 }
 
 .pattern-strip__btn:hover:not(:disabled) {
   border-color: var(--c-accent);
-  color: var(--c-accent);
+  color: white;
 }
 
 .pattern-strip__btn[aria-pressed="true"] {
   border-color: #88d3ff;
-  color: #88d3ff;
+  color: white;
   background: var(--c-btn-hover);
 }
 

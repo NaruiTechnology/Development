@@ -1995,6 +1995,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
               <WorkspaceProvider workspace="processing" active={activeTopTab === "processing"}>
                 <ProcessingPatternsPanel
                   visible={activeTopTab === "processing"}
+                  imageAvailable={Boolean(sampleStagePreviewImageUrl)}
                   disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning}
                   exposureDisabled={scanControlsSafetyDisabled}
                 />

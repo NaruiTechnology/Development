@@ -50,10 +50,11 @@ function useTr() {
   return { t, fmt, tr };
 }
 
-export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled, visible = true }: {
+export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled, visible = true, imageAvailable = false }: {
   disabled: boolean;
   exposureDisabled?: boolean;
   visible?: boolean;
+  imageAvailable?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t, tr } = useTr();
@@ -104,7 +105,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
                 key={spec.key}
                 type="button"
                 className="pattern-strip__btn"
-                disabled={patternsLoading || disabled}
+                disabled={patternsLoading || disabled || !imageAvailable}
                 aria-pressed={Boolean(activeKey && processing.instances[activeKey]?.typeKey === spec.key)}
                 aria-controls={`processing-pattern-${encodeURIComponent(activeKey && processing.instances[activeKey]?.typeKey === spec.key ? activeKey : spec.key)}`}
                 data-tooltip={caption}
