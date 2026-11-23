@@ -1,4 +1,5 @@
 import { registerPatternRecipeRoutes } from "./patternRecipeRoutes";
+import { registerCustomPatternRoutes } from "./customPatternRoutes";
 import { getPatternRecipes, getOptionalPatternRecipes } from "./patternRecipeRepository";
 /**
  * Entry point for the Node proxy / static server.
@@ -506,6 +507,11 @@ registerPatternRecipeRoutes(app, {
   currentActor: req => currentAdminActor(req),
   sendError: sendConfigError,
   patternKeys: async () => (await getProcessingCatalogue()).patterns.map(pattern => pattern.key),
+});
+
+registerCustomPatternRoutes(app, {
+  currentActor: req => currentAdminActor(req),
+  sendError: sendConfigError,
 });
 
 // FIB | SEM calibration parameters (CONFIGURATION > Admin > Calibration). See calibrationRoutes.ts.

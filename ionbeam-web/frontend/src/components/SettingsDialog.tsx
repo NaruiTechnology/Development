@@ -69,6 +69,7 @@ import {
 import { HelpPopover } from "./HelpPopover";
 import { CalibrationPanel } from "./calibration/CalibrationPanel";
 import { EquipmentGrid } from "./EquipmentGrid";
+import { CustomPatternsGrid } from "./CustomPatternsGrid";
 import { UserAccountsGrid } from "./UserAccountsGrid";
 import {
   emptyEquipment,
@@ -366,7 +367,7 @@ function SettingsModalShell({
   // we light up the tabs.
   return (
     <div
-      className={`modal settings-modal${activeTab === "admin" && (activeSubTab === "calibration" || activeSubTab === "patternRecipes") ? " settings-modal--wide" : activeTab === "admin" && activeSubTab === "equipment" ? " settings-modal--equipment" : ""}`}
+      className={`modal settings-modal${activeTab === "admin" && (activeSubTab === "calibration" || activeSubTab === "patternRecipes" || activeSubTab === "customPatterns") ? " settings-modal--wide" : activeTab === "admin" && activeSubTab === "equipment" ? " settings-modal--equipment" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleIdRef.current}
@@ -1643,7 +1644,7 @@ const ADMIN_ROLE_OPTIONS = [
 
 const ADMIN_ROLE = 3;
 const AUDITOR_ROLE = 4;
-type AdminSubTab = "patternRecipes" | "configuration" | "users" | "equipment" | "calibration" | "allowedHosts" | "ftp";
+type AdminSubTab = "patternRecipes" | "configuration" | "customPatterns" | "users" | "equipment" | "calibration" | "allowedHosts" | "ftp";
 
 function emptyAdminUser(nextId: number): AdminUserRow {
   return {
@@ -1922,7 +1923,7 @@ function AdminTab({
   }, []);
 
   useEffect(() => {
-    if (mobilityMode && (activeSubTab === "configuration" || activeSubTab === "calibration" || activeSubTab === "patternRecipes")) {
+    if (mobilityMode && (activeSubTab === "configuration" || activeSubTab === "calibration" || activeSubTab === "patternRecipes" || activeSubTab === "customPatterns")) {
       onSelectSubTab("users");
     }
   }, [activeSubTab, mobilityMode, onSelectSubTab]);
@@ -2393,6 +2394,8 @@ function AdminTab({
             onSelect={onSelectSubTab}
           />
         )}
+        {!mobilityMode && <AdminSubTabButton tab="customPatterns" active={activeSubTab}
+          label={t("settings.admin.group.customPatterns")} onSelect={onSelectSubTab} />}
         <AdminSubTabButton
           tab="allowedHosts"
           active={activeSubTab}
@@ -2697,6 +2700,7 @@ function AdminTab({
       {activeSubTab === "patternRecipes" && !mobilityMode && <PatternRecipesPanel
         equipment={equipmentFromDraft(source)} initialEquipmentId={recipeEquipmentId} canManage={canManageAdminConfig}
         onSaved={() => setRecipeListVersion(value => value + 1)} />}
+      {activeSubTab === "customPatterns" && !mobilityMode && <CustomPatternsGrid canManage={canManageAdminConfig} />}
       {activeSubTab === "calibration" && !mobilityMode && <CalibrationPanel />}
 
       {activeSubTab === "configuration" && (

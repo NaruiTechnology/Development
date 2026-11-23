@@ -1068,6 +1068,7 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.region.title": "选择实验室区域以筛选设备",
   "scan.region.empty": "未配置区域",
   "settings.admin.group.configuration": "配置",
+  "settings.admin.group.customPatterns": "自定义图案",
   "settings.admin.group.equipment": "设备",
   "settings.admin.group.allowedHosts": "允许的主机",
   "settings.admin.subtabs.aria": "管理配置分区",

@@ -180,6 +180,7 @@ REQUIRED_DIST_FILES = (
     'Development/IobeamAdmin/Sql/008_pattern_recipe_editing.sql',
     'Development/IobeamAdmin/Sql/009_pattern_recipe_history.sql',
     'Development/IobeamAdmin/Sql/010_restore_technology_nodes.sql',
+    'Development/IobeamAdmin/Sql/012_custom_patterns.sql',
     'Development/glasgow_service/requirements.txt',
     'Development/glasgow_service/scripts/vacuum_excursion_test.py',
     'Development/requirements.txt',

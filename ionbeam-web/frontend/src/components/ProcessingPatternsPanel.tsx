@@ -29,6 +29,7 @@ import { Icon } from "./Icon";
 import { NumberStepperField } from "./NumberStepperField";
 import { StairRecipeCard } from "./StepRecipe";
 import { PatternIcon } from "./PatternIcon";
+import { PatternTableCustom, PatternTableTabs, usePatternTableTab } from "./PatternTable";
 import { PatternRuntimeReadouts } from "./PatternRuntimeReadouts";
 import { ProcessingWorkflowPanel } from "./ProcessingWorkflowPanel";
 import { VectorScanPathPreview } from "./VectorScanPathPreview";
@@ -75,6 +76,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
   const countValidationFailed = selectedSpotCount !== null && selectedSpotCount > MAX_EXPOSURE_SPOTS;
   const exposurePhase = useAppSelector(s => s.exposure.phase);
   const exposureActive = ["preparing", "running", "stopping"].includes(exposurePhase);
+  const tableTab = usePatternTableTab();
 
   useEffect(() => {
     if (visible && status === "idle") void dispatch(fetchProcessingPatterns());
@@ -97,7 +99,9 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
         </div>
         <ExposureControls disabled={patternsLoading || exposureDisabled || countValidationFailed} />
         {patternsLoading && <LoadingSpinner label={t("processing.loading")} />}
-        <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
+        <PatternTableTabs />
+        {tableTab === "custom" && <PatternTableCustom />}
+        {tableTab === "default" && <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
           {specs.filter(spec => (processing.instances[spec.key]?.typeKey ?? spec.key) === spec.key).map((spec) => {
             const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
             return (
@@ -117,7 +121,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
               </button>
             );
           })}
-        </div>
+        </div>}
         {specs.find(s => s.key === activeKey)?.model === "LineModel" && <p className="patterns-card__status">{t("processing.hint.line")}</p>}
         {specs.find(s => s.key === activeKey)?.model === "PolygonModel" && <p className="patterns-card__status">{t("processing.hint.vertices")}</p>}
         {messages.length > 0 && (
@@ -139,6 +143,7 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
   const { tr } = useTr();
   const [limitMessage, setLimitMessage] = useState("");
   const milling = useAppSelector(s => s.exposure.mode === "milling");
+  const tableTab = usePatternTableTab();
   const selectedSpotCount = useMemo(() => {
     if (!processing.lensLookup) return null;
     try {
@@ -185,6 +190,7 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
     group.push(spec);
     groups.set(typeKey, group);
   }
+  if (tableTab !== "default") return null;
   return <>
     {limitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{limitMessage}</p>}
     {totalLimitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{totalLimitMessage}</p>}

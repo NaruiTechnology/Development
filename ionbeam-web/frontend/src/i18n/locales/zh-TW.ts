@@ -1073,6 +1073,7 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.region.title": "選擇實驗室區域以篩選設備",
   "scan.region.empty": "未配置區域",
   "settings.admin.group.configuration": "設定",
+  "settings.admin.group.customPatterns": "自訂圖案",
   "settings.admin.group.equipment": "設備",
   "settings.admin.group.allowedHosts": "允許的主機",
   "settings.admin.subtabs.aria": "管理設定分頁",
