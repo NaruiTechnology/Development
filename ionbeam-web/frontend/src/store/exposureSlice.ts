@@ -30,7 +30,7 @@ export interface ExposureState {
   viewExpectedSamples: number;
 }
 const initialState: ExposureState = {
-  mode: "milling", millingChangeThresholdPercent: 10, parallel: false, viewPauseSeconds: 5, pauseAfterView: false, viewZoom: 2, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
+  mode: "milling", millingChangeThresholdPercent: 1, parallel: false, viewPauseSeconds: 5, pauseAfterView: false, viewZoom: 2, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
   viewPhase: "idle", viewError: null, viewRequestId: 0,
   viewReceivedSamples: 0, viewReceivedChunks: 0, viewExpectedSamples: 0,
 };
