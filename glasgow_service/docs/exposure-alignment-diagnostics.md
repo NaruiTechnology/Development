@@ -100,7 +100,7 @@ presentation surface, not the acquisition buffer resolution.
 
 ## Milling change-threshold slider
 
-The Milling panel includes a 0-100% Change threshold slider, default 10%, styled
+The Milling panel includes a 0-10% Change threshold slider (0.1% steps), default 0.2%, styled
 like Auto's View hold control. It remains adjustable during acquisition and after
 completion. The current interpretation is absolute change relative to the previous
 completed pass: `100 * abs(current - previous) / abs(previous)`.

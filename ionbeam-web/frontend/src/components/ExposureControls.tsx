@@ -96,19 +96,19 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
               if(event.button!==0||event.target instanceof HTMLInputElement)return;
               const rect=event.currentTarget.getBoundingClientRect();
               const ratio=Math.max(0,Math.min(1,(event.clientX-rect.left-4)/Math.max(1,rect.width-8)));
-              const next=state.millingChangeThresholdPercent+(ratio<state.millingChangeThresholdPercent/100?-1:1);
-              dispatch(setMillingChangeThresholdPercent(Math.max(0,Math.min(100,next))));
+              const next=state.millingChangeThresholdPercent+(ratio<state.millingChangeThresholdPercent/10?-0.1:0.1);
+              dispatch(setMillingChangeThresholdPercent(Math.max(0,Math.min(10,Math.round(next*10)/10))));
             }}>
                 <div className="patterns-exposure__pause-track" />
                 <div className="patterns-exposure__pause-ticks" aria-hidden="true">
                   {Array.from({length: 21}, (_, index) => {
-                    const value = index * 5;
-                    const major = value % 25 === 0;
-                    return <span key={value} className={major ? "patterns-exposure__pause-tick--major" : ""}
-                      style={{left:`${value}%`}}>{major && <i>{value}%</i>}</span>;
+                    const value = index * 0.5;
+                    const major = index % 5 === 0;
+                    return <span key={index} className={major ? "patterns-exposure__pause-tick--major" : ""}
+                      style={{left:`${value*10}%`}}>{major && <i>{value}%</i>}</span>;
                   })}
                 </div>
-                <input type="range" min={0} max={100} step={1} value={state.millingChangeThresholdPercent}
+                <input type="range" min={0} max={10} step={0.1} value={state.millingChangeThresholdPercent}
                   aria-labelledby={`${tabId}-change-threshold-label`} aria-valuetext={`${state.millingChangeThresholdPercent}%`}
                   onChange={event=>dispatch(setMillingChangeThresholdPercent(Number(event.target.value)))} />
               </div>
