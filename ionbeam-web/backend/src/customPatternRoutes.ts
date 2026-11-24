@@ -20,15 +20,20 @@ export interface CustomPatternRouteDeps {
   remove?: typeof deleteCustomPattern;
 }
 
+const ROLE_SUPER_USER = 1;
+const ROLE_ADMIN = 3;
+
 export function registerCustomPatternRoutes(app: express.Express, deps: CustomPatternRouteDeps) {
   const base = "/api/admin/iobeam/custom-patterns";
-  const route = (write: boolean, handler: (req: express.Request, res: express.Response, actor: AdminUser) => Promise<void>): express.RequestHandler =>
+  const route = (write: boolean, handler: (req: express.Request, res: express.Response, actor: AdminUser) => Promise<void>, minimumRole = ROLE_ADMIN): express.RequestHandler =>
     async (req, res) => {
       try {
         res.set("Cache-Control", "no-store");
         const actor = await deps.currentActor(req);
         if (!actor?.is_active) throw new ConfigError("Sign in to manage custom patterns.", 401);
-        if (write && actor.role < 3) throw new ConfigError("Only Admin or Auditor accounts can manage custom patterns.", 403);
+        if (write && actor.role < minimumRole) throw new ConfigError(minimumRole === ROLE_SUPER_USER
+          ? "Saving custom patterns requires SuperUser or higher access."
+          : "Only Admin or Auditor accounts can manage custom patterns.", 403);
         await handler(req, res, actor);
       } catch (error) { deps.sendError(res, error); }
     };
@@ -40,7 +45,7 @@ export function registerCustomPatternRoutes(app: express.Express, deps: CustomPa
     const { name, payload } = validateCustomPattern(req.body?.name, req.body?.payload);
     const pattern = await (deps.create ?? createCustomPattern)(name, payload);
     res.status(201).json({ ok: true, pattern });
-  }));
+  }, ROLE_SUPER_USER));
   app.put(`${base}/:id`, route(true, async (req, res) => {
     const id = validateCustomPatternId(req.params.id);
     const { name, payload } = validateCustomPattern(req.body?.name, req.body?.payload);

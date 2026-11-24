@@ -1,11 +1,13 @@
 /** PATTERNS > Custom: tile picker over the ionbeam_asset.CustomPatterns image catalogue. */
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { MouseEvent } from "react";
 import type { ReactNode } from "react";
 import { customPatternApi, type CustomPattern } from "../lib/customPatternApi";
 import { Icon } from "./Icon";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { useTranslation, type TranslationKey } from "../i18n";
+import { fetchCurrentRole } from "../lib/calibrationApi";
+import { ROLE_SUPER_USER } from "../lib/calibrationModel";
 
 // Pattern confirmed with the Select button. Shared so other Patterns components can consume it.
 let confirmed: CustomPattern | null = null;
@@ -71,6 +73,9 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
   const [matchRangeMax, setMatchRangeMax] = useState(98);
   const [progressUpper, setProgressUpper] = useState<number | null>(null);
   const [searchText, setSearchText] = useState("");
+  const [currentRole, setCurrentRole] = useState<number | null>(null);
+  const [savingPattern, setSavingPattern] = useState(false);
+  const localFileInputRef = useRef<HTMLInputElement | null>(null);
   const confirmedPattern = useConfirmedCustomPattern();
   const match = useCustomPatternMatchState();
   const title = tr("processing.customPatterns.title", "Custom patterns");
@@ -98,11 +103,40 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
   useEffect(() => {
     let cancelled = false;
     customPatternApi.list()
-      .then(result => { if (!cancelled) { setRows(result.patterns); setError(null); } })
+      .then(result => { if (!cancelled) { setRows(existing => [...existing.filter(row => row.id < 0), ...result.patterns]); setError(null); } })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCurrentRole().then(role => { if (!cancelled) setCurrentRole(role); })
+      .catch(() => { if (!cancelled) setCurrentRole(null); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "z") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]')) return;
+      const selected = rows.find(row => row.id === highlightedId);
+      if (!selected || selected.id >= 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      if (savingPattern) return;
+      if (match.pattern?.id === selected.id) resetCustomPatternMatch();
+      setRows(existing => existing.filter(row => row.id !== selected.id));
+      setHighlightedId(null);
+      setError(null);
+    };
+    // Capture before PatternOverlay's global ROI undo handler so a temporary
+    // uploaded tile is undone first when it is the current selection.
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [highlightedId, rows, match.pattern?.id, savingPattern]);
 
   const highlighted = rows.find(row => row.id === highlightedId) ?? null;
   const visibleRows = rows.filter(row => row.name.toLocaleLowerCase().includes(searchText.trim().toLocaleLowerCase()));
@@ -110,6 +144,57 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
     setSearchText(value);
     const query = value.trim().toLocaleLowerCase();
     if (query) setHighlightedId(rows.find(row => row.name.toLocaleLowerCase().includes(query))?.id ?? null);
+  };
+  const addLocalPattern = async (file?: File) => {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+      setError("Choose a PNG, JPEG, WebP, or GIF image.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Images must be 10 MB or smaller.");
+      return;
+    }
+    try {
+      const payload = await new Promise<CustomPattern["payload"]>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Could not read the selected image."));
+        reader.onload = () => typeof reader.result === "string"
+          ? resolve({ mimeType: file.type, data: reader.result })
+          : reject(new Error("Could not read the selected image."));
+        reader.readAsDataURL(file);
+      });
+      const name = file.name.replace(/\.[^.]+$/, "").trim() || file.name;
+      const temporary: CustomPattern = { id: -Date.now(), name, payload };
+      setRows(existing => [temporary, ...existing]);
+      setHighlightedId(temporary.id);
+      setSearchText("");
+      setError(null);
+      setTilesCollapsed(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (localFileInputRef.current) localFileInputRef.current.value = "";
+    }
+  };
+  const saveLocalPattern = async () => {
+    if (!highlighted || highlighted.id >= 0) return;
+    if (currentRole === null || currentRole < ROLE_SUPER_USER) {
+      setError("Saving a custom pattern requires SuperUser or higher access.");
+      return;
+    }
+    if (!window.confirm(t("processing.customPatterns.saveConfirm", { name: highlighted.name }))) return;
+    setSavingPattern(true);
+    setError(null);
+    try {
+      const result = await customPatternApi.create(highlighted.name, highlighted.payload);
+      setRows(existing => existing.map(row => row.id === highlighted.id ? result.pattern : row));
+      setHighlightedId(result.pattern.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingPattern(false);
+    }
   };
   const select = () => {
     if (!highlighted || !imageAvailable) return;
@@ -159,6 +244,7 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
         </div>
         <button type="button" className="btn btn--primary" disabled={!highlighted || !imageAvailable || match.status === "matching" || (match.status === "complete" && match.matches.length > 0 && tilesCollapsed)} onClick={select}
           title={!imageAvailable ? tr("processing.customPatterns.loadImage", "Load an image on the canvas first.") : undefined}>
+          <Icon name={match.status === "complete" && match.matches.length > 0 ? "check" : match.status === "complete" ? "refresh" : "search"} />
           {match.status === "complete" && match.matches.length > 0
             ? tr("processing.customPatterns.selected", "Selected")
             : match.status === "complete" && match.matches.length === 0
@@ -166,7 +252,7 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
               : tr("processing.customPatterns.select", "Select")}
         </button>
       </div>
-      {(rows.length > 0 || loading) && <section className="custom-pattern-tiles-section" aria-busy={loading}>
+      {(rows.length > 0 || loading || !imageAvailable || (highlighted !== null && highlighted.id < 0)) && <section className="custom-pattern-tiles-section" aria-busy={loading}>
         <button type="button" className="custom-pattern-tiles-toggle" aria-expanded={!tilesCollapsed}
           onClick={() => setTilesCollapsed(value => !value)}>
           <span>{tr("processing.customPatterns.title", "Custom patterns")}</span><Icon name="chevronDown" />
@@ -203,8 +289,20 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
         </button>)}
         {visibleRows.length === 0 && <p className="patterns-card__status">{tr("processing.customPatterns.noSearchResults", "No matching custom patterns.")}</p>}
         </div>}
+        {!tilesCollapsed && (!imageAvailable || (highlighted !== null && highlighted.id < 0)) && <div className="custom-pattern-local-actions">
+          <input ref={localFileInputRef} className="custom-pattern-local-actions__input" type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif" aria-label={tr("processing.customPatterns.selectFile", "Select custom pattern image")}
+            onChange={event => void addLocalPattern(event.target.files?.[0])} />
+          <button type="button" className="btn btn--cancel" onClick={() => localFileInputRef.current?.click()}>
+            <Icon name="upload" /> {tr("processing.customPatterns.selectFile", "Select")}
+          </button>
+          <button type="button" className="btn btn--primary" disabled={!highlighted || highlighted.id >= 0 || currentRole === null || currentRole < ROLE_SUPER_USER || savingPattern}
+            title={currentRole !== null && currentRole < ROLE_SUPER_USER ? tr("processing.customPatterns.superUserRequired", "SuperUser or higher access is required to save.") : undefined}
+            onClick={() => void saveLocalPattern()}>
+            {savingPattern ? tr("settings.admin.customPatterns.saving", "Saving…") : tr("settings.admin.customPatterns.save", "Save")}
+          </button>
+        </div>}
       </section>}
-      {!imageAvailable && <p className="patterns-card__status">{tr("processing.customPatterns.loadImage", "Load an image on the canvas first.")}</p>}
       {match.status === "matching" && <LoadingSpinner label={tr("processing.customPatterns.matching", "Matching on the canvas image…")} />}
       {match.status === "complete" && match.matches.length > 0 && <p className="patterns-card__status" role="status">
         {t("processing.customPatterns.matchCount", { count: match.matches.length })}

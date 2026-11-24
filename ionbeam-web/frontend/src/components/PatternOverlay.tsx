@@ -69,6 +69,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   const milling = useAppSelector(s => s.exposure.mode === "milling");
   const { specs, instances, activeKey, stairReceipes } = useAppSelector((s) => s.processing);
   const customMatch = useCustomPatternMatchState();
+  const appliedCustomMatchId = useRef(0);
   const materials = useAppSelector((s) => s.processing.materials);
   const [, repaint] = useReducer((n: number) => n + 1, 0);
   const draft = useRef<Draft | null>(null);
@@ -128,6 +129,28 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       }
     })();
   }, [customMatch.requestId, customMatch.status, customMatch.pattern]);
+
+  useEffect(() => {
+    if (customMatch.status !== "complete" || !customMatch.matches.length ||
+        customMatch.requestId === 0 || appliedCustomMatchId.current === customMatch.requestId) return;
+    const solidBox = specs.find(spec => spec.key === "solidBox")
+      ?? specs.find(spec => spec.model === "SolidBoxModel");
+    if (!solidBox) return;
+    // Match boxes use the same 640×640 canvas coordinates as the overlay. Convert
+    // both corners through the canvas transform so the Solid Box ROIs align with
+    // the displayed match rectangles even when the viewport is calibrated.
+    const toWorld = apiRef.current.toWorld;
+    appliedCustomMatchId.current = customMatch.requestId;
+    for (const match of customMatch.matches) {
+      const a = toWorld({ x: match.x, y: match.y });
+      const b = toWorld({ x: match.x + match.width, y: match.y + match.height });
+      if (![a.x, a.y, b.x, b.y].every(Number.isFinite) || a.x === b.x || a.y === b.y) continue;
+      dispatch(createPatternRoi({ key: solidBox.key, roi: {
+        x_start: Math.min(a.x, b.x), x_end: Math.max(a.x, b.x),
+        y_start: Math.min(a.y, b.y), y_end: Math.max(a.y, b.y),
+      } }));
+    }
+  }, [customMatch.requestId, customMatch.status, customMatch.matches, specs, dispatch]);
 
   const bounds = imageWorldBounds(roi);
   const view = viewportBounds(roi);
