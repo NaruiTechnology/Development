@@ -101,6 +101,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
         {patternsLoading && <LoadingSpinner label={t("processing.loading")} />}
         <PatternTableTabs />
         {tableTab === "custom" && <PatternTableCustom imageAvailable={imageAvailable}
+          onResetPatternCards={() => dispatch(selectPattern(null))}
           defaultWedges={<DefaultPatternWedges specs={specs} instances={processing.instances} activeKey={activeKey}
             disabled={patternsLoading || disabled} imageAvailable={imageAvailable}
             onSelect={key => dispatch(selectPattern(key))} />} />}

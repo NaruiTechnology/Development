@@ -8723,12 +8723,34 @@ body {
 .custom-patterns-card .card__collapse-btn { margin-left: auto; }
 .custom-patterns-card__body { display: flex; flex-direction: column; gap: 10px; }
 .custom-pattern-tiles-section { min-width: 0; border: 1px solid var(--c-border-soft); border-radius: 5px; overflow: hidden; }
+.custom-pattern-tiles-loading { display: flex; min-height: 96px; align-items: center; justify-content: center; padding: 8px; background: var(--c-bg-deep); }
+.custom-pattern-tiles-loading .loading-spinner--block { padding: 12px 0; }
 .custom-pattern-tiles-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 0; background: rgb(95 184 255 / 8%); color: var(--c-text-dim); font: inherit; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
 .custom-pattern-tiles-toggle:hover { color: var(--c-text); background: rgb(95 184 255 / 13%); }
 .custom-pattern-tiles-toggle .icon { width: 14px; height: 14px; transition: transform .15s ease; }
 .custom-pattern-tiles-toggle[aria-expanded="true"] .icon { transform: rotate(180deg); }
 .custom-pattern-match-row { display: flex; align-items: flex-end; gap: 10px; }
 .custom-pattern-match-threshold { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex: 1 1 auto; min-width: 0; color: var(--c-text-dim); font-size: 12px; }
+.custom-pattern-match-threshold output { color: lawngreen; font-family: var(--font-mono); }
+.custom-pattern-range-slider { position: relative; width: 100%; height: 38px; padding: 0 4px; color: var(--c-text-dim); }
+.custom-pattern-range-track, .custom-pattern-range-selected { position: absolute; top: 9px; height: 1px; }
+.custom-pattern-range-track { left: 4px; right: 4px; background: currentColor; }
+.custom-pattern-range-selected { background: lawngreen; }
+.custom-pattern-range-ticks { position: absolute; top: 8px; right: 4px; left: 4px; height: 24px; pointer-events: none; }
+.custom-pattern-range-ticks span { position: absolute; top: 0; width: 1px; height: 4px; transform: translateX(-50%); border-left: 1px solid currentColor; }
+.custom-pattern-range-ticks .custom-pattern-range-tick--major { height: 7px; }
+.custom-pattern-range-ticks i { position: absolute; top: 13px; left: 50%; transform: translateX(-50%); color: inherit; font: normal 9px/1 var(--font-mono); }
+.custom-pattern-range-slider input[type="range"] { position: absolute; top: 0; left: 4px; width: calc(100% - 8px); height: 18px; margin: 0; appearance: none; color: inherit; background: transparent; pointer-events: none; }
+.custom-pattern-range-slider input[type="range"]::-webkit-slider-runnable-track { height: 18px; background: transparent; }
+.custom-pattern-range-slider input[type="range"]::-moz-range-track { height: 18px; background: transparent; }
+.custom-pattern-range-slider input[type="range"]::-webkit-slider-thumb { width: 0; height: 0; margin-top: 0; border: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 12px solid lawngreen; background: transparent; cursor: grab; pointer-events: auto; filter: drop-shadow(0 1px 1px rgba(5,10,20,.7)); appearance: none; -webkit-appearance: none; }
+.custom-pattern-range-slider input[type="range"]::-moz-range-thumb { width: 0; height: 0; border: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 12px solid lawngreen; background: transparent; cursor: grab; pointer-events: auto; filter: drop-shadow(0 1px 1px rgba(5,10,20,.7)); }
+.custom-pattern-range-slider input.custom-pattern-range-upper--at-limit::-webkit-slider-thumb,
+.custom-pattern-range-slider input.custom-pattern-range-lower--at-limit::-webkit-slider-thumb { border-top-color: #ff4545; }
+.custom-pattern-range-slider input.custom-pattern-range-upper--at-limit::-moz-range-thumb,
+.custom-pattern-range-slider input.custom-pattern-range-lower--at-limit::-moz-range-thumb { border-top-color: #ff4545; }
+.custom-pattern-range-slider[aria-disabled="true"] input { opacity: .5; }
+.custom-pattern-range-slider[aria-disabled="false"] { cursor: pointer; }
 .custom-pattern-match-number { display: flex; align-items: center; gap: 5px; color: lawngreen; }
 .custom-pattern-match-number .number-stepper { width: 82px; }
 .custom-pattern-match-number .number-stepper__input { color: lawngreen; }

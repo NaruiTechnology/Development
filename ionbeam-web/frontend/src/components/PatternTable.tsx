@@ -29,7 +29,7 @@ export function usePatternTableTab(): PatternTableTab {
 export function PatternTableTabs() {
   const { tr } = useTr();
   const tab = usePatternTableTab();
-  const label = (name: PatternTableTab) => name === "default" ? tr("processing.table.default", "Default") : tr("processing.table.custom", "Custom");
+  const label = (name: PatternTableTab) => name === "default" ? tr("processing.table.default", "Default") : tr("processing.table.custom", "Advanced");
   return <div className="pattern-table__tabs" role="tablist" aria-label={tr("processing.table.aria", "Pattern table")}>
     {TABS.map((name, i) => <button key={name} type="button" role="tab"
       id={`pattern-table-tab-${name}`} aria-controls="pattern-table-panel"
@@ -47,6 +47,6 @@ export function PatternTableTabs() {
   </div>;
 }
 
-export function PatternTableCustom({ imageAvailable = false, defaultWedges }: { imageAvailable?: boolean; defaultWedges?: ReactNode }) {
-  return <CustomPatternsCard imageAvailable={imageAvailable} defaultWedges={defaultWedges} />;
+export function PatternTableCustom({ imageAvailable = false, defaultWedges, onResetPatternCards }: { imageAvailable?: boolean; defaultWedges?: ReactNode; onResetPatternCards?: () => void }) {
+  return <CustomPatternsCard imageAvailable={imageAvailable} defaultWedges={defaultWedges} onResetPatternCards={onResetPatternCards} />;
 }

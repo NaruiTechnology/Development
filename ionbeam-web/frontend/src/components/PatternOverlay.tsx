@@ -104,9 +104,10 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       return;
     }
     const startPercent = Math.max(10, Math.min(100, Math.round(customMatch.threshold * 100)));
+    const minPercent = Math.max(10, Math.min(startPercent, Math.round(customMatch.thresholdMin * 100)));
     void (async () => {
       try {
-        for (let percent = startPercent; percent >= 10; percent -= 1) {
+        for (let percent = startPercent; percent >= minPercent; percent -= 1) {
           if (!updateCustomPatternMatchThreshold(requestId, percent / 100)) return;
           const response = await fetch(apiUrl("/api/processing/custom-pattern-match"), {
             method: "POST",
@@ -121,7 +122,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
             return;
           }
         }
-        finishCustomPatternMatch(requestId, [], null, 0.1);
+        finishCustomPatternMatch(requestId, [], null, minPercent / 100);
       } catch (error) {
         finishCustomPatternMatch(requestId, [], error instanceof Error ? error.message : String(error));
       }

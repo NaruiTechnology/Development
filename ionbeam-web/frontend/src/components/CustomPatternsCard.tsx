@@ -1,10 +1,10 @@
 /** PATTERNS > Custom: tile picker over the ionbeam_asset.CustomPatterns image catalogue. */
 import { useEffect, useState, useSyncExternalStore } from "react";
+import type { MouseEvent } from "react";
 import type { ReactNode } from "react";
 import { customPatternApi, type CustomPattern } from "../lib/customPatternApi";
 import { Icon } from "./Icon";
 import { LoadingSpinner } from "./LoadingSpinner";
-import { NumberStepperInput } from "./NumberStepperField";
 import { useTranslation, type TranslationKey } from "../i18n";
 
 // Pattern confirmed with the Select button. Shared so other Patterns components can consume it.
@@ -25,16 +25,17 @@ export interface CustomPatternMatchState {
   requestId: number;
   pattern: CustomPattern | null;
   threshold: number;
+  thresholdMin: number;
   status: "idle" | "matching" | "complete" | "error";
   matches: CustomPatternMatch[];
   error: string | null;
 }
-let matchState: CustomPatternMatchState = { requestId: 0, pattern: null, threshold: 0.99, status: "idle", matches: [], error: null };
+let matchState: CustomPatternMatchState = { requestId: 0, pattern: null, threshold: 0.98, thresholdMin: 0.7, status: "idle", matches: [], error: null };
 const matchListeners = new Set<() => void>();
 const subscribeMatch = (fn: () => void) => { matchListeners.add(fn); return () => { matchListeners.delete(fn); }; };
 const publishMatch = () => matchListeners.forEach(fn => fn());
-export const requestCustomPatternMatch = (pattern: CustomPattern, threshold = 0.99) => {
-  matchState = { requestId: matchState.requestId + 1, pattern, threshold, status: "matching", matches: [], error: null };
+export const requestCustomPatternMatch = (pattern: CustomPattern, threshold = 0.98, thresholdMin = 0.7) => {
+  matchState = { requestId: matchState.requestId + 1, pattern, threshold, thresholdMin, status: "matching", matches: [], error: null };
   publishMatch();
   return matchState.requestId;
 };
@@ -51,13 +52,13 @@ export const finishCustomPatternMatch = (requestId: number, matches: CustomPatte
 };
 export const resetCustomPatternMatch = () => {
   confirmed = null;
-  matchState = { requestId: matchState.requestId + 1, pattern: null, threshold: 0.99, status: "idle", matches: [], error: null };
+  matchState = { requestId: matchState.requestId + 1, pattern: null, threshold: 0.98, thresholdMin: 0.7, status: "idle", matches: [], error: null };
   listeners.forEach(fn => fn());
   publishMatch();
 };
 export const useCustomPatternMatchState = () => useSyncExternalStore(subscribeMatch, () => matchState, () => matchState);
 
-export function CustomPatternsCard({ onSelect, imageAvailable = false, defaultWedges }: { onSelect?: (pattern: CustomPattern) => void; imageAvailable?: boolean; defaultWedges?: ReactNode }) {
+export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailable = false, defaultWedges }: { onSelect?: (pattern: CustomPattern) => void; onResetPatternCards?: () => void; imageAvailable?: boolean; defaultWedges?: ReactNode }) {
   const { t } = useTranslation();
   const tr = (key: string, fallback: string) => { const text = t(key as TranslationKey); return text === key ? fallback : text; };
   const [collapsed, setCollapsed] = useState(false);
@@ -66,17 +67,32 @@ export function CustomPatternsCard({ onSelect, imageAvailable = false, defaultWe
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
-  const [matchThreshold, setMatchThreshold] = useState("99");
+  const [matchRangeMin, setMatchRangeMin] = useState(70);
+  const [matchRangeMax, setMatchRangeMax] = useState(98);
+  const [progressUpper, setProgressUpper] = useState<number | null>(null);
   const confirmedPattern = useConfirmedCustomPattern();
   const match = useCustomPatternMatchState();
   const title = tr("processing.customPatterns.title", "Custom patterns");
+  const shownUpper = progressUpper ?? matchRangeMax;
+  const rangeAccuracyClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (match.status === "matching") return;
+    if (event.target instanceof HTMLInputElement) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left - 4) / Math.max(1, rect.width - 8)));
+    const value = Math.round(10 + ratio * 90);
+    if (Math.abs(value - matchRangeMin) <= Math.abs(value - matchRangeMax))
+      setMatchRangeMin(Math.min(value, matchRangeMax));
+    else
+      setMatchRangeMax(Math.max(value, matchRangeMin));
+    setProgressUpper(null);
+  };
 
   useEffect(() => {
-    if (match.status === "matching" || match.status === "complete")
-      setMatchThreshold(String(Math.round(match.threshold * 100)));
     if (match.status === "matching") setTilesCollapsed(false);
     if (match.status === "complete" && match.matches.length > 0) setTilesCollapsed(true);
-  }, [match.status, match.threshold, match.matches.length]);
+    if (match.status === "matching" || match.status === "complete") setProgressUpper(Math.round(match.threshold * 100));
+    else if (match.status === "idle") setProgressUpper(null);
+  }, [match.status, match.matches.length, match.threshold, match.requestId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,17 +104,12 @@ export function CustomPatternsCard({ onSelect, imageAvailable = false, defaultWe
   }, []);
 
   const highlighted = rows.find(row => row.id === highlightedId) ?? null;
-  const matchThresholdValue = () => {
-    const parsed = Number(matchThreshold);
-    return Number.isFinite(parsed) ? Math.max(10, Math.min(100, Math.round(parsed))) : 99;
-  };
-  const normalizeMatchThreshold = () => setMatchThreshold(String(matchThresholdValue()));
   const select = () => {
     if (!highlighted || !imageAvailable) return;
-    const threshold = matchThresholdValue();
-    setMatchThreshold(String(threshold));
+    onResetPatternCards?.();
     confirmCustomPattern(highlighted);
-    requestCustomPatternMatch(highlighted, threshold / 100);
+    setProgressUpper(matchRangeMax);
+    requestCustomPatternMatch(highlighted, matchRangeMax / 100, matchRangeMin / 100);
     onSelect?.(highlighted);
   };
 
@@ -114,32 +125,47 @@ export function CustomPatternsCard({ onSelect, imageAvailable = false, defaultWe
     </div>
     <div className="card__body custom-patterns-card__body" hidden={collapsed}>
       {defaultWedges}
-      {loading && <LoadingSpinner label={tr("settings.admin.customPatterns.loading", "Loading custom patterns…")} />}
       {error && <p className="patterns-card__status patterns-card__status--error" role="alert">{error}</p>}
       {!loading && !error && rows.length === 0 && <p className="patterns-card__status">{tr("processing.table.customEmpty", "No custom patterns yet.")}</p>}
       <div className="custom-pattern-match-row">
-        <div className="custom-pattern-match-threshold" onBlur={event => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) normalizeMatchThreshold();
-        }}>
-          <span>{tr("processing.customPatterns.matchThreshold", "Match range")}</span>
-          <div className="custom-pattern-match-number">
-            <NumberStepperInput value={matchThreshold} min={10} max={100} step={1} inputMode="numeric" disabled={match.status === "matching"}
-              ariaLabel={tr("processing.customPatterns.matchThresholdLabel", "Match confidence threshold")}
-              onValueChange={setMatchThreshold} />
-            <span>%</span>
+        <div className="custom-pattern-match-threshold">
+          <span>{tr("processing.customPatterns.matchThreshold", "Match accuracy")} <output>{matchRangeMin}%–{shownUpper}%</output></span>
+          <div className="custom-pattern-range-slider" aria-disabled={match.status === "matching"} onClick={rangeAccuracyClick}>
+            <div className="custom-pattern-range-track" />
+            <div className="custom-pattern-range-selected" style={{ left: `${(matchRangeMin - 10) / 90 * 100}%`, right: `${100 - (shownUpper - 10) / 90 * 100}%` }} />
+            <div className="custom-pattern-range-ticks" aria-hidden="true">
+              {Array.from({ length: 19 }, (_, index) => index * 5 + 10).map(value => {
+                const major = [10, 25, 50, 75, 100].includes(value);
+                return <span key={value} className={major ? "custom-pattern-range-tick--major" : ""}
+                  style={{ left: `${(value - 10) / 90 * 100}%` }}><i>{major ? `${value}%` : ""}</i></span>;
+              })}
+            </div>
+            <input type="range" className={shownUpper <= matchRangeMin ? "custom-pattern-range-lower--at-limit" : undefined}
+              min={10} max={100} step={1} value={matchRangeMin} disabled={match.status === "matching"}
+              aria-label={tr("processing.customPatterns.matchRangeMin", "Minimum match range")}
+              onChange={event => { setMatchRangeMin(Math.min(Number(event.target.value), matchRangeMax)); setProgressUpper(null); }} />
+            <input type="range" className={shownUpper <= matchRangeMin ? "custom-pattern-range-upper--at-limit" : undefined}
+              min={10} max={100} step={1} value={shownUpper} disabled={match.status === "matching"}
+              aria-label={tr("processing.customPatterns.matchRangeMax", "Maximum match range")}
+              onChange={event => { setMatchRangeMax(Number(event.target.value)); setProgressUpper(null); }} />
           </div>
         </div>
         <button type="button" className="btn btn--primary" disabled={!highlighted || !imageAvailable || match.status === "matching" || (match.status === "complete" && match.matches.length > 0 && tilesCollapsed)} onClick={select}
           title={!imageAvailable ? tr("processing.customPatterns.loadImage", "Load an image on the canvas first.") : undefined}>
-          {match.status === "complete" && match.matches.length > 0 ? tr("processing.customPatterns.selected", "Selected") : tr("processing.customPatterns.select", "Select")}
+          {match.status === "complete" && match.matches.length > 0
+            ? tr("processing.customPatterns.selected", "Selected")
+            : match.status === "complete" && match.matches.length === 0
+              ? tr("processing.customPatterns.retry", "Retry")
+              : tr("processing.customPatterns.select", "Select")}
         </button>
       </div>
-      {rows.length > 0 && <section className="custom-pattern-tiles-section">
+      {(rows.length > 0 || loading) && <section className="custom-pattern-tiles-section" aria-busy={loading}>
         <button type="button" className="custom-pattern-tiles-toggle" aria-expanded={!tilesCollapsed}
           onClick={() => setTilesCollapsed(value => !value)}>
           <span>{tr("processing.customPatterns.title", "Custom patterns")}</span><Icon name="chevronDown" />
         </button>
-        {!tilesCollapsed && <div className="custom-pattern-tiles" role="group" aria-label={title}>
+        {loading && !tilesCollapsed && <div className="custom-pattern-tiles-loading"><LoadingSpinner label={tr("settings.admin.customPatterns.loading", "Loading custom patterns…")} /></div>}
+        {!loading && rows.length > 0 && !tilesCollapsed && <div className="custom-pattern-tiles" role="group" aria-label={title}>
         {rows.map(row => <button key={row.id} type="button"
           className={`custom-pattern-tile${confirmedPattern?.id === row.id ? " custom-pattern-tile--confirmed" : ""}`}
           aria-pressed={highlightedId === row.id} title={row.name}
@@ -147,10 +173,9 @@ export function CustomPatternsCard({ onSelect, imageAvailable = false, defaultWe
           onDoubleClick={() => {
             setHighlightedId(row.id);
             if (imageAvailable) {
-              const threshold = matchThresholdValue();
-              setMatchThreshold(String(threshold));
               confirmCustomPattern(row);
-              requestCustomPatternMatch(row, threshold / 100);
+              setProgressUpper(matchRangeMax);
+              requestCustomPatternMatch(row, matchRangeMax / 100, matchRangeMin / 100);
               onSelect?.(row);
             }
           }}>
@@ -166,7 +191,7 @@ export function CustomPatternsCard({ onSelect, imageAvailable = false, defaultWe
         {t("processing.customPatterns.matchCount", { count: match.matches.length })}
       </p>}
       {match.status === "complete" && match.matches.length === 0 && <p className="patterns-card__status patterns-card__status--warning" role="alert">
-        {tr("processing.customPatterns.noMatches", "No matching custom pattern was found on this image.")}
+        {t("processing.customPatterns.matchFailedAtLimit", { threshold: Math.round(match.threshold * 100) })}
       </p>}
       {match.status === "error" && <p className="patterns-card__status patterns-card__status--error" role="alert">{match.error}</p>}
     </div>
