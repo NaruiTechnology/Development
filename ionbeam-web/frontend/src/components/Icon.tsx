@@ -48,6 +48,7 @@ type IconName =
   | "ruler"
   | "scan"
   | "save"
+  | "search"
   | "square"
   | "sun"
   | "target"
@@ -120,6 +121,7 @@ const imageSources: Partial<Record<IconName, string>> = {
 };
 
 const paths: Partial<Record<IconName, JSX.Element>> = {
+  search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 5 5" /></>,
   processing: (
     <>
       <path d="M4 20L9 15M9 15L6 12L12 6L18 12L12 18Z" />

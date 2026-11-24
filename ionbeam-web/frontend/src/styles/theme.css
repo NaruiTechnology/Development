@@ -8755,6 +8755,12 @@ body {
 .custom-pattern-match-number .number-stepper { width: 82px; }
 .custom-pattern-match-number .number-stepper__input { color: lawngreen; }
 .custom-pattern-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; max-height: 320px; overflow-y: auto; padding: 2px; }
+.custom-pattern-search { position: relative; display: flex; grid-column: 1 / -1; align-items: center; min-width: 0; }
+.custom-pattern-search > .icon { position: absolute; left: 9px; width: 16px; height: 16px; color: var(--c-text-dim); pointer-events: none; }
+.custom-pattern-search .input { width: 100%; min-width: 0; padding-left: 32px; padding-right: 32px; }
+.custom-pattern-search__clear { position: absolute; right: 5px; display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; padding: 2px; border: 0; border-radius: 4px; background: transparent; color: var(--c-text-dim); cursor: pointer; }
+.custom-pattern-search__clear:hover { background: rgb(95 184 255 / 12%); color: var(--c-text); }
+.custom-pattern-search__clear .icon { width: 14px; height: 14px; }
 .custom-pattern-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; border: 1px solid var(--c-border-soft); border-radius: 6px; background: var(--c-bg-deep); color: var(--c-text-dim); font: inherit; font-size: 11px; cursor: pointer; }
 .custom-pattern-tile img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 4px; }
 .custom-pattern-tile__name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

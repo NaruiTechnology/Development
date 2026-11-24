@@ -70,6 +70,7 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
   const [matchRangeMin, setMatchRangeMin] = useState(70);
   const [matchRangeMax, setMatchRangeMax] = useState(98);
   const [progressUpper, setProgressUpper] = useState<number | null>(null);
+  const [searchText, setSearchText] = useState("");
   const confirmedPattern = useConfirmedCustomPattern();
   const match = useCustomPatternMatchState();
   const title = tr("processing.customPatterns.title", "Custom patterns");
@@ -104,6 +105,12 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
   }, []);
 
   const highlighted = rows.find(row => row.id === highlightedId) ?? null;
+  const visibleRows = rows.filter(row => row.name.toLocaleLowerCase().includes(searchText.trim().toLocaleLowerCase()));
+  const updateSearch = (value: string) => {
+    setSearchText(value);
+    const query = value.trim().toLocaleLowerCase();
+    if (query) setHighlightedId(rows.find(row => row.name.toLocaleLowerCase().includes(query))?.id ?? null);
+  };
   const select = () => {
     if (!highlighted || !imageAvailable) return;
     onResetPatternCards?.();
@@ -166,7 +173,18 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
         </button>
         {loading && !tilesCollapsed && <div className="custom-pattern-tiles-loading"><LoadingSpinner label={tr("settings.admin.customPatterns.loading", "Loading custom patterns…")} /></div>}
         {!loading && rows.length > 0 && !tilesCollapsed && <div className="custom-pattern-tiles" role="group" aria-label={title}>
-        {rows.map(row => <button key={row.id} type="button"
+        <label className="custom-pattern-search">
+          <Icon name="search" />
+          <input className="input" type="text" value={searchText}
+            placeholder={tr("processing.customPatterns.search", "Search custom patterns…")}
+            aria-label={tr("processing.customPatterns.search", "Search custom patterns…")}
+            onChange={event => updateSearch(event.target.value)} />
+          {searchText && <button type="button" className="custom-pattern-search__clear"
+            aria-label={tr("processing.customPatterns.clearSearch", "Clear search")}
+            title={tr("processing.customPatterns.clearSearch", "Clear search")}
+            onClick={() => setSearchText("")}><Icon name="x" /></button>}
+        </label>
+        {visibleRows.map(row => <button key={row.id} type="button"
           className={`custom-pattern-tile${confirmedPattern?.id === row.id ? " custom-pattern-tile--confirmed" : ""}`}
           aria-pressed={highlightedId === row.id} title={row.name}
           onClick={() => setHighlightedId(row.id)}
@@ -183,6 +201,7 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
           <span className="custom-pattern-tile__name">{row.name}</span>
           {confirmedPattern?.id === row.id && <span className="custom-pattern-tile__badge" aria-label={tr("processing.customPatterns.selected", "Selected")}><Icon name="check" /></span>}
         </button>)}
+        {visibleRows.length === 0 && <p className="patterns-card__status">{tr("processing.customPatterns.noSearchResults", "No matching custom patterns.")}</p>}
         </div>}
       </section>}
       {!imageAvailable && <p className="patterns-card__status">{tr("processing.customPatterns.loadImage", "Load an image on the canvas first.")}</p>}
