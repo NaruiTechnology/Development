@@ -100,7 +100,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
         <ExposureControls disabled={patternsLoading || exposureDisabled || countValidationFailed} />
         {patternsLoading && <LoadingSpinner label={t("processing.loading")} />}
         <PatternTableTabs />
-        {tableTab === "custom" && <PatternTableCustom />}
+        {tableTab === "custom" && <PatternTableCustom imageAvailable={imageAvailable} />}
         {tableTab === "default" && <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
           {specs.filter(spec => (processing.instances[spec.key]?.typeKey ?? spec.key) === spec.key).map((spec) => {
             const caption = tr(`processing.pattern.${spec.key}`, spec.caption);

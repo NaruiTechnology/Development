@@ -135,6 +135,7 @@ export function ROIEditor({
     pointFromClient: (clientX: number, clientY: number) => { x: number; y: number };
     toWorld: (point: { x: number; y: number }) => { x: number; y: number };
     sampleGrayAtClient: (clientX: number, clientY: number) => { value: number; x: number; y: number } | null;
+    imageDataUrl: () => string | null;
   }) => ReactNode;
   onLoadLastScan?: (imageUrl?: string | null) => void;
   autoLoadLastScan?: boolean;
@@ -2042,6 +2043,7 @@ export function ROIEditor({
             pointFromClient: (clientX, clientY) => canvasPointFromClient(clientX, clientY, true),
             toWorld: toDut,
             sampleGrayAtClient: rawGrayAtClient,
+            imageDataUrl: () => rawCanvasRef.current?.toDataURL("image/png") ?? null,
           })}
           {milling && <LiveViewCanvas contrastHost={liveContrastHost} toolsHost={liveToolsHost}
             pointerWorld={(x,y)=>toDut(canvasPointFromClient(x,y,true))} />}

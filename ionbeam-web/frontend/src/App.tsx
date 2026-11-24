@@ -50,6 +50,7 @@ import { ImageCanvas, type CapturedScanImage } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { PatternOverlay } from "./components/PatternOverlay";
+import { resetCustomPatternMatch } from "./components/CustomPatternsCard";
 import { exposureBusy } from "./store/exposureSlice";
 import { ProcessingPatternCards, ProcessingPatternsPanel } from "./components/ProcessingPatternsPanel";
 import { ExposureReviewPauseToggle } from "./components/ExposureControls";
@@ -1280,6 +1281,10 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
       suppressedROIScanImageUrlRef],
   );
 
+  const handleProcessingCanvasImageChange = useCallback(() => {
+    resetCustomPatternMatch();
+  }, []);
+
   useEffect(() => {
     if (activeTopTab !== "processing" || processingImageInitialized.current) return;
     const controller = new AbortController();
@@ -1656,6 +1661,7 @@ function WorkspaceApp({ activeTopTab, setActiveTopTab }: {
           ? <ExposureViewCanvasOverlay processingViewport displayLevels={api.displayLevels} />
           : <PatternOverlay disabled={scanControlsSafetyDisabled || phase === "stopping" || workflowRunning} api={api} />
         : undefined}
+      onImageChange={activeTopTab === "processing" ? handleProcessingCanvasImageChange : undefined}
     />
   );
 

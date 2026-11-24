@@ -1,5 +1,6 @@
 # Web service runtime — only the API layer needs these.
 # GlasgowDataIO and AutomationPy must already be importable in the same env.
+--extra-index-url https://download.pytorch.org/whl/cpu
 fastapi>=0.110
 uvicorn[standard]>=0.27
 pydantic>=2.5
@@ -15,3 +16,5 @@ pytest>=8       # for tests/test_wet_run.py
 matplotlib>=3.8
 numpy>=1.26
 Pillow>=10
+# CPU template matching for CONFIGURATION > ADMIN > Custom Patterns.
+torch==2.14.1

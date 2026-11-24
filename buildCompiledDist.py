@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover - Python 3.10 deploy builder fallback
 
 
 REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('gpiozero', 'httpx', 'redis', 'pillow')
+REQUIRED_IMAGE_MATCHING_PACKAGES = ('torch',)
 REQUIRED_SBC_RUNTIME_PACKAGES = ('smbus2', 'pyserial')
 REQUIRED_LOCAL_REDIS_APT_PACKAGES = (
     'redis-server', 'redis-sentinel', 'redis-tools')
@@ -231,6 +232,12 @@ def validate_glasgow_runtime_dependencies(src_dir):
             'Missing Glasgow dependency manifest(s): ' + ', '.join(missing_files))
 
     requirement_names = _requirement_names(requirements_path)
+    missing_matching_requirements = sorted(
+        set(REQUIRED_IMAGE_MATCHING_PACKAGES) - requirement_names)
+    if missing_matching_requirements:
+        raise ValueError(
+            'glasgow_service/requirements.txt is missing image-matching package(s): ' +
+            ', '.join(missing_matching_requirements))
     missing_requirements = sorted(
         set(REQUIRED_GLASGOW_RUNTIME_PACKAGES + REQUIRED_SBC_RUNTIME_PACKAGES) - requirement_names)
     if missing_requirements:
@@ -269,6 +276,34 @@ def validate_glasgow_runtime_dependencies(src_dir):
     # requirements.txt directly and must receive them before starting services.
     with open(pyproject_path, 'r', encoding='utf-8') as stream:
         metadata = stream.read()
+    optional_dependencies = re.search(
+        r'(?ms)^\[project\.optional-dependencies\]\s*$(.*?)(?=^\[|\Z)', metadata)
+    matching_extra = re.search(
+        r'(?m)^image-matching\s*=\s*\[(.*?)\]\s*$',
+        optional_dependencies.group(1) if optional_dependencies else '')
+    matching_names = {
+        re.match(r'([A-Za-z0-9_.-]+)', value).group(1).lower().replace('_', '-')
+        for value in re.findall(r'["\']([^"\']+)["\']', matching_extra.group(1) if matching_extra else '')
+        if re.match(r'([A-Za-z0-9_.-]+)', value)
+    }
+    if set(REQUIRED_IMAGE_MATCHING_PACKAGES) - matching_names:
+        raise ValueError('glasgow_service/pyproject.toml image-matching extra must include torch')
+    root_requirements = _development_relative_path(src_dir, 'requirements.txt')
+    if set(REQUIRED_IMAGE_MATCHING_PACKAGES) - _requirement_names(root_requirements):
+        raise ValueError('Development/requirements.txt must include torch for the host installation')
+    deploy_config = _development_relative_path(
+        src_dir, 'DeployWorkSpace', 'Development', 'DistributionDeploy', 'Json', 'DistributionDeploy.json')
+    with open(deploy_config, 'r', encoding='utf-8') as stream:
+        deploy_actions = json.load(stream).get('Actions', [])
+    install_action = next((item.get('installPipRequirements', {}).get('actionData', {})
+                           for item in deploy_actions if 'installPipRequirements' in item), {})
+    if 'torch' not in install_action.get('verifyImports', []):
+        raise ValueError('DistributionDeploy installPipRequirements must verify the torch import')
+    local_system_script = _development_relative_path(src_dir, 'Scripts', 'manage-local-system.sh')
+    with open(local_system_script, 'r', encoding='utf-8') as stream:
+        local_system_text = stream.read()
+    if 'PIL.Image, torch' not in local_system_text:
+        raise ValueError('manage-local-system.sh must verify the PyTorch runtime import')
     sbc_extra = re.search(r'(?m)^sbc\s*=\s*\[(.*?)\]', metadata)
     sbc_names = {
         re.match(r'([A-Za-z0-9_.-]+)', value).group(1).lower().replace('_', '-')
@@ -278,7 +313,7 @@ def validate_glasgow_runtime_dependencies(src_dir):
     if missing_sbc:
         raise ValueError('glasgow_service/pyproject.toml SBC extra is missing: ' + ', '.join(missing_sbc))
     print('Validated Glasgow runtime dependencies: ' +
-          ', '.join(REQUIRED_GLASGOW_RUNTIME_PACKAGES))
+          ', '.join(REQUIRED_GLASGOW_RUNTIME_PACKAGES + REQUIRED_IMAGE_MATCHING_PACKAGES))
 
 
 def validate_local_redis_distribution_workflow(src_dir):

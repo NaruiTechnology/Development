@@ -23,6 +23,11 @@ import { resolveStairSteps, type StairRecipeDefaults, type StairStepOverride } f
 import { ROI_CANVAS_EDGE, imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { useAppDispatch, useAppSelector, useWorkspaceActive } from "../store";
 import { useTranslation } from "../i18n";
+import { apiUrl } from "../lib/backendUrl";
+import { scanAuthHeaders } from "../lib/authIdentity";
+import { readJsonResponse } from "../lib/readJsonResponse";
+import { finishCustomPatternMatch, useCustomPatternMatchState } from "./CustomPatternsCard";
+import { LoadingSpinner } from "./LoadingSpinner";
 import { undoPatternRoi, createPatternRoi, commitPatternRoiEdit, clearPatternRoi, selectPattern, setPatternEnabled, setPatternRoi } from "../store/processingSlice";
 
 const DRAG_THRESHOLD = 8;           // canvas px, same as the rectangle ROI tool
@@ -41,6 +46,8 @@ export interface CanvasOverlayApi {
   toWorld(point: Pt): Pt;
   /** Raw gray value and canvas pixel under a client point. */
   sampleGrayAtClient(clientX: number, clientY: number): { value: number; x: number; y: number } | null;
+  /** Raw 640×640 image currently shown on the canvas, before display-level stretching. */
+  imageDataUrl(): string | null;
 }
 
 type Draft =
@@ -52,6 +59,8 @@ type Draft =
 
 export function PatternOverlay({ disabled, api }: { disabled: boolean; api: CanvasOverlayApi }) {
   const dispatch = useAppDispatch();
+  const apiRef = useRef(api);
+  apiRef.current = api;
   const workspaceActive = useWorkspaceActive();
   const { t } = useTranslation();
   const [menu, setMenu] = useState<{ x: number; y: number; key: string } | null>(null);
@@ -59,6 +68,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
   const roi = useAppSelector((s) => s.scan.roi);
   const milling = useAppSelector(s => s.exposure.mode === "milling");
   const { specs, instances, activeKey, stairReceipes } = useAppSelector((s) => s.processing);
+  const customMatch = useCustomPatternMatchState();
   const materials = useAppSelector((s) => s.processing.materials);
   const [, repaint] = useReducer((n: number) => n + 1, 0);
   const draft = useRef<Draft | null>(null);
@@ -84,6 +94,27 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
     : grayTooltip && nearestMaterials.length
       ? t("roi.materialLookup.nearest", { materials: nearestMaterials.map(material => material.caption ?? material.name).join(", ") })
       : null;
+
+  useEffect(() => {
+    if (customMatch.status !== "matching" || !customMatch.pattern) return;
+    const requestId = customMatch.requestId;
+    const imageData = apiRef.current.imageDataUrl();
+    if (!imageData) {
+      finishCustomPatternMatch(requestId, [], "Load an image on the canvas before matching a custom pattern.");
+      return;
+    }
+    void fetch(apiUrl("/api/processing/custom-pattern-match"), {
+      method: "POST",
+      headers: { ...scanAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ image_data: imageData, template_data: customMatch.pattern.payload.data, threshold: customMatch.threshold }),
+    }).then(async response => {
+      const result = await readJsonResponse<{ ok?: boolean; matches?: Array<{ x: number; y: number; width: number; height: number; score: number }>; detail?: string }>(response, "custom pattern matching");
+      if (!response.ok || result.ok === false) throw new Error(typeof result.detail === "string" ? result.detail : `Matching failed (HTTP ${response.status}).`);
+      finishCustomPatternMatch(requestId, result.matches ?? []);
+    }).catch(error => {
+      finishCustomPatternMatch(requestId, [], error instanceof Error ? error.message : String(error));
+    });
+  }, [customMatch.requestId, customMatch.status, customMatch.pattern, customMatch.threshold]);
 
   const bounds = imageWorldBounds(roi);
   const view = viewportBounds(roi);
@@ -392,6 +423,12 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         ) : null;
       })}
       <ExposureLatticeGeometry project={(x,y) => ({x:cx(x),y:cy(y)})} />
+      {customMatch.status === "complete" && customMatch.matches.map((match, index) => <g key={`${customMatch.requestId}-${index}`} className="custom-pattern-match-overlay" pointerEvents="none">
+        <rect x={match.x} y={match.y} width={match.width} height={match.height}
+          fill="rgb(34 255 0 / 7%)" stroke="#35ff00" strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
+        <text x={match.x + 3} y={Math.max(12, match.y - 4)} fill="#00d9ff" fontSize={11} fontWeight={400}
+          stroke="#07101c" strokeWidth={2} paintOrder="stroke">{`${(match.score * 100).toFixed(0)}%`}</text>
+      </g>)}
       {active && d?.kind === "rect" && d.rect && (
         <Shape spec={active} params={instances[active.key]?.parameters ?? {}} roi={d.rect} active draft cx={cx} cy={cy} sx={sx} sy={sy} />
       )}

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { CustomPatternsCard } from "./CustomPatternsCard";
 import { useTranslation, type TranslationKey } from "../i18n";
 
 function useTr() {
@@ -45,9 +46,6 @@ export function PatternTableTabs() {
   </div>;
 }
 
-export function PatternTableCustom() {
-  const { tr } = useTr();
-  return <p className="patterns-card__status" role="tabpanel" id="pattern-table-panel" aria-labelledby="pattern-table-tab-custom">
-    {tr("processing.table.customEmpty", "No custom patterns yet.")}
-  </p>;
+export function PatternTableCustom({ imageAvailable = false }: { imageAvailable?: boolean }) {
+  return <CustomPatternsCard imageAvailable={imageAvailable} />;
 }

@@ -1,10 +1,33 @@
 """Reference-only Processing API, independently testable without a device service."""
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 from . import lens_lookup, pattern_recipes
+from .custom_pattern_match import CustomPatternMatchError, find_custom_pattern_matches
 from .auth import require_token
 
 router = APIRouter(prefix="/processing", tags=["processing"], dependencies=[Depends(require_token)])
+
+
+class CustomPatternMatchRequest(BaseModel):
+    image_data: str = Field(min_length=32, max_length=15_000_000)
+    template_data: str = Field(min_length=32, max_length=15_000_000)
+    threshold: float = Field(default=0.85, ge=0.1, le=1.0)
+
+
+@router.post("/custom-pattern-match")
+async def match_custom_pattern(body: CustomPatternMatchRequest):
+    try:
+        matches = await run_in_threadpool(
+            find_custom_pattern_matches,
+            body.image_data,
+            body.template_data,
+            body.threshold,
+        )
+        return {"ok": True, "matches": matches}
+    except CustomPatternMatchError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 # Reference-only calculations: these endpoints never acquire or expose a beam.
 @router.get("/lens-lookup")
