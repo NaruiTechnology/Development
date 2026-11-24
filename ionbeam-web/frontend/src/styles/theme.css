@@ -8680,6 +8680,33 @@ body {
 .custom-pattern-edit-dialog { width: min(560px, calc(100vw - 32px)); }
 .custom-pattern-edit-dialog__body { display: grid; gap: 12px; }
 .custom-pattern-edit-dialog__body > label { display: grid; gap: 5px; color: var(--c-text-dim); }
+.custom-pattern-edit-dialog__upload { display: grid; gap: 5px; color: var(--c-text-dim); }
+.custom-pattern-edit-dialog__file-control {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 5px;
+  background: var(--c-bg-deep);
+}
+.custom-pattern-edit-dialog__file-control .btn { flex: none; margin: 4px; }
+.custom-pattern-edit-dialog__filename {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 8px;
+  color: var(--c-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.custom-pattern-edit-dialog__file-input { display: none; }
+.custom-pattern-edit-dialog .modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--c-border-soft);
+}
 .custom-pattern-edit-dialog__preview {
   display: block;
   max-width: 100%;
@@ -8695,6 +8722,11 @@ body {
 .custom-patterns-card { margin: 0; }
 .custom-patterns-card .card__collapse-btn { margin-left: auto; }
 .custom-patterns-card__body { display: flex; flex-direction: column; gap: 10px; }
+.custom-pattern-tiles-section { min-width: 0; border: 1px solid var(--c-border-soft); border-radius: 5px; overflow: hidden; }
+.custom-pattern-tiles-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 0; background: rgb(95 184 255 / 8%); color: var(--c-text-dim); font: inherit; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.custom-pattern-tiles-toggle:hover { color: var(--c-text); background: rgb(95 184 255 / 13%); }
+.custom-pattern-tiles-toggle .icon { width: 14px; height: 14px; transition: transform .15s ease; }
+.custom-pattern-tiles-toggle[aria-expanded="true"] .icon { transform: rotate(180deg); }
 .custom-pattern-match-row { display: flex; align-items: flex-end; gap: 10px; }
 .custom-pattern-match-threshold { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex: 1 1 auto; min-width: 0; color: var(--c-text-dim); font-size: 12px; }
 .custom-pattern-match-number { display: flex; align-items: center; gap: 5px; color: lawngreen; }

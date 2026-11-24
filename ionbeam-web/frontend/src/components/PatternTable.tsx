@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import type { ReactNode } from "react";
 import { CustomPatternsCard } from "./CustomPatternsCard";
 import { useTranslation, type TranslationKey } from "../i18n";
 
@@ -46,6 +47,6 @@ export function PatternTableTabs() {
   </div>;
 }
 
-export function PatternTableCustom({ imageAvailable = false }: { imageAvailable?: boolean }) {
-  return <CustomPatternsCard imageAvailable={imageAvailable} />;
+export function PatternTableCustom({ imageAvailable = false, defaultWedges }: { imageAvailable?: boolean; defaultWedges?: ReactNode }) {
+  return <CustomPatternsCard imageAvailable={imageAvailable} defaultWedges={defaultWedges} />;
 }

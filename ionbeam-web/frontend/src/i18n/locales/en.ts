@@ -1072,6 +1072,8 @@ export const en = {
   "settings.admin.customPatterns.addTitle": "Add custom pattern",
   "settings.admin.customPatterns.editTitle": "Edit custom pattern",
   "settings.admin.customPatterns.upload": "Upload image",
+  "settings.admin.customPatterns.browse": "Browse…",
+  "settings.admin.customPatterns.noFileSelected": "No file selected.",
   "settings.admin.customPatterns.currentImage": "Current image will be kept unless you select another file.",
   "settings.admin.customPatterns.imageRequired": "Choose a PNG, JPEG, WebP, or GIF image (up to 10 MB).",
   "settings.admin.customPatterns.preview": "Pattern preview",

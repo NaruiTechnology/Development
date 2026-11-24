@@ -1,5 +1,6 @@
 /** PATTERNS > Custom: tile picker over the ionbeam_asset.CustomPatterns image catalogue. */
 import { useEffect, useState, useSyncExternalStore } from "react";
+import type { ReactNode } from "react";
 import { customPatternApi, type CustomPattern } from "../lib/customPatternApi";
 import { Icon } from "./Icon";
 import { LoadingSpinner } from "./LoadingSpinner";
@@ -28,40 +29,54 @@ export interface CustomPatternMatchState {
   matches: CustomPatternMatch[];
   error: string | null;
 }
-let matchState: CustomPatternMatchState = { requestId: 0, pattern: null, threshold: 0.9, status: "idle", matches: [], error: null };
+let matchState: CustomPatternMatchState = { requestId: 0, pattern: null, threshold: 0.99, status: "idle", matches: [], error: null };
 const matchListeners = new Set<() => void>();
 const subscribeMatch = (fn: () => void) => { matchListeners.add(fn); return () => { matchListeners.delete(fn); }; };
 const publishMatch = () => matchListeners.forEach(fn => fn());
-export const requestCustomPatternMatch = (pattern: CustomPattern, threshold = 0.9) => {
+export const requestCustomPatternMatch = (pattern: CustomPattern, threshold = 0.99) => {
   matchState = { requestId: matchState.requestId + 1, pattern, threshold, status: "matching", matches: [], error: null };
   publishMatch();
   return matchState.requestId;
 };
-export const finishCustomPatternMatch = (requestId: number, matches: CustomPatternMatch[], error: string | null = null) => {
+export const updateCustomPatternMatchThreshold = (requestId: number, threshold: number) => {
+  if (matchState.requestId !== requestId || matchState.status !== "matching") return false;
+  matchState = { ...matchState, threshold };
+  publishMatch();
+  return true;
+};
+export const finishCustomPatternMatch = (requestId: number, matches: CustomPatternMatch[], error: string | null = null, threshold = matchState.threshold) => {
   if (matchState.requestId !== requestId) return;
-  matchState = { ...matchState, status: error ? "error" : "complete", matches, error };
+  matchState = { ...matchState, threshold, status: error ? "error" : "complete", matches, error };
   publishMatch();
 };
 export const resetCustomPatternMatch = () => {
   confirmed = null;
-  matchState = { requestId: matchState.requestId + 1, pattern: null, threshold: 0.9, status: "idle", matches: [], error: null };
+  matchState = { requestId: matchState.requestId + 1, pattern: null, threshold: 0.99, status: "idle", matches: [], error: null };
   listeners.forEach(fn => fn());
   publishMatch();
 };
 export const useCustomPatternMatchState = () => useSyncExternalStore(subscribeMatch, () => matchState, () => matchState);
 
-export function CustomPatternsCard({ onSelect, imageAvailable = false }: { onSelect?: (pattern: CustomPattern) => void; imageAvailable?: boolean }) {
+export function CustomPatternsCard({ onSelect, imageAvailable = false, defaultWedges }: { onSelect?: (pattern: CustomPattern) => void; imageAvailable?: boolean; defaultWedges?: ReactNode }) {
   const { t } = useTranslation();
   const tr = (key: string, fallback: string) => { const text = t(key as TranslationKey); return text === key ? fallback : text; };
   const [collapsed, setCollapsed] = useState(false);
+  const [tilesCollapsed, setTilesCollapsed] = useState(false);
   const [rows, setRows] = useState<CustomPattern[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
-  const [matchThreshold, setMatchThreshold] = useState("90");
+  const [matchThreshold, setMatchThreshold] = useState("99");
   const confirmedPattern = useConfirmedCustomPattern();
   const match = useCustomPatternMatchState();
   const title = tr("processing.customPatterns.title", "Custom patterns");
+
+  useEffect(() => {
+    if (match.status === "matching" || match.status === "complete")
+      setMatchThreshold(String(Math.round(match.threshold * 100)));
+    if (match.status === "matching") setTilesCollapsed(false);
+    if (match.status === "complete" && match.matches.length > 0) setTilesCollapsed(true);
+  }, [match.status, match.threshold, match.matches.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +90,7 @@ export function CustomPatternsCard({ onSelect, imageAvailable = false }: { onSel
   const highlighted = rows.find(row => row.id === highlightedId) ?? null;
   const matchThresholdValue = () => {
     const parsed = Number(matchThreshold);
-    return Number.isFinite(parsed) ? Math.max(10, Math.min(100, Math.round(parsed))) : 90;
+    return Number.isFinite(parsed) ? Math.max(10, Math.min(100, Math.round(parsed))) : 99;
   };
   const normalizeMatchThreshold = () => setMatchThreshold(String(matchThresholdValue()));
   const select = () => {
@@ -98,6 +113,7 @@ export function CustomPatternsCard({ onSelect, imageAvailable = false }: { onSel
       </button>
     </div>
     <div className="card__body custom-patterns-card__body" hidden={collapsed}>
+      {defaultWedges}
       {loading && <LoadingSpinner label={tr("settings.admin.customPatterns.loading", "Loading custom patterns…")} />}
       {error && <p className="patterns-card__status patterns-card__status--error" role="alert">{error}</p>}
       {!loading && !error && rows.length === 0 && <p className="patterns-card__status">{tr("processing.table.customEmpty", "No custom patterns yet.")}</p>}
@@ -107,18 +123,23 @@ export function CustomPatternsCard({ onSelect, imageAvailable = false }: { onSel
         }}>
           <span>{tr("processing.customPatterns.matchThreshold", "Match range")}</span>
           <div className="custom-pattern-match-number">
-            <NumberStepperInput value={matchThreshold} min={10} max={100} step={1} inputMode="numeric"
+            <NumberStepperInput value={matchThreshold} min={10} max={100} step={1} inputMode="numeric" disabled={match.status === "matching"}
               ariaLabel={tr("processing.customPatterns.matchThresholdLabel", "Match confidence threshold")}
               onValueChange={setMatchThreshold} />
             <span>%</span>
           </div>
         </div>
-        <button type="button" className="btn btn--primary" disabled={!highlighted || !imageAvailable || match.status === "matching"} onClick={select}
+        <button type="button" className="btn btn--primary" disabled={!highlighted || !imageAvailable || match.status === "matching" || (match.status === "complete" && match.matches.length > 0 && tilesCollapsed)} onClick={select}
           title={!imageAvailable ? tr("processing.customPatterns.loadImage", "Load an image on the canvas first.") : undefined}>
-          {tr("processing.customPatterns.select", "Select")}
+          {match.status === "complete" && match.matches.length > 0 ? tr("processing.customPatterns.selected", "Selected") : tr("processing.customPatterns.select", "Select")}
         </button>
       </div>
-      {rows.length > 0 && <div className="custom-pattern-tiles" role="group" aria-label={title}>
+      {rows.length > 0 && <section className="custom-pattern-tiles-section">
+        <button type="button" className="custom-pattern-tiles-toggle" aria-expanded={!tilesCollapsed}
+          onClick={() => setTilesCollapsed(value => !value)}>
+          <span>{tr("processing.customPatterns.title", "Custom patterns")}</span><Icon name="chevronDown" />
+        </button>
+        {!tilesCollapsed && <div className="custom-pattern-tiles" role="group" aria-label={title}>
         {rows.map(row => <button key={row.id} type="button"
           className={`custom-pattern-tile${confirmedPattern?.id === row.id ? " custom-pattern-tile--confirmed" : ""}`}
           aria-pressed={highlightedId === row.id} title={row.name}
@@ -137,7 +158,8 @@ export function CustomPatternsCard({ onSelect, imageAvailable = false }: { onSel
           <span className="custom-pattern-tile__name">{row.name}</span>
           {confirmedPattern?.id === row.id && <span className="custom-pattern-tile__badge" aria-label={tr("processing.customPatterns.selected", "Selected")}><Icon name="check" /></span>}
         </button>)}
-      </div>}
+        </div>}
+      </section>}
       {!imageAvailable && <p className="patterns-card__status">{tr("processing.customPatterns.loadImage", "Load an image on the canvas first.")}</p>}
       {match.status === "matching" && <LoadingSpinner label={tr("processing.customPatterns.matching", "Matching on the canvas image…")} />}
       {match.status === "complete" && match.matches.length > 0 && <p className="patterns-card__status" role="status">

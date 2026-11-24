@@ -1,5 +1,5 @@
 /** CONFIGURATION > ADMIN > Custom Patterns: image catalogue backed by ionbeam_asset.CustomPatterns. */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { customPatternApi, type CustomPattern } from "../lib/customPatternApi";
@@ -47,6 +47,7 @@ export function CustomPatternsGrid({ canManage }: { canManage: boolean }) {
   const [name, setName] = useState("");
   const [payload, setPayload] = useState<CustomPattern["payload"] | null>(null);
   const [fileName, setFileName] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -110,7 +111,13 @@ export function CustomPatternsGrid({ canManage }: { canManage: boolean }) {
         <div className="modal__body custom-pattern-edit-dialog__body">
           {error && <p role="alert" className="settings-form__hint" style={{ color: "var(--c-danger)" }}>{error}</p>}
           <label>{t("settings.admin.customPatterns.name")}<input className="input" value={name} maxLength={160} disabled={saving} onChange={e => setName(e.target.value)} /></label>
-          <label>{t("settings.admin.customPatterns.upload")}<input className="input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={saving} onChange={e => void chooseFile(e.target.files?.[0])} /></label>
+          <label className="custom-pattern-edit-dialog__upload">{t("settings.admin.customPatterns.upload")}
+            <span className="custom-pattern-edit-dialog__file-control">
+              <button type="button" className="btn btn--cancel" disabled={saving} onClick={() => fileInputRef.current?.click()}>{t("settings.admin.customPatterns.browse")}</button>
+              <span className="custom-pattern-edit-dialog__filename">{fileName || t("settings.admin.customPatterns.noFileSelected")}</span>
+            </span>
+            <input ref={fileInputRef} className="custom-pattern-edit-dialog__file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={saving} aria-label={t("settings.admin.customPatterns.upload")} onChange={e => void chooseFile(e.target.files?.[0])} />
+          </label>
           <span className="settings-form__hint">{fileName || (payload ? t("settings.admin.customPatterns.currentImage") : t("settings.admin.customPatterns.imageRequired"))}</span>
           {payload && <img className="custom-pattern-edit-dialog__preview" src={payload.data} alt={name || t("settings.admin.customPatterns.preview")} />}
         </div>

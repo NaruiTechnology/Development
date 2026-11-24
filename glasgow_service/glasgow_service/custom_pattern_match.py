@@ -15,7 +15,7 @@ _DATA_URL = re.compile(r"^data:image/(?:png|jpeg|webp|gif);base64,([A-Za-z0-9+/]
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024
 _MAX_SIDE = 256
 _SCALE_STEPS = (0.5, 0.68, 0.85, 1.0, 1.2, 1.45, 1.75, 2.1)
-_SCORE_THRESHOLD = 0.85
+_SCORE_THRESHOLD = 0.99
 _MAX_MATCHES = 24
 
 
@@ -71,7 +71,7 @@ def _iou(a: Match, b: Match) -> float:
 
 
 def find_custom_pattern_matches(image_data: str, template_data: str, threshold: float = _SCORE_THRESHOLD) -> list[dict[str, float]]:
-    """Find template instances in the provided canvas image; coordinates use the source image's pixel space."""
+    """Find template instances meeting one confidence threshold in source-image pixel space."""
     if not 0.1 <= threshold <= 1.0:
         raise CustomPatternMatchError("threshold must be between 0.1 and 1.0.")
     image = _decode_image(image_data, "Canvas image")

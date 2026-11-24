@@ -28,8 +28,8 @@ import { fetchProcessingPatterns, setPatternMaterial, setPatternWorkflow, select
 import { Icon } from "./Icon";
 import { NumberStepperField } from "./NumberStepperField";
 import { StairRecipeCard } from "./StepRecipe";
-import { PatternIcon } from "./PatternIcon";
 import { PatternTableCustom, PatternTableTabs, usePatternTableTab } from "./PatternTable";
+import { DefaultPatternWedges } from "./DefaultPatternWedges";
 import { PatternRuntimeReadouts } from "./PatternRuntimeReadouts";
 import { ProcessingWorkflowPanel } from "./ProcessingWorkflowPanel";
 import { VectorScanPathPreview } from "./VectorScanPathPreview";
@@ -100,28 +100,13 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
         <ExposureControls disabled={patternsLoading || exposureDisabled || countValidationFailed} />
         {patternsLoading && <LoadingSpinner label={t("processing.loading")} />}
         <PatternTableTabs />
-        {tableTab === "custom" && <PatternTableCustom imageAvailable={imageAvailable} />}
-        {tableTab === "default" && <div className="pattern-strip" role="toolbar" aria-label={t("processing.patterns")}>
-          {specs.filter(spec => (processing.instances[spec.key]?.typeKey ?? spec.key) === spec.key).map((spec) => {
-            const caption = tr(`processing.pattern.${spec.key}`, spec.caption);
-            return (
-              <button
-                key={spec.key}
-                type="button"
-                className="pattern-strip__btn"
-                disabled={patternsLoading || disabled || !imageAvailable}
-                aria-pressed={Boolean(activeKey && processing.instances[activeKey]?.typeKey === spec.key)}
-                aria-controls={`processing-pattern-${encodeURIComponent(activeKey && processing.instances[activeKey]?.typeKey === spec.key ? activeKey : spec.key)}`}
-                data-tooltip={caption}
-                data-styled-tooltip="true"
-                aria-label={caption}
-                onClick={() => dispatch(selectPattern(activeKey && processing.instances[activeKey]?.typeKey === spec.key ? null : spec.key))}
-              >
-                <PatternIcon name={spec.icon} />
-              </button>
-            );
-          })}
-        </div>}
+        {tableTab === "custom" && <PatternTableCustom imageAvailable={imageAvailable}
+          defaultWedges={<DefaultPatternWedges specs={specs} instances={processing.instances} activeKey={activeKey}
+            disabled={patternsLoading || disabled} imageAvailable={imageAvailable}
+            onSelect={key => dispatch(selectPattern(key))} />} />}
+        {tableTab === "default" && <DefaultPatternWedges specs={specs} instances={processing.instances} activeKey={activeKey}
+          disabled={patternsLoading || disabled} imageAvailable={imageAvailable}
+          onSelect={key => dispatch(selectPattern(key))} />}
         {specs.find(s => s.key === activeKey)?.model === "LineModel" && <p className="patterns-card__status">{t("processing.hint.line")}</p>}
         {specs.find(s => s.key === activeKey)?.model === "PolygonModel" && <p className="patterns-card__status">{t("processing.hint.vertices")}</p>}
         {messages.length > 0 && (
@@ -143,7 +128,6 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
   const { tr } = useTr();
   const [limitMessage, setLimitMessage] = useState("");
   const milling = useAppSelector(s => s.exposure.mode === "milling");
-  const tableTab = usePatternTableTab();
   const selectedSpotCount = useMemo(() => {
     if (!processing.lensLookup) return null;
     try {
@@ -190,7 +174,6 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
     group.push(spec);
     groups.set(typeKey, group);
   }
-  if (tableTab !== "default") return null;
   return <>
     {limitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{limitMessage}</p>}
     {totalLimitMessage && <p className="patterns-card__status patterns-card__status--error" role="alert">{totalLimitMessage}</p>}

@@ -26,7 +26,7 @@ import { useTranslation } from "../i18n";
 import { apiUrl } from "../lib/backendUrl";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { readJsonResponse } from "../lib/readJsonResponse";
-import { finishCustomPatternMatch, useCustomPatternMatchState } from "./CustomPatternsCard";
+import { finishCustomPatternMatch, updateCustomPatternMatchThreshold, useCustomPatternMatchState } from "./CustomPatternsCard";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { undoPatternRoi, createPatternRoi, commitPatternRoiEdit, clearPatternRoi, selectPattern, setPatternEnabled, setPatternRoi } from "../store/processingSlice";
 
@@ -103,18 +103,30 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       finishCustomPatternMatch(requestId, [], "Load an image on the canvas before matching a custom pattern.");
       return;
     }
-    void fetch(apiUrl("/api/processing/custom-pattern-match"), {
-      method: "POST",
-      headers: { ...scanAuthHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ image_data: imageData, template_data: customMatch.pattern.payload.data, threshold: customMatch.threshold }),
-    }).then(async response => {
-      const result = await readJsonResponse<{ ok?: boolean; matches?: Array<{ x: number; y: number; width: number; height: number; score: number }>; detail?: string }>(response, "custom pattern matching");
-      if (!response.ok || result.ok === false) throw new Error(typeof result.detail === "string" ? result.detail : `Matching failed (HTTP ${response.status}).`);
-      finishCustomPatternMatch(requestId, result.matches ?? []);
-    }).catch(error => {
-      finishCustomPatternMatch(requestId, [], error instanceof Error ? error.message : String(error));
-    });
-  }, [customMatch.requestId, customMatch.status, customMatch.pattern, customMatch.threshold]);
+    const startPercent = Math.max(10, Math.min(100, Math.round(customMatch.threshold * 100)));
+    void (async () => {
+      try {
+        for (let percent = startPercent; percent >= 10; percent -= 1) {
+          if (!updateCustomPatternMatchThreshold(requestId, percent / 100)) return;
+          const response = await fetch(apiUrl("/api/processing/custom-pattern-match"), {
+            method: "POST",
+            headers: { ...scanAuthHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ image_data: imageData, template_data: customMatch.pattern!.payload.data, threshold: percent / 100 }),
+          });
+          const result = await readJsonResponse<{ ok?: boolean; matches?: Array<{ x: number; y: number; width: number; height: number; score: number }>; detail?: string }>(response, "custom pattern matching");
+          if (!response.ok || result.ok === false) throw new Error(typeof result.detail === "string" ? result.detail : `Matching failed (HTTP ${response.status}).`);
+          const matches = result.matches ?? [];
+          if (matches.length > 0) {
+            finishCustomPatternMatch(requestId, matches, null, percent / 100);
+            return;
+          }
+        }
+        finishCustomPatternMatch(requestId, [], null, 0.1);
+      } catch (error) {
+        finishCustomPatternMatch(requestId, [], error instanceof Error ? error.message : String(error));
+      }
+    })();
+  }, [customMatch.requestId, customMatch.status, customMatch.pattern]);
 
   const bounds = imageWorldBounds(roi);
   const view = viewportBounds(roi);

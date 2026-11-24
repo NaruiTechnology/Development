@@ -13,7 +13,7 @@ router = APIRouter(prefix="/processing", tags=["processing"], dependencies=[Depe
 class CustomPatternMatchRequest(BaseModel):
     image_data: str = Field(min_length=32, max_length=15_000_000)
     template_data: str = Field(min_length=32, max_length=15_000_000)
-    threshold: float = Field(default=0.85, ge=0.1, le=1.0)
+    threshold: float = Field(default=0.99, ge=0.1, le=1.0)
 
 
 @router.post("/custom-pattern-match")
