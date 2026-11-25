@@ -16,14 +16,27 @@ export function liveAutoLevels(stats: LiveStatistics, minimumWindow=32, change=f
   const full=change?LIVE_FULL_SCALE*2:LIVE_FULL_SCALE;
   if(!stats.count)return change?{low:CHANGE_ZERO-minimumWindow,high:CHANGE_ZERO+minimumWindow}:{low:0,high:full};
   if(change){const span=Math.max(minimumWindow,Math.abs(stats.low-CHANGE_ZERO),Math.abs(stats.high-CHANGE_ZERO));return {low:Math.max(0,CHANGE_ZERO-span),high:Math.min(full,CHANGE_ZERO+span)};}
-  const width=Math.max(minimumWindow,stats.high-stats.low),centre=(stats.low+stats.high)/2;
-  const low=Math.max(0,Math.min(full-width,centre-width/2));
+  // Keep a useful black-to-white separation even when the detector values
+  // occupy a narrow band. Bias the measured signal center slightly above the
+  // window midpoint, leaving more display range for brighter detail and
+  // avoiding an aggressive lift of dark pixels.
+  // The caller controls the minimum span. This prevents small detector noise
+  // from turning into a full black-to-white image while leaving the operator
+  // free to widen or narrow the automatic window.
+  const width=Math.min(full,Math.max(minimumWindow,stats.high-stats.low));
+  const signalSpan=stats.high-stats.low;
+  // Move the window center toward the brighter part of a varying signal. A
+  // constant frame has no such bias and remains centered at midgray.
+  const centre=stats.low+signalSpan*0.65;
+  const low=Math.max(0,Math.min(full-width,centre-width*0.5));
   return normalizeLevels(low,Math.min(full,low+width),full);
 }
 /** Accept equal or stronger automatic gain; a weaker candidate cannot undo the boost. */
-export function retainLiveContrast(previous: ResolvedLevels | null, next: ResolvedLevels, progressiveFactor=1): ResolvedLevels {
+export function retainLiveContrast(previous: ResolvedLevels | null, next: ResolvedLevels, progressiveFactor=1, minimumWindow=0): ResolvedLevels {
   const boundedFactor=Math.max(0,Math.min(1,progressiveFactor));
-  const width=Math.min((previous?previous.high-previous.low:next.high-next.low)*boundedFactor,next.high-next.low);
+  // Progressive strengthening can narrow an otherwise valid candidate. Keep
+  // the operator's configured auto-window floor after applying that easing.
+  const width=Math.min(Math.max(minimumWindow,(previous?previous.high-previous.low:next.high-next.low)*boundedFactor),next.high-next.low);
   if(width>=next.high-next.low)return next;
   // Preserve the strongest window width while following a shifted signal.
   // Freezing the old absolute levels can clip a later pass whose ADC values

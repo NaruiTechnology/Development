@@ -39,9 +39,10 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
   const setting=effectiveMode==="change"?deltaSetting:rawSetting;
   const setSetting=effectiveMode==="change"?setDeltaSetting:setRawSetting;
   const [strength,setStrength]=useState(75);
+  const [autoWindowPercent,setAutoWindowPercent]=useState(12);
   const [sharpness,setSharpness]=useState(25);
   const [band,setBand]=useState<[number,number]>([0,16383]),[bandEnabled,setBandEnabled]=useState(true);
-  const minimumWindow=8*4;
+  const minimumWindow=Math.round((effectiveMode==="change"?LIVE_FULL_SCALE*2:LIVE_FULL_SCALE)*autoWindowPercent/100);
   const rawStats=useMemo(()=>liveStatistics(frame?.pixels??[],frame?.valid??[]),[frame]);
   // Use a complete exposure for automatic contrast once it is available.
   // Mixing retained pixels with a partially replaced pass shifts the quantiles
@@ -73,7 +74,9 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
   },[frame,effectiveMode,changes,threshold]);
   const automaticStats=effectiveMode==="change"?changeStats:completedStats??rawStats;
   const retainedContrast=useRef<{key:string;pass:number;completedPass:number;raw:ResolvedLevels|null;change:ResolvedLevels|null}>({key:"",pass:0,completedPass:0,raw:null,change:null});
-  const contrastKey=JSON.stringify([frame?.key,frame?.referenceKey,frame?.bounds]);
+  // A changed minimum auto window invalidates retained narrower levels. Keep
+  // the new floor effective immediately when the operator moves its handle.
+  const contrastKey=JSON.stringify([frame?.key,frame?.referenceKey,frame?.bounds,autoWindowPercent]);
   if (retainedContrast.current.key!==contrastKey || !rawStats.count || (frame?.pass??0)<retainedContrast.current.pass)
     retainedContrast.current={key:contrastKey,pass:frame?.pass??0,completedPass:0,raw:null,change:null};
   retainedContrast.current.pass=frame?.pass??0;
@@ -84,7 +87,7 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
   const passesToStrengthen=completedPassAdvanced
     ?completedPass>0?(frame?.pass??completedPass)-completedPass:Math.max(0,(frame?.pass??1)-1):0;
   const progressiveFactor=setting.mode==="auto"?Math.pow(0.85,passesToStrengthen):1;
-  const autoLevels=automaticStats.count?retainLiveContrast(retainedContrast.current[channel],candidate,progressiveFactor)
+  const autoLevels=automaticStats.count?retainLiveContrast(retainedContrast.current[channel],candidate,progressiveFactor,minimumWindow)
     :retainedContrast.current[channel]??candidate;
   if (automaticStats.count && setting.mode==="auto") retainedContrast.current[channel]=autoLevels;
   if(completedPassAdvanced)retainedContrast.current.completedPass=frame?.pass??retainedContrast.current.completedPass;
@@ -164,6 +167,8 @@ export function LiveViewCanvas({contrastHost, toolsHost, pointerWorld}: {contras
       </label>
       <LevelWedge histogram={histogram} levels={levels}
         fullScale={effectiveMode==="change"?LIVE_FULL_SCALE*2:LIVE_FULL_SCALE} codeOffset={effectiveMode==="change"?CHANGE_ZERO:0}
+        autoWindow={setting.mode==="auto"?minimumWindow:undefined}
+        onAutoWindowChange={width=>setAutoWindowPercent(Math.max(2,Math.min(50,width/(effectiveMode==="change"?LIVE_FULL_SCALE*2:LIVE_FULL_SCALE)*100)))}
         auto={setting.mode==="auto"} onChange={next=>setSetting({mode:"manual",...next})} onAuto={()=>setSetting({mode:"auto"})}
         disabled={!stats.count||!source}/>
       <div className="live-sharpen-control" role="group" aria-label={t("processing.liveView.sharpness")}>

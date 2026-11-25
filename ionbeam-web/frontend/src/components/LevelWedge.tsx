@@ -52,9 +52,12 @@ export interface LevelWedgeProps {
   fullScale?: number;
   /** Sample units per axis unit (default 4: 14-bit ADC codes). */
   codeDivisor?: number;
+  /** Optional third handle for adjusting the minimum auto window width. */
+  autoWindow?: number;
+  onAutoWindowChange?: (width: number) => void;
 }
 
-type DragKind = "low" | "high" | "region";
+type DragKind = "low" | "high" | "region" | "window";
 
 export function LevelWedge({
   scopeLabel,
@@ -67,6 +70,8 @@ export function LevelWedge({
   fullScale = OBI_FULL_SCALE,
   codeDivisor = 4,
   codeOffset = 0,
+  autoWindow,
+  onAutoWindowChange,
 }: LevelWedgeProps) {
   const { t } = useTranslation();
   const barRef = useRef<HTMLDivElement | null>(null);
@@ -85,6 +90,8 @@ export function LevelWedge({
 
   const lowFrac = valueToFraction(levels.low, domain);
   const highFrac = valueToFraction(levels.high, domain);
+  const autoWindowValue = autoWindow ?? 0;
+  const autoWindowFrac = autoWindow === undefined ? null : valueToFraction(Math.min(fullScale, levels.low + autoWindowValue), domain);
 
   // Histogram outline: bin count -> horizontal extent, bin position -> height.
   const histogramPath = useMemo(() => {
@@ -130,7 +137,7 @@ export function LevelWedge({
 
   const moveDrag = (event: React.PointerEvent<HTMLElement>) => {
     const drag = dragRef.current;
-    if (!drag) return;
+    if (!drag || drag.kind === "window") return;
     onChange(dragLevels(drag.kind, drag.start, pointerValue(event.clientY), drag.offset, fullScale));
   };
 
@@ -211,6 +218,41 @@ export function LevelWedge({
           />
           <div className="level-wedge__line level-wedge__line--high" style={{ bottom: `${highFrac * 100}%` }} />
           <div className="level-wedge__line level-wedge__line--low" style={{ bottom: `${lowFrac * 100}%` }} />
+          {autoWindowFrac !== null && onAutoWindowChange && <div
+            className="level-wedge__handle level-wedge__handle--window"
+            style={{ bottom: `${autoWindowFrac * 100}%` }}
+            role="slider"
+            tabIndex={disabled ? -1 : 0}
+            aria-orientation="vertical"
+            aria-label={t("canvas.wedge.autoWindow")}
+            aria-valuemin={sampleToCode(MIN_LEVEL_GAP, codeDivisor)}
+            aria-valuemax={sampleToCode(fullScale, codeDivisor)}
+            aria-valuenow={sampleToCode(autoWindowValue, codeDivisor)}
+            title={`${t("canvas.wedge.autoWindow")}: ${sampleToCode(autoWindowValue, codeDivisor)}`}
+            onPointerDown={event => {
+              if (disabled) return;
+              event.preventDefault(); event.stopPropagation();
+              (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+              dragRef.current = { kind: "window", start: levels, offset: pointerValue(event.clientY) - (levels.low + autoWindowValue) };
+            }}
+            onPointerMove={event => {
+              if (dragRef.current?.kind !== "window") return;
+              const drag = dragRef.current;
+              if (!drag || drag.kind !== "window") return;
+              const markerValue = pointerValue(event.clientY) - drag.offset;
+              onAutoWindowChange(Math.max(MIN_LEVEL_GAP, Math.min(fullScale, markerValue - drag.start.low)));
+            }}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            onKeyDown={event => {
+              if (disabled) return;
+              const step = codeToSample(event.shiftKey ? 16 : 1, codeDivisor);
+              if (event.key !== "ArrowUp" && event.key !== "ArrowRight" && event.key !== "ArrowDown" && event.key !== "ArrowLeft" && event.key !== "Home" && event.key !== "End") return;
+              event.preventDefault();
+              const next = event.key === "Home" ? MIN_LEVEL_GAP : event.key === "End" ? fullScale : autoWindowValue + ((event.key === "ArrowUp" || event.key === "ArrowRight") ? step : -step);
+              onAutoWindowChange(Math.max(MIN_LEVEL_GAP, Math.min(fullScale, next)));
+            }}
+          />}
           <div
             className="level-wedge__handle level-wedge__handle--high"
             style={{ bottom: `${highFrac * 100}%` }}

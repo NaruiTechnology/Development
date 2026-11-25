@@ -141,6 +141,14 @@ const slice = createSlice({
     setPatternEnabled(s, a: PayloadAction<{ key: string; enabled: boolean }>) {
       const inst = s.instances[a.payload.key];
       if (inst) inst.enabled = a.payload.enabled && inst.roi !== null;
+      if (a.payload.enabled && inst?.roi) {
+        // PATTERNS exposure is run one selected ROI at a time in both Auto
+        // and Advanced milling workflows.
+        for (const [key, other] of Object.entries(s.instances)) {
+          if (key !== a.payload.key) other.enabled = false;
+        }
+        s.activeKey = a.payload.key;
+      }
       if (!a.payload.enabled && s.activeKey === a.payload.key) {
         const currentIndex = s.specs.findIndex(spec => spec.key === a.payload.key);
         const remaining = s.specs.slice(currentIndex + 1).concat(s.specs.slice(0, currentIndex))
@@ -238,6 +246,9 @@ const slice = createSlice({
       if (s.roiHistory.length > 100) s.roiHistory.shift();
       instance.roi = roi;
       instance.enabled = true;
+      for (const [otherKey, other] of Object.entries(s.instances)) {
+        if (otherKey !== key) other.enabled = false;
+      }
       instance.AvgGray = null;
       syncPatternGeometry(sourceSpec, roi, instance.parameters);
       if (!s.roiCreationOrder.includes(key)) s.roiCreationOrder.push(key);
@@ -253,6 +264,10 @@ const slice = createSlice({
         if (spec.model === "LineModel") next = lineRoi(...lineEndpoints(next as PolygonRoi), Number(inst.parameters.lineWidth ?? 0.5));
         if (!a.payload.preview && !inst.enabled) {
           inst.enabled = true;
+          for (const [otherKey, other] of Object.entries(s.instances)) {
+            if (otherKey !== a.payload.key) other.enabled = false;
+          }
+          s.activeKey = a.payload.key;
           s.workflowProgress = [];
         }
         if (JSON.stringify(inst.roi) === JSON.stringify(next)) return;

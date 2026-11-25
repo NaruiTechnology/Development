@@ -3469,6 +3469,21 @@ body {
   background: #fff;
 }
 
+.level-wedge__handle--window::before {
+  background: var(--c-accent, #5aa9ff);
+}
+
+.level-wedge__handle--window {
+  /* Give the adjustable auto-window marker its own lane so it stays usable
+     when its value coincides with either black or white. */
+  right: 8px;
+  z-index: 2;
+}
+
+.level-wedge__handle--window::after {
+  background: #10233d;
+}
+
 .level-wedge__handle--low::after {
   background: #000;
 }

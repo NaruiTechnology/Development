@@ -637,6 +637,7 @@ export const zhCN: Partial<TranslationTable> = {
   "canvas.wedge.label": "图像色阶",
   "canvas.wedge.white": "白电平（ADC 码值）",
   "canvas.wedge.black": "黑电平（ADC 码值）",
+  "canvas.wedge.autoWindow": "自动对比度最小窗口（ADC 码值）",
   "canvas.wedge.auto": "自动",
   "canvas.wedge.autoTitle": "自动色阶：忽略最暗与最亮的 0.5 % 像素",
   "canvas.wedge.help.title": "自动图像色阶",

@@ -645,6 +645,7 @@ export const zhTW: Partial<TranslationTable> = {
   "canvas.wedge.label": "影像色階",
   "canvas.wedge.white": "白位準（ADC 碼值）",
   "canvas.wedge.black": "黑位準（ADC 碼值）",
+  "canvas.wedge.autoWindow": "自動對比度最小視窗（ADC 碼值）",
   "canvas.wedge.auto": "自動",
   "canvas.wedge.autoTitle": "自動色階：忽略最暗與最亮的 0.5 % 像素",
   "canvas.wedge.help.title": "自動影像色階",

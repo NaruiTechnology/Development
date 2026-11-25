@@ -337,7 +337,10 @@ export function useExposureRun() {
     let failure: string | null = null;
     try {
       const milling = snapshot.exposure.mode === "milling";
-      const selected = snapshot.processing.activeKey;
+      const activePattern = snapshot.processing.activeKey;
+      const selected = activePattern && snapshot.processing.instances[activePattern]?.enabled
+        ? activePattern
+        : snapshot.processing.specs.find(spec => snapshot.processing.instances[spec.key]?.enabled && snapshot.processing.instances[spec.key]?.roi)?.key ?? null;
       const field = snapshot.scan.roi;
       const selectedRoi = selected ? snapshot.processing.instances[selected]?.roi : null;
       const registrationBounds = milling && registerMilling && selectedRoi ? millingRegistrationBounds(selectedRoi, field) : null;
@@ -356,7 +359,7 @@ export function useExposureRun() {
       }
       if (cancelled.current) return;
       if (registrationBounds && !registrationSupported) throw new Error(t("processing.advanced.serviceError"));
-      const patterns = milling ? {...snapshot.processing, instances: Object.fromEntries(Object.entries(snapshot.processing.instances).map(([key,instance]) => [key,{...instance,enabled:key===selected && instance.enabled && instance.roi!==null}]))} : snapshot.processing;
+      const patterns = {...snapshot.processing, instances: Object.fromEntries(Object.entries(snapshot.processing.instances).map(([key,instance]) => [key,{...instance,enabled:key===selected && instance.enabled && instance.roi!==null}]))};
       const plannedEntries = prepareExposureSequence(patterns, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
       const millingConfig = new Map<string, {geometry: ReturnType<typeof millingPreviewGeometry>; referenceKey:string; aggregate:boolean; lattices:LatticeRequest[]; resolution:number}>();
       if (milling) {

@@ -661,6 +661,7 @@ export const en = {
   "canvas.wedge.label": "Image levels",
   "canvas.wedge.white": "White level (ADC code)",
   "canvas.wedge.black": "Black level (ADC code)",
+  "canvas.wedge.autoWindow": "Minimum automatic contrast window (ADC codes)",
   "canvas.wedge.auto": "Auto",
   "canvas.wedge.autoTitle": "Automatic levels: trim the darkest and brightest 0.5 % of pixels",
   "canvas.wedge.help.title": "Automatic image levels",

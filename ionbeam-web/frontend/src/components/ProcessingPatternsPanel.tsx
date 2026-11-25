@@ -65,15 +65,16 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
   const patternsLoading = visible && (status === "idle" || status === "loading");
   const field = useAppSelector(s => s.scan.roi);
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
-  const milling = useAppSelector(s => s.exposure.mode === "milling");
   const selectedSpotCount = useMemo(() => {
     if (!processing.lensLookup) return null;
     try {
-      const selected = milling ? {...processing, instances: Object.fromEntries(Object.entries(processing.instances).map(([key,instance]) => [key,{...instance,enabled:instance.enabled && key===activeKey}]))} : processing;
+      const active = activeKey && processing.instances[activeKey]?.enabled ? activeKey
+        : specs.find(spec => processing.instances[spec.key]?.enabled && processing.instances[spec.key]?.roi)?.key;
+      const selected = {...processing, instances: Object.fromEntries(Object.entries(processing.instances).map(([key,instance]) => [key,{...instance,enabled:instance.enabled && key===active}]))};
       return maxLatticeSpotsPerRequest(prepareExposureSequence(selected, field, simulation));
     }
     catch { return null; }
-  }, [processing, field, simulation, milling, activeKey]);
+  }, [processing, field, simulation, activeKey, specs]);
   const countValidationFailed = selectedSpotCount !== null && selectedSpotCount > MAX_LATTICE_SPOTS_PER_REQUEST;
   const exposurePhase = useAppSelector(s => s.exposure.phase);
   const exposureActive = ["preparing", "running", "stopping"].includes(exposurePhase);
@@ -129,15 +130,16 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
   const viewLocked = exposure.viewPhase === "queued" || exposure.viewPhase === "scanning" || exposure.phase === "paused";
   const { t, fmt, tr } = useTr();
   const [limitMessage, setLimitMessage] = useState("");
-  const milling = useAppSelector(s => s.exposure.mode === "milling");
   const selectedSpotCount = useMemo(() => {
     if (!processing.lensLookup) return null;
     try {
-      const selected = milling ? {...processing, instances: Object.fromEntries(Object.entries(processing.instances).map(([key,instance]) => [key,{...instance,enabled:instance.enabled && key===activeKey}]))} : processing;
+      const active = activeKey && processing.instances[activeKey]?.enabled ? activeKey
+        : specs.find(spec => processing.instances[spec.key]?.enabled && processing.instances[spec.key]?.roi)?.key;
+      const selected = {...processing, instances: Object.fromEntries(Object.entries(processing.instances).map(([key,instance]) => [key,{...instance,enabled:instance.enabled && key===active}]))};
       return maxLatticeSpotsPerRequest(prepareExposureSequence(selected, field, simulation));
     }
     catch { return null; }
-  }, [processing, field, simulation, milling, activeKey]);
+  }, [processing, field, simulation, activeKey, specs]);
   const totalLimitMessage = selectedSpotCount !== null && selectedSpotCount > MAX_LATTICE_SPOTS_PER_REQUEST
     ? t("processing.exposure.totalLimit", { count: fmt(selectedSpotCount), limit: fmt(MAX_LATTICE_SPOTS_PER_REQUEST) })
     : "";
