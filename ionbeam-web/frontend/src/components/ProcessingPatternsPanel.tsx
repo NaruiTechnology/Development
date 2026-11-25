@@ -31,10 +31,11 @@ import { StairRecipeCard } from "./StepRecipe";
 import { PatternTableCustom, PatternTableTabs, usePatternTableTab } from "./PatternTable";
 import { DefaultPatternWedges } from "./DefaultPatternWedges";
 import { PatternRuntimeReadouts } from "./PatternRuntimeReadouts";
+import { plannedPatternExposureMetrics } from "../lib/patternExposure";
 import { ProcessingWorkflowPanel } from "./ProcessingWorkflowPanel";
 import { VectorScanPathPreview } from "./VectorScanPathPreview";
 import { unitLabel } from "./ROIEditor";
-import { prepareExposureSequence, totalExposureSpots, MAX_EXPOSURE_SPOTS } from "../lib/exposureSequence";
+import { prepareExposureSequence, maxLatticeSpotsPerRequest, MAX_LATTICE_SPOTS_PER_REQUEST } from "../lib/exposureSequence";
 
 import { ExposureControls } from "./ExposureControls";
 import { LoadingSpinner } from "./LoadingSpinner";
@@ -69,11 +70,11 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
     if (!processing.lensLookup) return null;
     try {
       const selected = milling ? {...processing, instances: Object.fromEntries(Object.entries(processing.instances).map(([key,instance]) => [key,{...instance,enabled:instance.enabled && key===activeKey}]))} : processing;
-      return totalExposureSpots(prepareExposureSequence(selected, field, simulation));
+      return maxLatticeSpotsPerRequest(prepareExposureSequence(selected, field, simulation));
     }
     catch { return null; }
   }, [processing, field, simulation, milling, activeKey]);
-  const countValidationFailed = selectedSpotCount !== null && selectedSpotCount > MAX_EXPOSURE_SPOTS;
+  const countValidationFailed = selectedSpotCount !== null && selectedSpotCount > MAX_LATTICE_SPOTS_PER_REQUEST;
   const exposurePhase = useAppSelector(s => s.exposure.phase);
   const exposureActive = ["preparing", "running", "stopping"].includes(exposurePhase);
   const tableTab = usePatternTableTab();
@@ -126,19 +127,19 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
   const exposure = useAppSelector(s => s.exposure);
   const viewLocked = exposure.viewPhase === "queued" || exposure.viewPhase === "scanning" || exposure.phase === "paused";
-  const { tr } = useTr();
+  const { t, fmt, tr } = useTr();
   const [limitMessage, setLimitMessage] = useState("");
   const milling = useAppSelector(s => s.exposure.mode === "milling");
   const selectedSpotCount = useMemo(() => {
     if (!processing.lensLookup) return null;
     try {
       const selected = milling ? {...processing, instances: Object.fromEntries(Object.entries(processing.instances).map(([key,instance]) => [key,{...instance,enabled:instance.enabled && key===activeKey}]))} : processing;
-      return totalExposureSpots(prepareExposureSequence(selected, field, simulation));
+      return maxLatticeSpotsPerRequest(prepareExposureSequence(selected, field, simulation));
     }
     catch { return null; }
   }, [processing, field, simulation, milling, activeKey]);
-  const totalLimitMessage = selectedSpotCount !== null && selectedSpotCount > MAX_EXPOSURE_SPOTS
-    ? tr("processing.exposure.totalLimit", `Count validation failed: enabled patterns require ${selectedSpotCount.toLocaleString()} spots including passes; the maximum is ${MAX_EXPOSURE_SPOTS.toLocaleString()}. Select a smaller ROI area before starting.`)
+  const totalLimitMessage = selectedSpotCount !== null && selectedSpotCount > MAX_LATTICE_SPOTS_PER_REQUEST
+    ? t("processing.exposure.totalLimit", { count: fmt(selectedSpotCount), limit: fmt(MAX_LATTICE_SPOTS_PER_REQUEST) })
     : "";
   const setEnabled = (key: string, enabled: boolean) => {
     if (enabled && processing.lensLookup) {
@@ -146,9 +147,9 @@ export function ProcessingPatternCards({ disabled, enableDisabled = disabled }: 
       if (instance) {
         const candidate = { ...processing, instances: { ...instances, [key]: { ...instance, enabled: true } } };
         try {
-          const total = totalExposureSpots(prepareExposureSequence(candidate, field, simulation));
-          if (total > MAX_EXPOSURE_SPOTS) {
-            setLimitMessage(tr("processing.exposure.selectionLimit", `Cannot enable this pattern: the selected patterns would require ${total.toLocaleString()} spots including passes; the limit is ${MAX_EXPOSURE_SPOTS.toLocaleString()}. Reduce the ROI, increase pitch, or reduce passes.`));
+          const total = maxLatticeSpotsPerRequest(prepareExposureSequence(candidate, field, simulation));
+          if (total > MAX_LATTICE_SPOTS_PER_REQUEST) {
+            setLimitMessage(t("processing.exposure.selectionLimit", { count: fmt(total), limit: fmt(MAX_LATTICE_SPOTS_PER_REQUEST) }));
             return;
           }
         } catch {
@@ -241,6 +242,9 @@ function PatternCard({ spec, instance, active, indexed = false, countInvalid = f
   const workflows = useAppSelector(s => s.processing.workflows);
   const materials = useAppSelector(s => s.processing.materials);
   const stairRecipeAssigned = useAppSelector(s => Boolean(s.processing.stairReceipes.SMProcess));
+  const stairRecipes = useAppSelector(s => s.processing.stairReceipes.SMProcess);
+  const scanField = useAppSelector(s => s.scan.roi);
+  const lensLookup = useAppSelector(s => s.processing.lensLookup);
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
   const exposureState = useAppSelector(s => s.exposure);
   const [parametersOpen, setParametersOpen] = useState(false);
@@ -254,8 +258,24 @@ function PatternCard({ spec, instance, active, indexed = false, countInvalid = f
   const typeCaption = tr(`processing.pattern.${instance?.typeKey ?? spec.key}`, spec.caption);
   const caption = indexed ? `${typeCaption} - ${instance?.index}` : typeCaption;
   const label = active ? t("processing.collapse") : t("processing.expand");
+  const activeMaterialName = instance?.material || materials[0]?.name;
+  const selectedMaterial = activeMaterialName ? materials.find(material => material.name === activeMaterialName) : undefined;
+  const materialRemovalRates = useMemo(() => Object.fromEntries(materials
+    .filter(material => material.removalRateUM3PerNC !== undefined)
+    .map(material => [material.name, material.removalRateUM3PerNC!])), [materials]);
+  const stairPresets = (stairRecipes?.nodes.find(node => node.name === instance?.stairRecipeNode) ?? stairRecipes?.nodes[0])?.steps;
+  const planned = useMemo((): { passes: number | null; error: string } => {
+    if (!instance?.roi || !lensLookup) return { passes: null, error: "" };
+    try {
+      return { error: "", passes: plannedPatternExposureMetrics(spec, instance.roi, instance.parameters, lensLookup, scanField, {
+        simulation, stairPresets, stairOverrides: instance.stairSteps,
+        defaultMaterial: spec.model === "StairCutModel" ? materials[0]?.name : activeMaterialName,
+        materialRemovalRates,
+      }).passes };
+    } catch (error) { return { passes: null, error: error instanceof Error ? error.message : String(error) }; }
+  }, [spec, instance, lensLookup, scanField, simulation, stairPresets, materials, materialRemovalRates]);
+  const plannedPasses = planned.passes;
   if (!instance) return null;
-  const selectedMaterial = materials.find(material => material.name === instance.material);
   const materialBrightness = selectedMaterial?.brightness;
   const parametersId = `pattern-parameters-${encodeURIComponent(spec.key)}`;
   const targetGrayLevel = instance.AvgGray !== null && materialBrightness !== undefined
@@ -336,10 +356,15 @@ function PatternCard({ spec, instance, active, indexed = false, countInvalid = f
             <div className="pattern-parameters-card__controls">
             {[...spec.parameters.filter(p => p.name === "direction"), ...spec.parameters.filter(p => p.name === "loops" || p.name === "passes")].map(p => (
               <div className={p.name === "direction" ? "pattern-parameters-card__choice" : `pattern-parameters-card__step${p.name === "loops" ? " pattern-parameters-card__step--loops" : ""}`} key={p.name}>
-                <ParameterField spec={p} label={tr(`processing.param.common.${p.name}`, tr(`processing.param.${spec.key}.${p.name}`, p.label))}
+                {p.name === "passes" ? <div className="field pattern-parameters-card__pass-readout">
+                  <label>{tr(`processing.param.common.${p.name}`, tr(`processing.param.${spec.key}.${p.name}`, p.label))}</label>
+                  <output aria-label={`${caption}: ${p.label}`} title={planned.error || "Planned passes from the current pattern and calibrated depth settings."}>
+                    {plannedPasses === null ? "—" : plannedPasses.toLocaleString()}
+                  </output>
+                </div> : <ParameterField spec={p} label={tr(`processing.param.common.${p.name}`, tr(`processing.param.${spec.key}.${p.name}`, p.label))}
                   value={instance.parameters[p.name]} unit={p.unit === "world" ? unit : p.unit === "us" ? "µs" : p.unit === "um" ? "µm" : p.unit}
                   pattern={spec} roi={instance.roi} disabled={disabled}
-                  onChange={value => dispatch(setPatternParameter({ key: spec.key, name: p.name, value }))} />
+                  onChange={value => dispatch(setPatternParameter({ key: spec.key, name: p.name, value }))} />}
               </div>
             ))}
             <fieldset className="pattern-axis-field pattern-card__axis pattern-parameters-card__direction" disabled={disabled}>
@@ -366,6 +391,7 @@ function PatternCard({ spec, instance, active, indexed = false, countInvalid = f
           <div className="pattern-parameters-card__body" id={parametersId} hidden={!parametersOpen}>
         <div className="pattern-card__parameters">
         {spec.parameters.filter((p) => p.name !== "axis" && p.name !== "steps" && p.name !== "loops" && p.name !== "passes" && p.name !== "direction"
+          && !(spec.model !== "StairCutModel" && p.name.toLowerCase() === "dose")
           && !(spec.model === "StairCutModel" && stairRecipeAssigned && (p.name === "depth" || p.name === "overlap"))).map((p) => (
           <ParameterField
             key={p.name}
@@ -404,7 +430,8 @@ function PatternCard({ spec, instance, active, indexed = false, countInvalid = f
         </section>
         {spec.model === "StairCutModel" && <StairRecipeCard patternKey={spec.key} caption={caption} instance={instance} disabled={disabled} />}
         <PatternRuntimeReadouts spec={spec} roi={instance.roi} parameters={instance.parameters}
-          stairSteps={instance.stairSteps} defaultMaterial={materials[0]?.name} simulation={simulation} />
+          stairSteps={instance.stairSteps}
+          defaultMaterial={spec.model === "StairCutModel" ? materials[0]?.name : activeMaterialName} simulation={simulation} />
         <p className="pattern-card__readout">{roiReadout(spec, instance.roi, unit)}{`\nAvgGray: ${instance.AvgGray == null ? "—" : instance.AvgGray.toFixed(2)}`}</p>
       </div>
     </div>

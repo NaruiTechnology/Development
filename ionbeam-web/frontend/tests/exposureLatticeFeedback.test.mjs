@@ -33,9 +33,11 @@ test("exposure samples use frozen lattice geometry and reject incomplete feedbac
     const {millingSpotPositions,millingPreviewResolution,millingPixelIndex,projectedDac}=await vite.ssrLoadModule("/src/lib/millingLiveView.ts");
     const lensLookup=JSON.parse(readFileSync(new URL("../../../GlasgowDataIO/Json/processingPatterns.json",import.meta.url))).LensLookup;
     store.dispatch({type:"status/defaults/fulfilled",payload:{is_production:true,exposure_cell_ranges:false,exposure_session_stream:true,raster:{},vector:{}}});
-    const values={beamCurrent:150,dwell:1,overlap:50,axis:"x",passes:1};
+    const values={beamCurrent:150,dwell:1,overlap:50,axis:"x",depth:1};
     store.dispatch(processing.fetchProcessingPatterns.fulfilled({patterns:[{key:"box",caption:"Box",model:"SolidBoxModel",roi:"rect",
-      parameters:Object.entries(values).map(([name,value])=>({name,label:name,type:typeof value==="string"?"choice":"float",default:value,choices:typeof value==="string"?[value]:[]}))}],lensLookup},"test"));
+      parameters:Object.entries(values).map(([name,value])=>({name,label:name,type:typeof value==="string"?"choice":"float",default:value,choices:typeof value==="string"?[value]:[]}))}],lensLookup,
+      // Huge Sr keeps this single-lattice feedback test at one pass (passes derive from depth / Sr).
+      materials:[{name:"Si",brightness:1,removalRateUM3PerNC:1e6}]},"test"));
     store.dispatch(scan.updateROI({x_origin:0,x_end:1,y_origin:0,y_end:2}));
     store.dispatch(processing.createPatternRoi({key:"box",roi:{x_start:.1,x_end:.3,y_start:.1,y_end:.3}}));
     function Harness(){controls=useExposureRun();return null;}

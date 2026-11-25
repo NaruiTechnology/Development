@@ -8378,6 +8378,7 @@ body {
 .pattern-parameters-card__toggle[aria-expanded="true"] .pattern-parameters-card__chevron { transform: rotate(180deg); }
 .pattern-parameters-card__step { flex: 0 1 67px; min-width: 64px; max-width: 67px; }
 .pattern-parameters-card__step .field { margin: 0; }
+.pattern-parameters-card__pass-readout output { display: inline-flex; min-width: 68px; min-height: 26px; align-items: center; justify-content: center; padding: 4px 10px; border: 1px solid color-mix(in srgb, var(--c-accent) 58%, var(--c-border)); border-radius: 999px; color: var(--c-accent); background: color-mix(in srgb, var(--c-accent) 12%, var(--c-bg)); font: inherit; font-variant-numeric: tabular-nums; font-weight: 600; line-height: 1; box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent); }
 .pattern-parameters-card__step .field > label { white-space: nowrap; font-size: 9px; }
 .pattern-parameters-card__step--loops { flex-basis: 45px; min-width: 45px; max-width: 45px; }
 .pattern-parameters-card__step--loops .number-stepper { grid-template-columns: minmax(0, 1fr) 18px; }
@@ -8404,6 +8405,7 @@ body {
 .pattern-parameters-card__body { padding: 8px 10px; }
 .pattern-parameters-card__body .pattern-card__parameters { margin-bottom: 10px; }
 .pattern-parameters-card__body .pattern-card__axis { margin-bottom: 0; }
+.stair-steps__pass-readout { display: inline-block; min-width: 3.5em; padding: 5px 7px; border: 1px solid var(--c-border); border-radius: var(--r-sm); color: var(--c-text); background: var(--c-bg); font-variant-numeric: tabular-nums; text-align: right; }
 
 .pattern-roi-axis-cue .vector-scan-path-preview__frame { fill: #0b1220; fill-opacity: 0.65; stroke: var(--c-text-muted); stroke-width: 4; }
 .pattern-roi-axis-cue .vector-scan-path-preview__line { stroke: white; stroke-width: 6; }

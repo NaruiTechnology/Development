@@ -10,14 +10,17 @@ const params = { axis: "x", beamCurrent: 150, dwell: 1, overlap: 50, steps: 5, d
 const roi = { x_start: 0, x_end: 10, y_start: 0, y_end: 10 };
 const spec = { key: "stairs", caption: "Stair cut", model: "StairCutModel", roi: "rect" };
 const field = { x_origin: 0, x_end: 100, y_origin: 0, y_end: 100 };
-const state = (extra = {}) => ({ lensLookup, materials: [], specs: [spec],
+const SR = 0.27;  // um^3/nC, Si at 30 kV (processingPatterns.json)
+const materials = [{ name: "Si", brightness: 1, removalRateUM3PerNC: SR }];
+const allCalibrated = Array.from({ length: 5 }, () => ({ removalRate: SR }));
+const state = (extra = {}) => ({ lensLookup, materials, specs: [spec],
   instances: { stairs: { enabled: true, roi, parameters: params, ...extra } } });
 
 test("defaults reproduce the previous even depth split with card-level recipe", () => {
   const steps = resolveStairSteps(params);
   assert.deepEqual(steps.map(s => s.depth), [1, 2, 3, 4, 5]);
   assert.ok(steps.every(s => s.dwell === 1 && s.overlap === 50 && s.passes === 1 && s.enabled && s.removalRate === 0));
-  const old = simulationExposureSteps(spec, roi, params, 0.0175);
+  const old = simulationExposureSteps(spec, roi, params, 0.0175, allCalibrated);
   assert.equal(old.length, 5);
   assert.deepEqual(old.map(s => s.requestedDepthUM), [1, 2, 3, 4, 5]);
 });
@@ -48,31 +51,34 @@ test("a calibrated removal rate derives dose from the layer this step adds", () 
 });
 
 test("disabled steps are skipped but keep their strip geometry and depth labels", () => {
-  const steps = stairExposureSteps(roi, params, [{}, { enabled: false }]);
+  const steps = stairExposureSteps(roi, params, allCalibrated.map((s, i) => i === 1 ? { ...s, enabled: false } : s));
   assert.equal(steps.length, 4);
   assert.deepEqual(steps.map(s => s.caption), ["Step 1 / 5", "Step 3 / 5", "Step 4 / 5", "Step 5 / 5"]);
   assert.equal(steps[1].requestedDepthUM, 3);
 });
 
 test("production Run now expands Stair cut into one lattice per step with that step's dwell and passes", () => {
+  // Passes are derived from depth / Sr, never from a typed pass count: a stale `passes: 3` override is ignored.
   const entries = prepareExposureSequence(state({ stairSteps: [{ dwell: 2, passes: 3, material: "Si" }, {}, { dwell: 4 }] }), field, false);
   assert.equal(entries.length, 5);
-  assert.equal(entries[0].request.lattice.passes, 3);
+  assert.ok(entries[0].request.lattice.passes > 1000, "1 um layer at 0.27 um^3/nC needs thousands of passes");
+  // Same layer and current: doubling dwell halves the passes, so beam-on time is unchanged.
+  assert.ok(Math.abs(entries[1].request.lattice.passes / entries[0].request.lattice.passes - 2) < 0.01);
+  assert.ok(Math.abs(entries[2].request.lattice.passes * 4 / entries[1].request.lattice.passes - 1) < 0.01);
   assert.equal(entries[0].node.exposure.dwellUS, 2);
   assert.equal(entries[0].node.exposure.material, "Si");
   assert.equal(entries[2].node.exposure.dwellUS, 4);
-  assert.equal(entries[1].request.lattice.passes, 1);
   assert.equal(entries[4].node.exposure.requestedDepthUM, 5);
   assert.equal(entries.every(e => e.node.exposure.simulation === false), true);
 });
 
 test("Sr-derived passes follow the incremental layer, not the cumulative depth", () => {
-  const entries = prepareExposureSequence(state({ stairSteps: [{ removalRate: 1e-4 }, { removalRate: 2e-4 }] }), field, false);
+  const entries = prepareExposureSequence(state({ stairSteps: [{ removalRate: 0.1 }, { removalRate: 0.2 }] }), field, false);
   const [a, b] = entries;
   assert.equal(a.node.exposure.incrementUM, 1);
   assert.equal(b.node.exposure.incrementUM, 1);
   // same layer thickness, twice the Sr => half the dose => no more passes than step 1
-  assert.ok(b.request.lattice.passes <= a.request.lattice.passes);
+  assert.ok(b.request.lattice.passes < a.request.lattice.passes);
   assert.ok(a.request.lattice.passes > 1);
 });
 
@@ -82,8 +88,17 @@ test("an invalid recipe fails before any request is built", () => {
 
 test("other patterns keep their single production lattice", () => {
   const solid = { key: "box", caption: "Box", model: "SolidBoxModel", roi: "rect" };
-  const s = { lensLookup, materials: [], specs: [solid], instances: { box: { enabled: true, roi, parameters: params } } };
-  assert.equal(prepareExposureSequence(s, field, false).length, 1);
+  const s = { lensLookup, materials, specs: [solid], instances: { box: { enabled: true, roi, parameters: params } } };
+  const [only, ...rest] = prepareExposureSequence(s, field, false);
+  assert.equal(rest.length, 0);
+  // depth 5 um at Sr 0.27 -> dose 18.5 nC/um^2
+  assert.ok(Math.abs(only.node.exposure.plan.deliveredDose * SR - 5) / 5 < 0.001);
+});
+
+test("a pattern without a calibrated Sr cannot be planned and says why", () => {
+  const solid = { key: "box", caption: "Box", model: "SolidBoxModel", roi: "rect" };
+  const s = { lensLookup, materials: [{ name: "X", brightness: 1 }], specs: [solid], instances: { box: { enabled: true, roi, parameters: params } } };
+  assert.throws(() => prepareExposureSequence(s, field, false), /Box.*Sr/);
 });
 
 test("import: CSV and JSON map to sparse overrides, errors cite the row", () => {

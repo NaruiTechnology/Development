@@ -54,10 +54,9 @@ export function ProcessingPatternsHelp() {
       <div className="lens-reference-table" tabIndex={0} role="region" aria-label={t("help.patterns.table")}>
         <table>
           <caption>{table.name}</caption>
-          <thead><tr><th>{t("help.patterns.rows")}</th><th>{t("help.patterns.steps")}</th><th>kV</th><th>{t("help.patterns.aperture")} (µm)</th><th>pA</th><th>Lens 1 (kV)</th><th>Spot (Å)</th><th>Spot (nm)</th></tr></thead>
+          <thead><tr><th>{t("help.patterns.rows")}</th><th>kV</th><th>pA</th><th>Lens 1 (kV)</th><th>Spot (Å)</th><th>Spot (nm)</th></tr></thead>
           <tbody>{table.rows.map(row=><tr key={row.sourceRow} data-source-row={row.sourceRow} className={selected.has(row.sourceRow) ? "lens-reference-row--selected" : undefined}>
-            <td>{row.sourceRow}</td><td>{row.stepsBetweenApertures ?? "—"}</td><td>{row.beamVoltageKV}</td><td>{row.apertureDiameterUM}</td>
-            <td>{row.beamCurrentPA}</td><td>{row.lens1KV}</td><td>{row.spotSizeAngstrom}</td><td>{row.spotSizeAngstrom/10}</td>
+            <td>{row.sourceRow}</td><td>{row.beamVoltageKV}</td><td>{row.beamCurrentPA}</td><td>{row.lens1KV}</td><td>{row.spotSizeAngstrom}</td><td>{row.spotSizeAngstrom/10}</td>
           </tr>)}</tbody>
         </table>
       </div>

@@ -44,7 +44,9 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
       .map(material => [material.name, material.removalRateUM3PerNC!]));
     try {
       return plannedPatternExposureMetrics(spec, instance.roi, instance.parameters, lensLookup, field,
-        {simulation, stairPresets, stairOverrides: instance.stairSteps, defaultMaterial: materials[0]?.name, materialRemovalRates}).beamOnS;
+        {simulation, stairPresets, stairOverrides: instance.stairSteps, materialRemovalRates,
+          // Same material the run uses: the pattern's own for plain patterns, the first for Stair cut recipes.
+          defaultMaterial: spec.model === "StairCutModel" ? materials[0]?.name : instance.material || materials[0]?.name}).beamOnS;
     } catch { return 0; }
   }, [exposureProgress, patternKey, specs, instance, lensLookup, field, simulation, materials, stairPresets]);
   const exposureInProgress = ["preparing", "running", "paused", "stopping"].includes(exposurePhase);

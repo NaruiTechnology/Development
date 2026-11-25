@@ -46,9 +46,9 @@ export function overlapPctFromSpacing(spotDiameterUM: number, spacingUM: number)
   return (spotDiameterUM - spacingUM) / spotDiameterUM * 100;
 }
 
-/** Charge delivered to one spot per pass: I [pA] * t [us] = 1e-6 nC per pA*us. */
+/** Charge delivered to one spot per pass: I [pA] * t [us] = 1e-9 nC per pA*us. */
 export function chargePerSpotNC(beamCurrentPA: number, dwellUS: number): number {
-  return beamCurrentPA * dwellUS * 1e-6;
+  return beamCurrentPA * dwellUS * 1e-9;
 }
 
 /** Dose from one pass over a lattice of pitch s: every spot owns an s x s cell. */

@@ -3,13 +3,16 @@ import type { ProcessingState } from "../store/processingSlice";
 import type { ROIState } from "../store/scanSlice";
 import type { LatticeRequest, VectorRequest } from "../types/api";
 import type { WorkflowProgress } from "./processingWorkflows.js";
+import type { PatternParameters } from "./processingPatterns.js";
+import type { PatternExposureStep } from "./patternExposure.js";
 
 export interface ExposureEntry { key: string; node: WorkflowProgress; request: VectorRequest }
 /** Aggregate guard for one selected exposure run. Mirrors the service's per-lattice sanity bound. */
-export const MAX_EXPOSURE_SPOTS = 200_000_000;
+export const MAX_LATTICE_SPOTS_PER_REQUEST = 200_000_000;
 
-export function totalExposureSpots(entries: readonly ExposureEntry[]): number {
-  return entries.reduce((sum, entry) => sum + (entry.node.total ?? entry.node.spot) * (entry.request.lattice?.passes ?? 1), 0);
+/** The app submits one pass per lattice request; mirror the backend's per-request point bound. */
+export function maxLatticeSpotsPerRequest(entries: readonly ExposureEntry[]): number {
+  return entries.reduce((max, entry) => Math.max(max, entry.node.total ?? entry.node.spot), 0);
 }
 
 export function prepareExposureSequence(patterns: ProcessingState, field: ROIState, simulation: boolean): ExposureEntry[] {
@@ -37,15 +40,17 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
       .map(material => [material.name, material.removalRateUM3PerNC!]));
     const selectedMaterial = instance.material || patterns.materials[0]?.name;
     const selectedRemovalRate = selectedMaterial ? materialRemovalRates[selectedMaterial] : undefined;
-    const base = stair ? null : preparePatternExposure(spec, instance.roi, instance.parameters, patterns.lensLookup, field);
+    const plannedParameters: PatternParameters = stair || selectedRemovalRate === undefined
+      ? instance.parameters : { ...instance.parameters, removalRate: selectedRemovalRate };
+    const base = stair ? null : preparePatternExposure(spec, instance.roi, plannedParameters, patterns.lensLookup, field);
     // Stair cut (per-step recipe) and Cleaning line (serial one-row-per-line queue) are step sequences in
     // production and simulation alike, so the planning lattice always matches what Run exposes.
     const collection = patterns.stairReceipes?.SMProcess;
     const presets = (collection?.nodes.find(node => node.name === instance.stairRecipeNode) ?? collection?.nodes[0])?.steps;
-    const steps = stair ? stairExposureSteps(instance.roi, instance.parameters, instance.stairSteps, patterns.materials[0]?.name, materialRemovalRates, presets)
-      : cleaning ? cleaningExposureSteps(instance.roi, instance.parameters, base!.plan.spacingUM)
-      : simulation ? simulationExposureSteps(spec, instance.roi, instance.parameters, base!.plan.spacingUM)
-      : [{ shape: instance.roi, parameters: instance.parameters, caption: "Pattern exposure", requestedDepthUM: undefined, depthBand: undefined }];
+    const steps: PatternExposureStep[] = stair ? stairExposureSteps(instance.roi, plannedParameters, instance.stairSteps, patterns.materials[0]?.name, materialRemovalRates, presets)
+      : cleaning ? cleaningExposureSteps(instance.roi, plannedParameters, base!.plan.spacingUM)
+      : simulation ? simulationExposureSteps(spec, instance.roi, plannedParameters, base!.plan.spacingUM)
+      : [{ shape: instance.roi, parameters: plannedParameters, caption: "Pattern exposure", requestedDepthUM: undefined, depthBand: undefined }];
     for (const [index, step] of steps.entries()) {
       const p = stair || cleaning || simulation ? preparePatternExposure(spec, step.shape, step.parameters, patterns.lensLookup, field) : base!;
       const stepId = step.recipeStepIndex === undefined ? index : step.recipeStepIndex - 1;

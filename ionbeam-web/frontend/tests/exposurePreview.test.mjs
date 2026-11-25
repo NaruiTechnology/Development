@@ -14,7 +14,7 @@ const fov = { x_origin: 0, x_end: 1, y_origin: 0, y_end: 1 };
 
 test("five overlapping boxes produce increasing exposure layers in the requested direction", () => {
   for (const direction of ["down", "up", "left", "right"]) {
-    const steps = simulationExposureSteps({model:"StairCutModel"}, roi, {...parameters,direction}, 0.0175);
+    const steps = simulationExposureSteps({model:"StairCutModel"}, roi, {...parameters,direction}, 0.0175, Array.from({length:5},()=>({removalRate:0.27})));
     assert.equal(steps.length, 5);
     for (let i=0;i<5;i++) {
       const band=steps[i].depthBand;
@@ -28,7 +28,7 @@ test("five overlapping boxes produce increasing exposure layers in the requested
 
 test("cleaning steps are one row or column, centred on the saved line spacing", () => {
   for (const orientation of ["horizontal","vertical"]) {
-    const steps = simulationExposureSteps({model:"CleaningLineModel"},roi,{...parameters,orientation,spacing:0.2},0.0175);
+    const steps = simulationExposureSteps({model:"CleaningLineModel"},roi,{...parameters,orientation,spacing:0.2,removalRate:0.27},0.0175);
     assert.equal(steps.length,5);
     for (const [i,step] of steps.entries()) {
       const prepared=preparePatternExposure({model:"CleaningLineModel",caption:"Clean line"},step.shape,step.parameters,lens,fov);
@@ -88,7 +88,7 @@ test("production Run plans one serial lattice row per cleaning line, same as sim
   const field = { x_origin: 0, x_end: 50, y_origin: 0, y_end: 50 };
   const cleanRoi = { x_start: 10, x_end: 18, y_start: 10, y_end: 16 };
   for (const orientation of ["horizontal", "vertical"]) {
-    const queues = [true, false].map(simulation => prepareExposureSequence({ lensLookup: lens, specs: [spec], materials: [],
+    const queues = [true, false].map(simulation => prepareExposureSequence({ lensLookup: lens, specs: [spec], materials: [{ name: "Si", brightness: 1, removalRateUM3PerNC: 0.27 }],
       roiCreationOrder: ["clean"], instances: { clean: { enabled: true, roi: cleanRoi,
         parameters: { ...parameters, orientation, spacing: 0.2, passes: 2 } } } }, field, simulation));
     const [sim, prod] = queues;
@@ -99,7 +99,12 @@ test("production Run plans one serial lattice row per cleaning line, same as sim
       assert.equal(e.node.exposure.lineSpacingUM, 0.2);
     }
     // Serial: all passes of line N finish before line N+1 starts.
+    // Passes come from depth / Sr, so each line repeats thousands of times; collapse the repeats.
+    const passes = prod[0].request.lattice.passes;
+    assert.ok(passes > 1000);
     const order = [...exposureRuns(prod.slice(0, 3), false)].map(run => run.entry.node.id);
-    assert.deepEqual(order, [0, 0, 1, 1, 2, 2].map(i => `clean:${i}:exposure`));
+    assert.equal(order.length, prod.slice(0, 3).reduce((n, e) => n + e.request.lattice.passes, 0));
+    assert.deepEqual([...new Set(order)], [0, 1, 2].map(i => `clean:${i}:exposure`));
+    assert.deepEqual(order.slice(0, passes), Array(passes).fill("clean:0:exposure"), "all passes of line N finish before line N+1");
   }
 });

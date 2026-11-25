@@ -26,9 +26,9 @@ test("spot size comes from the lens table by beam current, not from image pixels
 });
 
 test("dose arithmetic: pA*us -> nC, per-pass dose, passes, depth via removal rate", () => {
-  near(chargePerSpotNC(150, 1), 1.5e-4);
-  near(dosePerPass(150, 1, 0.0175), 1.5e-4 / (0.0175 ** 2));
-  assert.equal(passesForDose(1, dosePerPass(150, 1, 0.0175)), 3);
+  near(chargePerSpotNC(150, 1), 1.5e-7, 1e-15);
+  near(dosePerPass(150, 1, 0.0175), 1.5e-7 / (0.0175 ** 2), 1e-12);
+  assert.equal(passesForDose(1, dosePerPass(150, 1, 0.0175)), 2042);
   assert.equal(passesForDose(0.1, 5), 1);
   near(doseFromDepth(1, 0.15), 1 / 0.15);
   near(depthFromDose(doseFromDepth(2, 0.3), 0.3), 2);
@@ -72,8 +72,8 @@ test("planExposure: spot size, spacing, count, passes and beam-on time for the s
   const plan = planExposure(box, roi, { beamCurrentPA: 150, spotDiameterUM: 0.035, overlapPct: 50, dwellUS: 1, dose: 1 });
   near(plan.spacingUM, 0.0175, 1e-4);
   assert.ok(Math.abs(plan.count - 42.85 * 48.03 / 0.0175 ** 2) / plan.count < 1e-3);
-  assert.equal(plan.passes, 3);
-  assert.ok(plan.deliveredDose >= 1 && plan.deliveredDose < 1.6);
+  assert.equal(plan.passes, 2041);  // lattice pitch is adjusted to fit a whole number of spots
+  assert.ok(plan.deliveredDose >= 1 && plan.deliveredDose < 1.001);
   near(plan.beamOnS, plan.count * 1e-6 * plan.passes, 1e-9);
   // explicit passes override the dose-derived value
   assert.equal(planExposure(box, roi, { beamCurrentPA: 150, spotDiameterUM: 0.035, overlapPct: 50, dwellUS: 1, dose: 1, passes: 7 }).passes, 7);
@@ -153,4 +153,32 @@ test("lattice request converts um pitch to DAC codes per axis and keeps shapes r
   assert.equal(buildLatticeRequest({ cx: 5, cy: 5, radius: 2 }, plan, 7, rotated, { widthUM: 10, heightUM: 10 }).shape.kind, "polygon");
   assert.throws(() => buildLatticeRequest({ cx: 5, cy: 5, r_inner: 1, r_outer: 2 }, plan, 7, rotated, { widthUM: 10, heightUM: 10 }), /ring/);
   assert.throws(() => buildLatticeRequest({ x_start: 0, x_end: 1, y_start: 0, y_end: 1 }, plan, 7, map, { widthUM: 0, heightUM: 5 }));
+});
+
+test("1 um deep circle in Si (Sr 0.27 um^3/nC): passes and beam-on time follow V / (Sr * I)", () => {
+  const circleRoi = { cx: 0, cy: 0, radius: 9.71 };
+  const sr = 0.27, depth = 1;
+  const plan = planExposure(circle, circleRoi, { beamCurrentPA: 150, spotDiameterUM: 0.035, overlapPct: 50, dwellUS: 1, dose: depth / sr });
+  const areaUM2 = Math.PI * 9.71 ** 2;
+  const ideal = areaUM2 * depth / sr / (150 * 1e-3);  // volume / Sr = nC; nC / (pA * 1e-3 nC/(pA*s)) = s
+  assert.ok(Math.abs(plan.passes - 7566) <= 30, `passes ${plan.passes}`);
+  assert.ok(Math.abs(plan.beamOnS - ideal) / ideal < 0.01, `beam-on ${plan.beamOnS} s vs ideal ${ideal} s`);
+});
+
+test("Circle 1 um in Si via preparePatternExposure: depth / Sr -> passes, beam-on ~ V / (Sr * I)", async () => {
+  const { preparePatternExposure } = await import("../.test-dist/lib/patternExposure.js");
+  const { readFileSync } = await import("node:fs");
+  const { parseLensLookup } = await import("../.test-dist/lib/lensLookup.js");
+  const lens = parseLensLookup(JSON.parse(readFileSync(new URL("../../../GlasgowDataIO/Json/processingPatterns.json", import.meta.url))).LensLookup);
+  const spec = { key: "circle", caption: "Circle", model: "CircleModel", roi: "circle" };
+  const fov = { x_origin: 0, x_end: 326.5, y_origin: 0, y_end: 327 };
+  const parameters = { axis: "x", beamCurrent: 150, radius: 9.71, depth: 1, dwell: 1, overlap: 50, removalRate: 0.27, passes: 1 };
+  const { plan } = preparePatternExposure(spec, { cx: 160, cy: 160, radius: 9.71 }, parameters, lens, fov);
+  const ideal = Math.PI * 9.71 ** 2 * 1 / 0.27 / (150 * 1e-3);  // s
+  assert.ok(Math.abs(plan.passes - 7566) <= 30, `passes ${plan.passes}`);
+  assert.ok(Math.abs(plan.beamOnS - ideal) / ideal < 0.01);
+  assert.ok(Math.abs(plan.deliveredDose * 0.27 - 1) < 0.001, "delivered depth ~ requested depth");
+  // a typed pass count no longer overrides the calibrated derivation
+  assert.equal(preparePatternExposure(spec, { cx: 160, cy: 160, radius: 9.71 }, { ...parameters, passes: 5 }, lens, fov).plan.passes, plan.passes);
+  assert.throws(() => preparePatternExposure(spec, { cx: 160, cy: 160, radius: 9.71 }, { ...parameters, removalRate: 0 }, lens, fov), /Sr/);
 });

@@ -8,7 +8,7 @@ import { useTranslation } from "../i18n";
 import { apiUrl } from "../lib/backendUrl";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { ExposureStream, exposureJson } from "../lib/exposureStream";
-import { prepareExposureSequence, exposureRounds, exposureSegments, totalExposureSpots, MAX_EXPOSURE_SPOTS } from "../lib/exposureSequence";
+import { prepareExposureSequence, exposureRounds, exposureSegments, maxLatticeSpotsPerRequest, MAX_LATTICE_SPOTS_PER_REQUEST } from "../lib/exposureSequence";
 import { selectPattern } from "../store/processingSlice";
 import { exposurePreparing, exposurePrepared, exposureStepStarted, exposureStepCompleted,
   exposureSamplesReceived, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
@@ -378,9 +378,9 @@ export function useExposureRun() {
           referenceKey:config.referenceKey,aggregate:config.aggregate,preserveDisplay,restoreDisplay:config.aggregate}));
       };
       if (milling && plannedEntries[0]?.node.exposure) resetMillingForEntry(plannedEntries[0],recoverLiveView);
-      const totalSpots = totalExposureSpots(plannedEntries);
-      if (totalSpots > MAX_EXPOSURE_SPOTS)
-        throw new Error(t("processing.exposure.totalLimit", {count: totalSpots.toLocaleString(), limit: MAX_EXPOSURE_SPOTS.toLocaleString()}));
+      const maxRequestSpots = maxLatticeSpotsPerRequest(plannedEntries);
+      if (maxRequestSpots > MAX_LATTICE_SPOTS_PER_REQUEST)
+        throw new Error(t("processing.exposure.totalLimit", {count: maxRequestSpots.toLocaleString(), limit: MAX_LATTICE_SPOTS_PER_REQUEST.toLocaleString()}));
       if (!milling && snapshot.exposure.parallel && plannedEntries.some(e => e.node.exposure?.model === "CleaningLineModel"))
         throw new Error("Cleaning lines require serial exposure (Parallel off).");
       dispatch(exposurePrepared(plannedEntries.map(e => e.node)));

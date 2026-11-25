@@ -1,7 +1,7 @@
 import type { StairRecipeDefaults } from "./stairRecipe.js";
 import { buildLatticeRequest, linearDacMap, type DacMap } from "./latticeRequest.js";
 import { lookupSpotSize, type LensLookup } from "./lensLookup.js";
-import { planExposure, type ExposurePlan } from "./exposurePlan.js";
+import { doseFromDepth, planExposure, type ExposurePlan } from "./exposurePlan.js";
 import { stairRects, patternBounds, type RectRoi, type PatternParameters, type PatternRoi, type PatternSpec } from "./processingPatterns.js";
 import type { ROIState } from "../store/scanSlice";
 import type { LatticeRequest } from "../types/api";
@@ -23,10 +23,16 @@ export function preparePatternExposure(spec: PatternSpec, shape: PatternRoi, par
   const beamCurrentPA = Number(parameters.beamCurrent);
   const dwellUS = Number(parameters.dwell);
   const overlapPct = Number(parameters.overlap);
-  // `targetDose` (nC/um^2) is set only by Stair cut steps with a calibrated removal rate; passes then derive from it.
-  const targetDose = parameters.targetDose === undefined ? undefined : Number(parameters.targetDose);
-  const passes = targetDose === undefined ? Number(parameters.passes ?? 1) : undefined;
-  const dose = targetDose ?? Number(parameters.dose ?? 1);
+  // Calibrated target dose is derived from requested depth and Sr for ordinary patterns,
+  // or supplied per step by Stair Cut. Exposure cannot be planned without both values.
+  const removalRate = Number(parameters.removalRate);
+  const depthUM = Number(parameters.depth);
+  if (parameters.targetDose === undefined && (!(removalRate > 0) || !(depthUM > 0)))
+    throw new Error(`${spec.caption}: a positive depth and calibrated material Sr are required to calculate passes.`);
+  const targetDose = parameters.targetDose === undefined
+    ? doseFromDepth(depthUM, removalRate)
+    : Number(parameters.targetDose);
+  const dose = targetDose;
   const axis = parameters.axis === "y" ? "y" : "x";
   const beamVoltageKV = lookup.rows[0]?.beamVoltageKV;
   if (!beamVoltageKV) throw new Error("Lens lookup has no beam-voltage reference.");
@@ -34,7 +40,7 @@ export function preparePatternExposure(spec: PatternSpec, shape: PatternRoi, par
   if (spot.status !== "exact" || spot.spotSizeUM === null || spot.spotSizeNM === null)
     throw new Error(`${spec.caption}: no exact ${beamCurrentPA} pA spot-size reference at ${beamVoltageKV} kV.`);
   const widthUM = Math.abs(fov.x_end - fov.x_origin), heightUM = Math.abs(fov.y_end - fov.y_origin);
-  const plan = planExposure(spec, shape, { beamCurrentPA, spotDiameterUM: spot.spotSizeUM, overlapPct, dwellUS, dose, passes },
+  const plan = planExposure(spec, shape, { beamCurrentPA, spotDiameterUM: spot.spotSizeUM, overlapPct, dwellUS, dose },
     { axis, fieldWidthUM: widthUM, parameters });
   const configuredLoops = Number(parameters.loops ?? 1);
   const loops = Number.isFinite(configuredLoops) ? Math.min(10000, Math.max(1, Math.round(configuredLoops))) : 1;
@@ -83,6 +89,8 @@ export function stairExposureSteps(shape: PatternRoi, parameters: PatternParamet
   }));
   const error = stairStepsError(recipe);
   if (error) throw new Error(error);
+  const uncalibratedStep = recipe.findIndex(step => step.enabled && !(step.removalRate > 0));
+  if (uncalibratedStep >= 0) throw new Error(`Stair cut step ${uncalibratedStep + 1}: calibrated material Sr is required to calculate passes.`);
   const out: PatternExposureStep[] = [];
   strips.forEach((strip, i) => {
     if (!recipe[i].enabled) return;
@@ -140,18 +148,20 @@ export function plannedPatternExposureMetrics(spec: PatternSpec, shape: PatternR
   lookup: LensLookup, fov: Pick<ROIState, "x_origin" | "x_end" | "y_origin" | "y_end" | "scanGeometry">,
   options: {stairPresets?: ReadonlyArray<StairRecipeDefaults>; simulation?: boolean; stairOverrides?: ReadonlyArray<StairStepOverride | null | undefined>; defaultMaterial?: string;
     materialRemovalRates?: Readonly<Record<string, number>>} = {}):
-  {spotCount: number; spotCountExact: boolean; beamOnS: number} {
+  {spotCount: number; spotCountExact: boolean; beamOnS: number; passes: number} {
   const stair = spec.model === "StairCutModel", cleaning = spec.model === "CleaningLineModel";
-  const base = stair ? null : preparePatternExposure(spec, shape, parameters, lookup, fov);
-  const steps = stair ? stairExposureSteps(shape, parameters, options.stairOverrides, options.defaultMaterial, options.materialRemovalRates, options.stairPresets)
-    : cleaning ? cleaningExposureSteps(shape, parameters, base!.plan.spacingUM)
-    : options.simulation ? simulationExposureSteps(spec, shape, parameters, base!.plan.spacingUM)
-    : [{shape, parameters}];
-  return steps.reduce<{spotCount: number; spotCountExact: boolean; beamOnS: number}>((total, step) => {
+  const selectedSr = options.defaultMaterial ? options.materialRemovalRates?.[options.defaultMaterial] : undefined;
+  const plannedParameters = stair ? parameters : { ...parameters, removalRate: selectedSr ?? parameters.removalRate };
+  const base = stair ? null : preparePatternExposure(spec, shape, plannedParameters, lookup, fov);
+  const steps = stair ? stairExposureSteps(shape, plannedParameters, options.stairOverrides, options.defaultMaterial, options.materialRemovalRates, options.stairPresets)
+    : cleaning ? cleaningExposureSteps(shape, plannedParameters, base!.plan.spacingUM)
+    : options.simulation ? simulationExposureSteps(spec, shape, plannedParameters, base!.plan.spacingUM)
+    : [{shape, parameters: plannedParameters}];
+  return steps.reduce<{spotCount: number; spotCountExact: boolean; beamOnS: number; passes: number}>((total, step) => {
     const plan = stair || cleaning || options.simulation
       ? preparePatternExposure(spec, step.shape, step.parameters, lookup, fov).plan
       : base!.plan;
     return {spotCount: total.spotCount + plan.count, spotCountExact: total.spotCountExact && plan.countExact,
-      beamOnS: total.beamOnS + plan.beamOnS};
-  }, {spotCount: 0, spotCountExact: true, beamOnS: 0});
+      beamOnS: total.beamOnS + plan.beamOnS, passes: total.passes + plan.passes};
+  }, {spotCount: 0, spotCountExact: true, beamOnS: 0, passes: 0});
 }

@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../store";
 import { setStairRecipeNode, setStairStepField, setStairSteps, type PatternInstance } from "../store/processingSlice";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
+import { preparePatternExposure, stairExposureSteps } from "../lib/patternExposure";
 import {
   defaultStairStep, parseStairStepsImport, resolveStairSteps, stairStepsError, stairStepsToCsv,
   STAIR_AFTER_VALUES, type StairAfter, type StairStep, type StairStepOverride,
 } from "../lib/stairRecipe";
 
-type NumericField = "depth" | "dwell" | "overlap" | "passes" | "removalRate";
+type NumericField = "depth" | "dwell" | "overlap" | "removalRate";
 
 /** One recipe cell. Empty = inherit the card-level default (shown as the placeholder). */
 function Cell({ label, value, placeholder, disabled, integer, title, onCommit }: {
@@ -67,6 +68,9 @@ export function StepRecipe({ patternKey, caption, instance, disabled }: {
 }) {
   const dispatch = useAppDispatch();
   const materials = useAppSelector(state => state.processing.materials);
+  const specs = useAppSelector(state => state.processing.specs);
+  const lensLookup = useAppSelector(state => state.processing.lensLookup);
+  const scanField = useAppSelector(state => state.scan.roi);
   const { t } = useTranslation();
   const tr = (key: string, fallback: string) => { const x = t(key as TranslationKey); return x === key ? fallback : x; };
   const fileInput = useRef<HTMLInputElement>(null);
@@ -76,6 +80,18 @@ export function StepRecipe({ patternKey, caption, instance, disabled }: {
   const collectionDefaults = useAppSelector(state => state.processing.stairReceipes.SMProcess);
   const presetSteps = (collectionDefaults?.nodes.find(node => node.name === instance.stairRecipeNode)
     ?? collectionDefaults?.nodes[0])?.steps;
+  const passCounts = useMemo(() => {
+    const spec = specs.find(item => item.key === patternKey);
+    if (!spec || !instance.roi || !lensLookup) return new Map<number, number>();
+    const rates = Object.fromEntries(materials.filter(material => material.removalRateUM3PerNC !== undefined)
+      .map(material => [material.name, material.removalRateUM3PerNC!]));
+    try {
+      const steps = stairExposureSteps(instance.roi, instance.parameters, overrides, defaultMaterial, rates, presetSteps);
+      return new Map(steps.flatMap(step => step.recipeStepIndex === undefined ? [] : [[
+        step.recipeStepIndex, preparePatternExposure(spec, step.shape, step.parameters, lensLookup, scanField).plan.passes,
+      ] as [number, number]]));
+    } catch { return new Map<number, number>(); }
+  }, [specs, patternKey, instance.roi, instance.parameters, instance.stairSteps, lensLookup, scanField, materials, defaultMaterial, presetSteps]);
   const resolved = resolveStairSteps(instance.parameters, overrides, presetSteps).map(step => ({
     ...step,
     material: step.material || defaultMaterial,
@@ -126,7 +142,11 @@ export function StepRecipe({ patternKey, caption, instance, disabled }: {
                 <td>{num(i, "removalRate", tr("processing.stair.sr", "Sr (µm³/nC)"))}</td>
                 <td>{num(i, "dwell", tr("processing.stair.dwell", "Dwell (µs)"))}</td>
                 <td>{num(i, "overlap", tr("processing.stair.overlap", "Overlap (%)"))}</td>
-                <td>{num(i, "passes", tr("processing.stair.passes", "Passes"), true)}</td>
+            <td><output className="stair-steps__pass-readout"
+              aria-label={`${caption} ${tr("processing.stair.step", "Step")} ${i + 1}: ${tr("processing.stair.passes", "Passes")}`}
+              title="Planned passes from the step depth, material removal rate, and exposure parameters.">
+              {passCounts.get(i + 1)?.toLocaleString() ?? "—"}
+            </output></td>
                 <td><select className="select stair-steps__after" value={step.after} disabled={disabled}
                   aria-label={`${caption} ${tr("processing.stair.step", "Step")} ${i + 1}: ${tr("processing.stair.after", "After step")}`}
                   title={tr("processing.stair.afterHelp", "View takes one full-field frame after the step. View + pause then waits for Resume. Nothing is paused after the last step.")}
