@@ -5,16 +5,20 @@ glasgow_service/api.py
 glasgow_service/auth.py
 glasgow_service/config.py
 glasgow_service/coordination.py
+glasgow_service/custom_pattern_match.py
 glasgow_service/device_lock.py
 glasgow_service/execution_authority.py
 glasgow_service/executor_config.py
 glasgow_service/executor_lifecycle.py
 glasgow_service/executor_logging.py
+glasgow_service/exposure_diagnostics.py
 glasgow_service/exposure_lattice.py
 glasgow_service/exposure_lattice_adapter.py
 glasgow_service/failover_executor.py
 glasgow_service/lens_lookup.py
+glasgow_service/milling_registration.py
 glasgow_service/models.py
+glasgow_service/pattern_recipes.py
 glasgow_service/pfeiffer.py
 glasgow_service/processing_reference_api.py
 glasgow_service/redis_coordination.py
@@ -65,6 +69,7 @@ tests/test_execution_authority.py
 tests/test_executor_config.py
 tests/test_executor_lifecycle.py
 tests/test_executor_logging.py
+tests/test_exposure_diagnostics.py
 tests/test_exposure_lattice.py
 tests/test_failover_executor.py
 tests/test_figure_levels.py
@@ -74,6 +79,7 @@ tests/test_lens_lookup.py
 tests/test_link_pacing.py
 tests/test_live_scan_continuous.py
 tests/test_parallel_regions.py
+tests/test_pattern_recipes.py
 tests/test_raster_orientation.py
 tests/test_redis_coordination.py
 tests/test_repeat_session.py

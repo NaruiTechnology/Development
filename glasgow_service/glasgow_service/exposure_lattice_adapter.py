@@ -29,5 +29,13 @@ def lattice_stream(req):
     lattice = build_lattice(shape, spec.pitch_x, spec.pitch_y, spec.axis)
     end = spec.cell_end if spec.cell_end is not None else lattice.nx * lattice.ny
     count = (end - spec.cell_start) * spec.passes if spec.cell_start or spec.cell_end is not None else total_points(shape, lattice, spec.passes)
-    return (lambda: lattice_points(shape, lattice, spec.dwell, spec.passes, spec.cell_start, spec.cell_end),
-            max(1, count))
+    def points():
+        stream = lattice_points(shape, lattice, spec.dwell, spec.passes, spec.cell_start, spec.cell_end)
+        dx, dy = spec.dac_offset
+        if not (dx or dy):
+            yield from stream
+            return
+        for x, y, dwell, blank, pass_index in stream:
+            yield x + dx, y + dy, dwell, blank, pass_index
+
+    return points, max(1, count)

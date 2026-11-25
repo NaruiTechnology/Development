@@ -8,6 +8,24 @@ export type ExposurePhase = "idle" | "preparing" | "running" | "paused" | "stopp
 /** "paused" still owns the beam session and keeps the recipe locked. */
 export const exposureBusy = (phase: ExposurePhase) => ["preparing", "running", "paused", "stopping"].includes(phase);
 export type ExposureViewPhase = "idle" | "queued" | "scanning" | "completed" | "stopped" | "error";
+export interface MillingMatchReport {
+  pass: number;
+  correlation?: number;
+  threshold?: number;
+  matchedStrips?: number;
+  drift: { dac: [number, number]; um: [number, number] };
+  correction?: { dac: [number, number]; um: [number, number]; applied: boolean };
+}
+export interface MillingProgress {
+  stage: "preparing" | "reference" | "qualifying" | "capture" | "matching" | "exposing" | "passComplete";
+  pass: number;
+  totalPasses: number;
+  strips: number;
+  captured: number;
+  referenceReady: boolean;
+  match?: MillingMatchReport;
+  recentCorrections: MillingMatchReport[];
+}
 export interface ExposureState {
   mode: "auto" | "milling";
   parallel: boolean;
@@ -20,6 +38,7 @@ export interface ExposureState {
   retainedPreview: WorkflowProgress[];
   activeStepIds: string[];
   error: string | null;
+  millingProgress: MillingProgress | null;
   /** Id of the step after which the run is waiting for Resume. */
   pausedAfterId: string | null;
   viewPhase: ExposureViewPhase;
@@ -31,7 +50,7 @@ export interface ExposureState {
 }
 const initialState: ExposureState = {
   mode: "milling", millingChangeThresholdPercent: 5, parallel: false, viewPauseSeconds: 5, pauseAfterView: false, viewZoom: 2, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
-  viewPhase: "idle", viewError: null, viewRequestId: 0,
+  millingProgress: null, viewPhase: "idle", viewError: null, viewRequestId: 0,
   viewReceivedSamples: 0, viewReceivedChunks: 0, viewExpectedSamples: 0,
 };
 
@@ -56,7 +75,21 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
   },
   exposurePreparing(s) {
     s.phase = "preparing"; s.error = null; s.activeStepIds = []; s.pausedAfterId = null;
+    s.millingProgress = null;
     s.viewPhase = "idle"; s.viewError = null;
+  },
+  millingProgressStarted(s) {
+    s.millingProgress = {stage: "preparing", pass: 0, totalPasses: 0, strips: 0, captured: 0,
+      referenceReady: false, recentCorrections: []};
+  },
+  millingProgressUpdated(s, a: PayloadAction<Partial<MillingProgress>>) {
+    if (s.millingProgress) Object.assign(s.millingProgress, a.payload);
+  },
+  millingCorrectionApplied(s, a: PayloadAction<MillingMatchReport>) {
+    if (!s.millingProgress) return;
+    s.millingProgress.match = a.payload;
+    s.millingProgress.recentCorrections.unshift(a.payload);
+    if (s.millingProgress.recentCorrections.length > 20) s.millingProgress.recentCorrections.pop();
   },
   exposureViewChanged(s, a: PayloadAction<{phase: ExposureViewPhase; error?: string}>) {
     s.viewPhase = a.payload.phase;
@@ -158,5 +191,5 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
 export const { setMillingChangeThresholdPercent, setExposureMode, setExposureViewZoom, setExposureParallel, setExposureViewPauseSeconds, setExposurePauseAfterView, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
   exposureStepCompleted, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
   exposureViewSamplesReceived, requestExposureView,
-  exposurePaused, exposureResumed } = slice.actions;
+  exposurePaused, exposureResumed, millingProgressStarted, millingProgressUpdated, millingCorrectionApplied } = slice.actions;
 export default slice.reducer;

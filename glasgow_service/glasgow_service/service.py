@@ -1771,6 +1771,7 @@ class DeviceService:
         """
         return {
             "exposure_cell_ranges": True,
+            "milling_drift_registration": True,
             "raster": dict(self._raster_defaults),
             "vector": dict(self._vector_defaults),
             "simulation": dict(self._simulation_defaults),

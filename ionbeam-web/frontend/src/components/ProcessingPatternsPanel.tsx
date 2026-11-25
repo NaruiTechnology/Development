@@ -98,7 +98,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
               ariaLabel={t("processing.exposure.status.current")} />}
           </span>
         </div>
-        <ExposureControls disabled={patternsLoading || exposureDisabled || countValidationFailed} />
+        <ExposureControls advanced={tableTab === "custom"} disabled={patternsLoading || exposureDisabled || countValidationFailed} />
         {patternsLoading && <LoadingSpinner label={t("processing.loading")} />}
         <PatternTableTabs />
         {tableTab === "custom" && <PatternTableCustom imageAvailable={imageAvailable}

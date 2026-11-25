@@ -399,6 +399,7 @@ class LatticeRequest(BaseModel):
     passes: int = Field(1, ge=1, le=100000)
     cell_start: int = Field(0, ge=0, description="First serpentine lattice cell, inclusive.")
     cell_end: Optional[int] = Field(None, ge=1, description="Last serpentine lattice cell, exclusive.")
+    dac_offset: Tuple[int, int] = Field((0, 0), description="Measured X/Y translation applied to emitted DAC codes.")
 
     @model_validator(mode="after")
     def _check_geometry(self):
@@ -406,6 +407,11 @@ class LatticeRequest(BaseModel):
         from .exposure_lattice import MAX_LATTICE_POINTS, build_lattice, total_points
         from .exposure_lattice_adapter import shape_from_request
         shape = shape_from_request(self.shape)
+        dx, dy = self.dac_offset
+        if dx or dy:
+            x0, x1, y0, y1 = shape.bounds()
+            if not (0 <= x0 + dx <= x1 + dx <= 16383 and 0 <= y0 + dy <= y1 + dy <= 16383):
+                raise ValueError("translated lattice is outside the DAC field")
         lattice = build_lattice(shape, self.pitch_x, self.pitch_y, self.axis)
         end = self.cell_end if self.cell_end is not None else lattice.nx * lattice.ny
         if not 0 <= self.cell_start < end <= lattice.nx * lattice.ny:

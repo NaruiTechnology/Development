@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import { useAppSelector } from "../store";
-import { selectExposurePreview } from "../store/exposureSlice";
+import { selectExposurePreview, type ExposurePhase, type MillingMatchReport, type MillingProgress } from "../store/exposureSlice";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { imageWorldBounds, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 import { patternBounds } from "../lib/processingPatterns";
@@ -205,12 +205,57 @@ export function ExposureLatticeProgress() {
   </div>;
 }
 
+function MillingProgressMessage({ progress, phase }: {progress: MillingProgress; phase: ExposurePhase}) {
+  const { t, fmt } = useTranslation();
+  const { match, recentCorrections } = progress;
+  const signed = (n: number, digits: number) => fmt(n, {signDisplay: "exceptZero", maximumFractionDigits: digits});
+  const percent = (n: number) => fmt(n, {style: "percent", maximumFractionDigits: 1});
+  const status = phase === "completed" ? t("processing.exposure.status.completed")
+    : phase === "stopped" ? t("processing.exposure.status.stopped")
+    : phase === "stopping" ? t("processing.advanced.progressStopping")
+    : phase === "paused" ? t("processing.advanced.progressPaused")
+    : phase === "error" ? null
+    : t(`processing.advanced.progress.${progress.stage}`, {captured: progress.captured, strips: progress.strips});
+  const matchQuality = (record: MillingMatchReport) => record.correlation !== undefined && record.threshold !== undefined && record.matchedStrips !== undefined
+    ? t("processing.advanced.matchQuality", {score: percent(record.correlation), threshold: percent(record.threshold / 100), matched: record.matchedStrips, strips: progress.strips})
+    : t("processing.advanced.matchFound");
+  const drift = (record: MillingMatchReport) => t("processing.advanced.driftDetected", {
+    pass: fmt(record.pass), x: signed(record.drift.um[0], 6), y: signed(record.drift.um[1], 6),
+    dx: signed(record.drift.dac[0], 3), dy: signed(record.drift.dac[1], 3),
+  });
+  const correction = (record: MillingMatchReport) => {
+    const shift = record.correction;
+    if (!shift) return null;
+    return t(shift.applied ? "processing.advanced.correctionApplied" : "processing.advanced.correctionMeasured", {
+      pass: fmt(record.pass), x: signed(shift.um[0], 6), y: signed(shift.um[1], 6),
+      dx: signed(shift.dac[0], 0), dy: signed(shift.dac[1], 0),
+    });
+  };
+
+  return <section className="exposure-lattice-message exposure-lattice-message--view">
+    <div className="milling-message__live" role="status">
+      <strong>{t("processing.advanced.progressTitle")}{progress.pass > 0 && ` · ${t("processing.advanced.progressPass", {pass: fmt(progress.pass), total: fmt(progress.totalPasses)})}`}</strong>
+      {status && <span>{status}</span>}
+      {progress.referenceReady && <span>{t("processing.advanced.referenceReady", {strips: progress.strips})}</span>}
+      {match && <span>{t(match.pass ? "processing.advanced.passMatch" : "processing.advanced.referenceMatch", {pass: fmt(match.pass)})} · {matchQuality(match)}</span>}
+      {match && match.pass > 0 && <span className="exposure-lattice-message__data">{drift(match)}</span>}
+      {match && match.pass > 0 && match.correction && <span>{correction(match)}</span>}
+    </div>
+    {recentCorrections.length > 0 && <details>
+      <summary>{t("processing.advanced.recentCorrections", {count: recentCorrections.length})}</summary>
+      <ul className="milling-message__history">
+        {recentCorrections.map(record => <li key={record.pass}>{drift(record)}<br />{correction(record)} · {matchQuality(record)}</li>)}
+      </ul>
+    </details>}
+  </section>;
+}
+
 export function ExposureLatticeMessage() {
   const { t } = useTranslation();
   const progress = useAppSelector(selectExposurePreview);
-  const { error, viewPhase, viewError, viewReceivedSamples, viewReceivedChunks, viewExpectedSamples } = useAppSelector(s => s.exposure);
+  const { error, phase, millingProgress, viewPhase, viewError, viewReceivedSamples, viewReceivedChunks, viewExpectedSamples } = useAppSelector(s => s.exposure);
   const hasPattern = useAppSelector(s => Object.values(s.processing.instances).some(instance => instance.roi !== null));
-  if (!hasPattern) return null;
+  if (!hasPattern && !millingProgress && !error) return null;
   const steps = progress.filter(n => n.exposure);
   const viewing = viewPhase === "queued" || viewPhase === "scanning";
   const node = steps.find(n => n.status === "current") ?? [...steps].reverse().find(n => n.status !== "upcoming") ?? steps[0];
@@ -236,11 +281,13 @@ export function ExposureLatticeMessage() {
       {viewError && <span>{viewError}</span>}
     </div>
   );
-  if (!node?.exposure || viewing) return <>{errorMessage}{viewMessage}</>;
+  const millingMessage = millingProgress && <MillingProgressMessage progress={millingProgress} phase={phase} />;
+  if (!node?.exposure || viewing) return <>{errorMessage}{millingMessage}{viewMessage}</>;
   const e = node.exposure, p = e.plan;
   const index = steps.indexOf(node)+1;
   return <>
     {errorMessage}
+    {millingMessage}
     {viewMessage}
     <div className="exposure-lattice-message exposure-lattice-message--pattern" role="status" aria-live="polite">
     <strong>{t("canvas.scanParams.exposureLattice")} · {node.pattern} · {node.caption} · {t(`processing.exposure.status.${node.status}` as TranslationKey)}</strong>

@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - Python 3.10 deploy builder fallback
     tomllib = None
 
 
-REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('gpiozero', 'httpx', 'redis', 'pillow')
+REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('gpiozero', 'httpx', 'redis', 'pillow', 'numpy')
 REQUIRED_IMAGE_MATCHING_PACKAGES = ('torch',)
 REQUIRED_SBC_RUNTIME_PACKAGES = ('smbus2', 'pyserial')
 REQUIRED_LOCAL_REDIS_APT_PACKAGES = (
@@ -134,6 +134,8 @@ REQUIRED_DIST_MODULES = (
     'Development/glasgow_service/glasgow_service/api',
     'Development/glasgow_service/glasgow_service/lens_lookup',
     'Development/glasgow_service/glasgow_service/processing_reference_api',
+    'Development/glasgow_service/glasgow_service/milling_registration',
+    'Development/glasgow_service/glasgow_service/exposure_lattice_adapter',
     'Development/glasgow_service/glasgow_service/pattern_recipes',
     'Development/glasgow_service/glasgow_service/service',
     'Development/glasgow_service/glasgow_service/device_lock',
@@ -159,6 +161,7 @@ REQUIRED_DIST_FILES = (
     'Development/ionbeam-web/frontend/src/lib/exposurePreview.ts',
     'Development/ionbeam-web/frontend/src/lib/exposureSequence.ts',
     'Development/ionbeam-web/frontend/src/lib/exposureStream.ts',
+    'Development/ionbeam-web/frontend/src/lib/millingRegistration.ts',
     'Development/ionbeam-web/backend/src/exposureSession.ts',
     'Development/ionbeam-web/backend/src/accountIdentity.ts',
     'Development/ionbeam-web/frontend/src/hooks/useExposureRun.ts',

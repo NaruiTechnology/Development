@@ -1,10 +1,12 @@
 """Reference-only Processing API, independently testable without a device service."""
 import asyncio
+from dataclasses import asdict
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 from . import lens_lookup, pattern_recipes
 from .custom_pattern_match import CustomPatternMatchError, find_custom_pattern_matches
+from .milling_registration import MillingRegistrationRequest, register_milling_frames
 from .auth import require_token
 
 router = APIRouter(prefix="/processing", tags=["processing"], dependencies=[Depends(require_token)])
@@ -30,6 +32,15 @@ async def match_custom_pattern(body: CustomPatternMatchRequest):
         raise HTTPException(422, str(exc)) from exc
 
 # Reference-only calculations: these endpoints never acquire or expose a beam.
+@router.post("/milling-registration")
+async def milling_registration(body: MillingRegistrationRequest):
+    try:
+        match = await run_in_threadpool(register_milling_frames, body)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return asdict(match) if match else {"offset": None}
+
+
 @router.get("/lens-lookup")
 async def get_processing_lens_lookup():
     try:

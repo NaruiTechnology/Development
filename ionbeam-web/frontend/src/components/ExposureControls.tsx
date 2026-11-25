@@ -24,7 +24,9 @@ export function ExposureReviewPauseToggle() {
   </button>;
 }
 
-export function ExposureControls({disabled = false, showView = true}: {disabled?: boolean; showView?: boolean}) {
+export function ExposureControls({disabled = false, showView = true, advanced = false}: {
+  disabled?: boolean; showView?: boolean; advanced?: boolean;
+}) {
   const {t} = useTranslation(), dispatch = useAppDispatch();
   const {state, start, stop, view, resume} = useExposureRun();
   const tab = state.mode;
@@ -81,7 +83,7 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
                 onClick={resume}><Icon name="play" tone="success" />{t("processing.exposure.resume")}</button>
             : <button type="button" className="btn btn--primary" disabled={startDisabled}
                 title={serialRequired ? t("processing.exposure.serialRequired") : t("processing.exposure.startHelp")}
-                onClick={() => void start()}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>}
+                onClick={() => void start({registerMilling: advanced && tab === "milling"})}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>}
         </div>
         {tab === "milling" && <div className="patterns-exposure__view-row patterns-exposure__change-row">
           <div className="patterns-exposure__pause">
@@ -146,7 +148,7 @@ export function ExposureControls({disabled = false, showView = true}: {disabled?
             </div>
           </label>
         </div>}
-        {state.phase === "paused" && <p className="scan-inline-note" role="status">{t("processing.exposure.paused").replace("{step}", state.progress.find(n => n.id === state.pausedAfterId)?.caption ?? "")}</p>}
+        {state.phase === "paused" && !state.millingProgress && <p className="scan-inline-note" role="status">{t("processing.exposure.paused").replace("{step}", state.progress.find(n => n.id === state.pausedAfterId)?.caption ?? "")}</p>}
         {serialRequired && <p className="scan-inline-error">{t("processing.exposure.serialRequired")}</p>}
       </div>
   </div>;

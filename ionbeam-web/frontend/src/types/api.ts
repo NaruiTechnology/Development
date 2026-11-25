@@ -104,6 +104,7 @@ export type LatticeShapeRequest =
   | { kind: "frame"; outer: [number, number][]; inner: [number, number][] }
   | { kind: "polygon"; points: [number, number][] };
 export interface LatticeRequest {
+  dac_offset?: [number, number];
   cell_start?: number;
   cell_end?: number;
   shape: LatticeShapeRequest;
@@ -341,6 +342,7 @@ export interface LastScanMeta {
  * fields, no client-side translation needed.
  */
 export interface ServerDefaults {
+  milling_drift_registration?: boolean;
   exposure_cell_ranges?: boolean;
   /** Node proxy keeps one authenticated channel for the whole exposure run. */
   exposure_session_stream?: boolean;
