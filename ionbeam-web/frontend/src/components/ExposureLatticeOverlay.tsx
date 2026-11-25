@@ -215,9 +215,9 @@ function MillingProgressMessage({ progress, phase }: {progress: MillingProgress;
     : phase === "stopping" ? t("processing.advanced.progressStopping")
     : phase === "paused" ? t("processing.advanced.progressPaused")
     : phase === "error" ? null
-    : t(`processing.advanced.progress.${progress.stage}`, {captured: progress.captured, strips: progress.strips});
-  const matchQuality = (record: MillingMatchReport) => record.correlation !== undefined && record.threshold !== undefined && record.matchedStrips !== undefined
-    ? t("processing.advanced.matchQuality", {score: percent(record.correlation), threshold: percent(record.threshold / 100), matched: record.matchedStrips, strips: progress.strips})
+    : t(`processing.advanced.progress.${progress.stage}`, {captured: progress.captured, frames: progress.frames});
+  const matchQuality = (record: MillingMatchReport) => record.correlation !== undefined && record.threshold !== undefined && record.matchedFrames !== undefined
+    ? t("processing.advanced.matchQuality", {score: percent(record.correlation), threshold: percent(record.threshold / 100), matched: record.matchedFrames, frames: progress.frames})
     : t("processing.advanced.matchFound");
   const drift = (record: MillingMatchReport) => t("processing.advanced.driftDetected", {
     pass: fmt(record.pass), x: signed(record.drift.um[0], 6), y: signed(record.drift.um[1], 6),
@@ -236,7 +236,7 @@ function MillingProgressMessage({ progress, phase }: {progress: MillingProgress;
     <div className="milling-message__live" role="status">
       <strong>{t("processing.advanced.progressTitle")}{progress.pass > 0 && ` · ${t("processing.advanced.progressPass", {pass: fmt(progress.pass), total: fmt(progress.totalPasses)})}`}</strong>
       {status && <span>{status}</span>}
-      {progress.referenceReady && <span>{t("processing.advanced.referenceReady", {strips: progress.strips})}</span>}
+      {progress.referenceReady && <span>{t("processing.advanced.referenceReady", {frames: progress.frames})}</span>}
       {match && <span>{t(match.pass ? "processing.advanced.passMatch" : "processing.advanced.referenceMatch", {pass: fmt(match.pass)})} · {matchQuality(match)}</span>}
       {match && match.pass > 0 && <span className="exposure-lattice-message__data">{drift(match)}</span>}
       {match && match.pass > 0 && match.correction && <span>{correction(match)}</span>}

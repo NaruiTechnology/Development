@@ -12,7 +12,7 @@ export interface MillingMatchReport {
   pass: number;
   correlation?: number;
   threshold?: number;
-  matchedStrips?: number;
+  matchedFrames?: number;
   drift: { dac: [number, number]; um: [number, number] };
   correction?: { dac: [number, number]; um: [number, number]; applied: boolean };
 }
@@ -20,7 +20,7 @@ export interface MillingProgress {
   stage: "preparing" | "reference" | "qualifying" | "capture" | "matching" | "exposing" | "passComplete";
   pass: number;
   totalPasses: number;
-  strips: number;
+  frames: number;
   captured: number;
   referenceReady: boolean;
   match?: MillingMatchReport;
@@ -49,7 +49,7 @@ export interface ExposureState {
   viewExpectedSamples: number;
 }
 const initialState: ExposureState = {
-  mode: "milling", millingChangeThresholdPercent: 5, parallel: false, viewPauseSeconds: 5, pauseAfterView: false, viewZoom: 2, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
+  mode: "milling", millingChangeThresholdPercent: 10, parallel: false, viewPauseSeconds: 5, pauseAfterView: false, viewZoom: 2, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
   millingProgress: null, viewPhase: "idle", viewError: null, viewRequestId: 0,
   viewReceivedSamples: 0, viewReceivedChunks: 0, viewExpectedSamples: 0,
 };
@@ -79,7 +79,7 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
     s.viewPhase = "idle"; s.viewError = null;
   },
   millingProgressStarted(s) {
-    s.millingProgress = {stage: "preparing", pass: 0, totalPasses: 0, strips: 0, captured: 0,
+    s.millingProgress = {stage: "preparing", pass: 0, totalPasses: 0, frames: 0, captured: 0,
       referenceReady: false, recentCorrections: []};
   },
   millingProgressUpdated(s, a: PayloadAction<Partial<MillingProgress>>) {

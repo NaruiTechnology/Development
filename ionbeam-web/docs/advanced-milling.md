@@ -2,18 +2,20 @@
 
 In PATTERNS, select Advanced, draw and enable a pattern ROI, then start Milling.
 Start checks width and height independently against the full, unzoomed field.
-Each ROI dimension plus 2 µm must fit on its axis. The reference scan excludes
-the bounds of the ROI with 1 µm added on each side and clips the exclusion to the
-scan field. With affine calibration, it encloses the exclusion in DAC space.
-It also excludes the planned beam footprint with the same allowance.
+Each ROI dimension plus 4 µm must fit on its axis. Start acquires a single
+512×512 detector frame across the full field at dwell no greater than 3 and
+keeps it in memory for the run. Matching masks the ROI bounds expanded by
+2 µm on every side, conservatively mapped into DAC space for affine scan
+calibration. This avoids repeatedly rastering narrow strips at the full frame
+resolution.
 
-The reference is a set of detector frames acquired outside the exclusion and
-held in memory for the run. For runs with further passes, the first cut
-requires a reference with distinguishable features. Before each subsequent
-pass, including a new Stair Cut step, image registration compares fresh frames
-with the initial frames. Each match starts at 98% correlation and retries in
-one percentage point steps down to the 75% milling minimum. The retries reuse
-the same images and still require agreement between reliable strips.
+For runs with further passes, the first cut requires a reference with
+distinguishable features. Before each subsequent pass, including a new Stair
+Cut step, image registration compares a fresh full-field frame with the initial
+frame. Each match starts at 98% correlation and retries in one percentage point
+steps down to the 75% milling minimum. Retries reuse the same pair of frames.
+The service logs the pass, match outcome, failure reason, offset, correlation,
+accepted threshold and number of threshold retries to `GlasgowService.log`.
 The service adds the measured integer DAC translation
 to every emitted spot after lattice generation. This keeps segment order, spot
 identity and dwell intact. The live feedback still renders in the pattern's

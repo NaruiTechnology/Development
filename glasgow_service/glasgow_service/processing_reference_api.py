@@ -1,5 +1,6 @@
 """Reference-only Processing API, independently testable without a device service."""
 import asyncio
+import logging
 from dataclasses import asdict
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from pydantic import BaseModel, Field
@@ -10,6 +11,7 @@ from .milling_registration import MillingRegistrationRequest, register_milling_f
 from .auth import require_token
 
 router = APIRouter(prefix="/processing", tags=["processing"], dependencies=[Depends(require_token)])
+logger = logging.getLogger("GlasgowService")
 
 
 class CustomPatternMatchRequest(BaseModel):
@@ -37,8 +39,12 @@ async def milling_registration(body: MillingRegistrationRequest):
     try:
         match = await run_in_threadpool(register_milling_frames, body)
     except ValueError as exc:
+        logger.warning("[milling-registration] pass=%d status=invalid_request reason=%s", body.pass_index, exc)
         raise HTTPException(422, str(exc)) from exc
-    return asdict(match) if match else {"offset": None}
+    logger.info("[milling-registration] pass=%d status=%s reason=%s offset=%s correlation=%s threshold_percent=%s retries=%d",
+                body.pass_index, "success" if match.offset is not None else "failure", match.reason,
+                match.offset, match.correlation, match.threshold_percent, match.retries)
+    return asdict(match)
 
 
 @router.get("/lens-lookup")
