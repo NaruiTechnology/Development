@@ -8611,6 +8611,7 @@ body {
 .pattern-instance-group .pattern-card { margin-bottom: 0; }
 
 .pattern-instance-tabs [role="tab"] { color: white; font-weight: 700; }
+
 .pattern-card__instance-index { color: white; font-weight: 700; }
 
 /* CONFIGURATION / ADMIN / Pattern recipes */
@@ -8706,6 +8707,18 @@ body {
 .custom-pattern-edit-dialog__body { display: grid; gap: 12px; }
 .custom-pattern-edit-dialog__body > label { display: grid; gap: 5px; color: var(--c-text-dim); }
 .custom-pattern-edit-dialog__upload { display: grid; gap: 5px; color: var(--c-text-dim); }
+
+/* Apply after component tab rules so every Configuration dialog tab, including
+   nested Admin and Calibration tabs, has visible 10px top corners. */
+.settings-modal [role="tab"] {
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.settings-modal [role="tab"][aria-selected="true"] {
+  background-color: var(--c-bg);
+}
 .custom-pattern-edit-dialog__file-control {
   display: flex;
   min-height: 40px;
