@@ -45,6 +45,7 @@
     "src/lib/processingWorkflows.ts",
     "src/lib/exposurePlan.ts",
     "src/lib/millingLiveView.ts",
+    "src/lib/millingRegistration.ts",
     "src/lib/millingChange.ts",
     "src/lib/liveContrast.ts",
     "src/lib/millingHistoryStore.ts",

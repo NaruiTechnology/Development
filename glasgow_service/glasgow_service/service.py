@@ -64,6 +64,7 @@ from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 
 from .device_lock import DeviceHeld, DeviceLock
 from .roi_scaling import dac_step, roi_zoom
+from .milling_registration import REGISTRATION_RESOLUTIONS
 from GlasgowDataIO.IobeamControl.transfer.linkStats import LinkStats
 from .exposure_lattice_adapter import lattice_stream
 from .exposure_diagnostics import exposure_diagnostics
@@ -1772,6 +1773,7 @@ class DeviceService:
         return {
             "exposure_cell_ranges": True,
             "milling_drift_registration": True,
+            "milling_registration_resolutions": list(REGISTRATION_RESOLUTIONS),
             "raster": dict(self._raster_defaults),
             "vector": dict(self._vector_defaults),
             "simulation": dict(self._simulation_defaults),

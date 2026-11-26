@@ -8767,6 +8767,29 @@ body {
 .custom-patterns-card { margin: 0; }
 .custom-patterns-card .card__collapse-btn { margin-left: auto; }
 .custom-patterns-card__body { display: flex; flex-direction: column; gap: 10px; }
+.milling-registration-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+  column-gap: 12px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--c-bg-elev) 72%, transparent);
+}
+.milling-registration-panel__row {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-width: 0;
+  color: var(--c-text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.milling-registration-panel__row:last-of-type { justify-items: end; }
+.milling-registration-panel__row .number-stepper { width: 82px; }
+.milling-registration-panel__resolution { width: 120px; max-width: 100%; padding: 4px 28px 4px 8px; color: var(--c-text); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .custom-pattern-tiles-section { min-width: 0; border: 1px solid var(--c-border-soft); border-radius: 5px; overflow: hidden; }
 .custom-pattern-tiles-loading { display: flex; min-height: 96px; align-items: center; justify-content: center; padding: 8px; background: var(--c-bg-deep); }
 .custom-pattern-tiles-loading .loading-spinner--block { padding: 12px 0; }

@@ -21,8 +21,9 @@ import { prepareScanAssets } from "../lib/scanAssets";
 import { scansUseHardware } from "../lib/takeoverTiming";
 import { exposureViewScanRegions, squareExposureViewRegions } from "../lib/processingScanRegions";
 import { effectiveScanRegions } from "../lib/scanRegions";
-import { encodeRegistrationFrames, latticeFitsWithOffset, millingDriftUM, millingOffset,
-  millingRegistrationBounds, REGISTRATION_RESOLUTION, registrationMask, registrationRadius } from "../lib/millingRegistration";
+import { encodeRegistrationFrame, latticeFitsWithOffset, millingDriftUM, millingOffset,
+  millingRegistrationBounds, millingRegistrationOptions, millingRegistrationSelection,
+  registrationMask, registrationPitch, registrationRadius } from "../lib/millingRegistration";
 import { appendExposureViewFrame, clearExposureViewFrames, resetMillingFrame, appendMillingSamples, beginMillingPass, completeMillingPass, restoreMillingHistory, markMillingHistorySaved } from "../store/imageSlice";
 
 /** A persisted reference is comparable only with the same pattern lattice and world mapping. */
@@ -337,30 +338,36 @@ export function useExposureRun() {
     let failure: string | null = null;
     try {
       const milling = snapshot.exposure.mode === "milling";
+      const advancedMilling = milling && registerMilling;
       const activePattern = snapshot.processing.activeKey;
       const selected = activePattern && snapshot.processing.instances[activePattern]?.enabled
         ? activePattern
         : snapshot.processing.specs.find(spec => snapshot.processing.instances[spec.key]?.enabled && snapshot.processing.instances[spec.key]?.roi)?.key ?? null;
       const field = snapshot.scan.roi;
+      const limitUm = snapshot.exposure.millingDriftLimitUm;
       const selectedRoi = selected ? snapshot.processing.instances[selected]?.roi : null;
-      const qualificationBounds = milling && registerMilling && selectedRoi
-        ? millingRegistrationBounds(selectedRoi, field) : null;
-      const registrationBounds = milling && registerMilling ? qualificationBounds : null;
-      if (milling && registerMilling && !registrationBounds) throw new Error(t("processing.advanced.geometryError"));
+      const registrationBounds = advancedMilling && selectedRoi
+        ? millingRegistrationBounds(selectedRoi, field, limitUm) : null;
+      if (advancedMilling && !registrationBounds) throw new Error(t("processing.advanced.geometryError", {limit: limitUm}));
       await checkAccount();
       if (cancelled.current) return;
       await hydrateHistory();
       if (!snapshot.status.defaults) throw new Error("Service defaults are unavailable.");
+      const registrationResolution = millingRegistrationSelection(
+        millingRegistrationOptions(snapshot.status.defaults), snapshot.exposure.millingRegistrationResolution);
       let cellRanges = snapshot.status.defaults.exposure_cell_ranges;
-      let registrationSupported = snapshot.status.defaults.milling_drift_registration === true;
-      if (cellRanges === undefined || (qualificationBounds && !registrationSupported)) {
+      if (cellRanges === undefined || advancedMilling) {
         const capabilities = await exposureJson(apiUrl("/api/defaults"), {cache: "no-store",
           headers: scanAuthHeaders(), signal: auth.current?.signal});
         cellRanges = capabilities.exposure_cell_ranges === true;
-        registrationSupported = capabilities.milling_drift_registration === true;
+        if (cancelled.current) return;
+        if (advancedMilling) {
+          const options = millingRegistrationOptions(capabilities);
+          if (!options.length) throw new Error(t("processing.advanced.serviceError"));
+          if (registrationResolution === undefined || !options.includes(registrationResolution))
+            throw new Error(t("processing.advanced.resolutionUnavailable"));
+        }
       }
-      if (cancelled.current) return;
-      if (qualificationBounds && !registrationSupported) throw new Error(t("processing.advanced.serviceError"));
       const patterns = {...snapshot.processing, instances: Object.fromEntries(Object.entries(snapshot.processing.instances).map(([key,instance]) => [key,{...instance,enabled:key===selected && instance.enabled && instance.roi!==null}]))};
       const plannedEntries = prepareExposureSequence(patterns, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
       const millingConfig = new Map<string, {geometry: ReturnType<typeof millingPreviewGeometry>; referenceKey:string; aggregate:boolean; lattices:LatticeRequest[]; resolution:number}>();
@@ -401,18 +408,19 @@ export function useExposureRun() {
         throw new Error(t("processing.exposure.totalLimit", {count: maxRequestSpots.toLocaleString(), limit: MAX_LATTICE_SPOTS_PER_REQUEST.toLocaleString()}));
       if (!milling && snapshot.exposure.parallel && plannedEntries.some(e => e.node.exposure?.model === "CleaningLineModel"))
         throw new Error("Cleaning lines require serial exposure (Parallel off).");
-      const excludedMask = qualificationBounds ? registrationMask(qualificationBounds, field) : null;
-      let captureReference: (() => Promise<string[]>) | undefined;
+      const mask = registrationBounds && registrationResolution !== undefined
+        ? registrationMask(registrationBounds, field, registrationResolution, limitUm) : null;
+      let captureRegistrationFrame: (() => Promise<string>) | undefined;
       const totalPasses = plannedEntries.reduce((total, entry) => total + entry.request.lattice!.passes, 0);
-      if (qualificationBounds) {
+      if (advancedMilling && registrationResolution !== undefined) {
         if (!plannedEntries.every(e => latticeFitsWithOffset(e.request.lattice!, [0, 0])))
-          throw new Error(t("processing.advanced.geometryError"));
-        if (!excludedMask) throw new Error(t("processing.advanced.noReference"));
-        if (milling && registerMilling) dispatch(millingProgressUpdated({stage: "reference", totalPasses, frames: 1}));
+          throw new Error(t("processing.advanced.geometryError", {limit: limitUm}));
+        if (!mask) throw new Error(t("processing.advanced.noReference"));
+        dispatch(millingProgressUpdated({stage: "reference", totalPasses, frames: 1}));
         const settings = snapshot.scan.raster;
         const simulated = !scansUseHardware(snapshot.status.defaults.is_production, snapshot.status.sessionSimulation);
         const base: RasterRequest = {
-          resolution: REGISTRATION_RESOLUTION, dwell: Math.min(3, simulated ? Math.max(1, settings.dwell) : settings.dwell),
+          resolution: registrationResolution, dwell: Math.min(3, simulated ? Math.max(1, settings.dwell) : settings.dwell),
           latency_bytes: settings.latency_bytes,
           frame_blank: true, cookie: settings.cookie, adc_valid: settings.adc_valid, do_validate: false,
           continuous: false, output_mode: "SixteenBit", preview: true, exposure_view: true,
@@ -420,25 +428,26 @@ export function useExposureRun() {
         };
         const source = simulated ? await rasterRequestWithBitmapSelection(base, {...field, selection: null},
           {isProduction: false, allowBitmapSimulation: true}) : base;
-        const prepared = await prepareScanAssets(source, {signal: auth.current?.signal});
-        captureReference = async () => {
-          const images: Uint16Array[] = [];
-          const frame = {pixels: new Uint16Array(REGISTRATION_RESOLUTION ** 2), cursor: 0};
-          await runRequest({...prepared, roi: FULL_DAC_ROI}, [frame]);
-          images.push(frame.pixels);
-          if (milling && registerMilling) dispatch(millingProgressUpdated({captured: 1}));
-          return encodeRegistrationFrames(images);
+        const raster = {...await prepareScanAssets(source, {signal: auth.current?.signal}), roi: FULL_DAC_ROI};
+        captureRegistrationFrame = async () => {
+          const frame = {pixels: new Uint16Array(registrationResolution ** 2), cursor: 0};
+          await runRequest(raster, [frame]);
+          dispatch(millingProgressUpdated({captured: 1}));
+          return encodeRegistrationFrame(frame.pixels, mask.pixels);
         };
       }
-      const matchReference = async (reference: string[], current: string[], pass: number, qualification = false): Promise<NonNullable<MillingProgress["match"]>> => {
+      const matchReference = async (reference: string, current: string, pass: number, qualification = false): Promise<NonNullable<MillingProgress["match"]>> => {
+        if (!mask || registrationResolution === undefined) throw new Error(t("processing.advanced.serviceError"));
+        const pitch = registrationPitch(registrationResolution);
         let result;
         try {
           result = await exposureJson(apiUrl("/api/processing/milling-registration"), {
             method: "POST", signal: auth.current?.signal,
             headers: {...scanAuthHeaders(), "Content-Type": "application/json"},
-            body: JSON.stringify({reference: reference[0], current: current[0], mask: excludedMask, pass_index: pass,
-              pitch_x: 16383 / (REGISTRATION_RESOLUTION - 1), pitch_y: 16383 / (REGISTRATION_RESOLUTION - 1),
-              radius_x: registrationRadius(field, 0), radius_y: registrationRadius(field, 1)}),
+            body: JSON.stringify({reference, current, mask: mask.encoded, pass_index: pass, resolution: registrationResolution,
+              pitch_x: pitch, pitch_y: pitch,
+              radius_x: registrationRadius(field, 0, registrationResolution, limitUm),
+              radius_y: registrationRadius(field, 1, registrationResolution, limitUm)}),
           });
         } catch (error) {
           if (cancelled.current) throw error;
@@ -448,9 +457,9 @@ export function useExposureRun() {
           throw new Error(t("processing.advanced.referenceAmbiguous"));
         const raw: unknown = result?.offset;
         if (!Array.isArray(raw) || raw.length !== 2 || !raw.every(Number.isFinite))
-          throw new Error(qualification ? t("processing.advanced.referenceUnqualified") : t("processing.advanced.matchError"));
+          throw new Error(qualification ? t("processing.advanced.referenceUnqualified") : t("processing.advanced.matchError", {limit: limitUm}));
         const measured: [number, number] = [raw[0], raw[1]];
-        const dac = millingOffset(measured, field);
+        const dac = millingOffset(measured, field, limitUm);
         const match = {
           pass, drift: {dac: measured, um: millingDriftUM(measured, field)},
           correction: dac ? {dac, um: millingDriftUM(dac, field), applied: false} : undefined,
@@ -459,19 +468,17 @@ export function useExposureRun() {
           matchedFrames: 1,
         };
         if (!qualification) dispatch(millingProgressUpdated({match}));
-        if (!dac) throw new Error(t("processing.advanced.marginError"));
+        if (!dac) throw new Error(t("processing.advanced.marginError", {limit: limitUm}));
         return match;
       };
-      const reference = await captureReference?.();
+      const reference = await captureRegistrationFrame?.();
       if (cancelled.current) return;
-      // Qualify every drawn pattern ROI against its own reference before any
-      // exposure request is sent. Advanced milling also displays this stage.
       if (reference) {
-        if (milling && registerMilling) dispatch(millingProgressUpdated({stage: "qualifying"}));
+        dispatch(millingProgressUpdated({stage: "qualifying"}));
         await matchReference(reference, reference, 0, true);
       }
       if (cancelled.current) return;
-      if (reference && milling && registerMilling) dispatch(millingProgressUpdated({referenceReady: true}));
+      if (reference) dispatch(millingProgressUpdated({referenceReady: true}));
       dispatch(exposurePrepared(plannedEntries.map(e => e.node)));
       // Yield so the pattern cards can render their calculated spot counts before the first lattice starts.
       await new Promise<void>(resolve => window.setTimeout(resolve, 0));
@@ -486,9 +493,10 @@ export function useExposureRun() {
         if (cancelled.current) break;
         pass++;
         let alignment: MillingProgress["match"];
-        if (milling && registerMilling && captureReference && reference && pass > 1) {
+        if (captureRegistrationFrame && reference && pass > 1) {
           dispatch(millingProgressUpdated({stage: "capture", pass, captured: 0}));
-          const current = await captureReference();
+          const current = await captureRegistrationFrame();
+          if (cancelled.current) break;
           dispatch(millingProgressUpdated({stage: "matching"}));
           alignment = await matchReference(reference, current, pass);
           const correction = alignment.correction;
@@ -496,7 +504,7 @@ export function useExposureRun() {
             throw new Error(t("processing.advanced.offsetError"));
         }
         if (cancelled.current) break;
-        if (reference && milling && registerMilling) dispatch(millingProgressUpdated({stage: "exposing", pass}));
+        if (reference) dispatch(millingProgressUpdated({stage: "exposing", pass}));
         const queues = round.map(run => ({run, requests: (cellRanges
           ? exposureSegments({...run.request.lattice!, passes: 1})
           : [{...run.request.lattice!, passes: 1}])[Symbol.iterator]()}));

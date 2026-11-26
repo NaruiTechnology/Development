@@ -60,7 +60,10 @@ export const resetCustomPatternMatch = () => {
 };
 export const useCustomPatternMatchState = () => useSyncExternalStore(subscribeMatch, () => matchState, () => matchState);
 
-export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailable = false, defaultWedges }: { onSelect?: (pattern: CustomPattern) => void; onResetPatternCards?: () => void; imageAvailable?: boolean; defaultWedges?: ReactNode }) {
+export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailable = false, defaultWedges, registrationPanel }: {
+  onSelect?: (pattern: CustomPattern) => void; onResetPatternCards?: () => void;
+  imageAvailable?: boolean; defaultWedges?: ReactNode; registrationPanel?: ReactNode;
+}) {
   const { t } = useTranslation();
   const tr = (key: string, fallback: string) => { const text = t(key as TranslationKey); return text === key ? fallback : text; };
   const [collapsed, setCollapsed] = useState(false);
@@ -243,6 +246,7 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
           </div>
         </div>
       </div>
+      {registrationPanel}
       <section className="custom-pattern-tiles-section" aria-busy={loading}>
         <button type="button" className="custom-pattern-tiles-toggle" aria-expanded={!tilesCollapsed}
           onClick={() => setTilesCollapsed(value => !value)}>

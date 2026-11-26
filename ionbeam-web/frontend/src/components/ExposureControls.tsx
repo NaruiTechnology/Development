@@ -3,7 +3,8 @@ import { useTranslation } from "../i18n";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useExposureRun } from "../hooks/useExposureRun";
 import { useOtherWorkspaceBusy } from "../hooks/useScanWorkspace";
-import { exposureBusy, setMillingChangeThresholdPercent, setExposureMode, setExposureParallel, setExposureViewZoom, setExposureViewPauseSeconds, setExposurePauseAfterView } from "../store/exposureSlice";
+import { exposureBusy, setMillingChangeThresholdPercent, setMillingRegistrationResolution, setMillingDriftLimitUm,
+  setExposureMode, setExposureParallel, setExposureViewZoom, setExposureViewPauseSeconds, setExposurePauseAfterView } from "../store/exposureSlice";
 import { applyMillingPassDefaults } from "../store/processingSlice";
 import { NumberStepperInput } from "./NumberStepperField";
 import { MAX_SCAN_ZOOM } from "../lib/scanRegions";
@@ -24,8 +25,56 @@ export function ExposureReviewPauseToggle() {
   </button>;
 }
 
-export function ExposureControls({disabled = false, showView = true, advanced = false}: {
-  disabled?: boolean; showView?: boolean; advanced?: boolean;
+function useExposureScanLocks() {
+  const scanBusy = useAppSelector(s => ["running", "stopping"].includes(s.scan.phase) || s.scan.streamRestarting || s.scan.infiniteActive || s.scan.roiTargetGrayRun.status === "running");
+  const otherBusy = useOtherWorkspaceBusy();
+  return { scanBusy, otherBusy };
+}
+
+export function MillingRegistrationPanel({ resolutions, resolution, driftLimitInvalid, onDriftLimitInvalidChange }: {
+  resolutions: number[];
+  resolution: number | undefined;
+  driftLimitInvalid: boolean;
+  onDriftLimitInvalidChange: (invalid: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  const dispatch = useAppDispatch();
+  const limit = useAppSelector(s => s.exposure.millingDriftLimitUm);
+  const exposureLocked = useAppSelector(s => exposureBusy(s.exposure.phase) || s.exposure.viewPhase === "queued" || s.exposure.viewPhase === "scanning");
+  const { scanBusy, otherBusy } = useExposureScanLocks();
+  const disabled = exposureLocked || scanBusy || otherBusy;
+  return <div className="milling-registration-panel">
+    <label className="milling-registration-panel__row">
+      <span>{t("processing.advanced.resolution")}</span>
+      <select className="select milling-registration-panel__resolution"
+        value={resolution ?? ""} disabled={disabled || resolution === undefined}
+        onChange={event => dispatch(setMillingRegistrationResolution(Number(event.target.value)))}>
+        {resolution === undefined && <option value="">{t("processing.advanced.resolutionUnavailableOption")}</option>}
+        {resolutions.map(size => <option key={size} value={size}>{size} × {size}</option>)}
+      </select>
+    </label>
+    <label className="milling-registration-panel__row">
+      <span>{t("processing.advanced.driftLimit")}</span>
+      <NumberStepperInput value={limit} min={0} step={0.1}
+        ariaLabel={t("processing.advanced.driftLimit")} disabled={disabled} invalid={driftLimitInvalid}
+        onValueChange={value => {
+          const limitUm = Number(value);
+          const valid = value.trim() !== "" && Number.isFinite(limitUm) && limitUm >= 0;
+          onDriftLimitInvalidChange(!valid);
+          if (valid) dispatch(setMillingDriftLimitUm(limitUm));
+        }} />
+    </label>
+    {driftLimitInvalid && <p className="scan-inline-error" role="status">{t("processing.advanced.driftLimitInvalid")}</p>}
+  </div>;
+}
+
+export function ExposureControls({disabled = false, showView = true, advancedMilling = false,
+  registrationUnavailable = false, driftLimitInvalid = false}: {
+  disabled?: boolean;
+  showView?: boolean;
+  advancedMilling?: boolean;
+  registrationUnavailable?: boolean;
+  driftLimitInvalid?: boolean;
 }) {
   const {t} = useTranslation(), dispatch = useAppDispatch();
   const {state, start, stop, view, resume} = useExposureRun();
@@ -38,12 +87,12 @@ export function ExposureControls({disabled = false, showView = true, advanced = 
   const tabId = useId();
   const defaultsReady = useAppSelector(s => Boolean(s.status.defaults));
   const patterns = useAppSelector(s => s.processing);
-  const scanBusy = useAppSelector(s => ["running", "stopping"].includes(s.scan.phase) || s.scan.streamRestarting || s.scan.infiniteActive || s.scan.roiTargetGrayRun.status === "running");
+  const { scanBusy, otherBusy } = useExposureScanLocks();
   const viewBusy = state.viewPhase === "queued" || state.viewPhase === "scanning";
-  const otherBusy = useOtherWorkspaceBusy(), busy = exposureBusy(state.phase) || viewBusy;
+  const busy = exposureBusy(state.phase) || viewBusy;
   const enabled = patterns.specs.filter(spec => (tab !== "milling" || spec.key === patterns.activeKey) && patterns.instances[spec.key]?.enabled && patterns.instances[spec.key]?.roi);
   const serialRequired = tab === "auto" && state.parallel && enabled.some(spec => spec.model === "CleaningLineModel");
-  const startDisabled = disabled || !defaultsReady || busy || scanBusy || otherBusy || patterns.status !== "ready" || !patterns.lensLookup || !enabled.length || serialRequired;
+  const startDisabled = disabled || !defaultsReady || registrationUnavailable || driftLimitInvalid || busy || scanBusy || otherBusy || patterns.status !== "ready" || !patterns.lensLookup || !enabled.length || serialRequired;
   return <div className="patterns-exposure" role="group" aria-label={t("processing.exposure.card")}>
       <div className="patterns-exposure__tabs" role="tablist" aria-label={t("processing.exposure.card")}>
         {(["milling", "auto"] as const).map(name => <button type="button" role="tab" key={name}
@@ -82,8 +131,10 @@ export function ExposureControls({disabled = false, showView = true, advanced = 
             ? <button type="button" className="btn btn--primary" disabled={viewBusy} title={t("processing.exposure.resumeHelp")}
                 onClick={resume}><Icon name="play" tone="success" />{t("processing.exposure.resume")}</button>
             : <button type="button" className="btn btn--primary" disabled={startDisabled}
-                title={serialRequired ? t("processing.exposure.serialRequired") : t("processing.exposure.startHelp")}
-                onClick={() => void start({registerMilling: advanced && tab === "milling"})}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>}
+                title={serialRequired ? t("processing.exposure.serialRequired") : registrationUnavailable
+                  ? t("processing.advanced.serviceError") : driftLimitInvalid
+                    ? t("processing.advanced.driftLimitInvalid") : t("processing.exposure.startHelp")}
+                onClick={() => void start({registerMilling: advancedMilling})}><Icon name="play" tone="success" />{t("processing.exposure.start")}</button>}
         </div>
         {tab === "milling" && <div className="patterns-exposure__view-row patterns-exposure__change-row">
           <div className="patterns-exposure__pause">

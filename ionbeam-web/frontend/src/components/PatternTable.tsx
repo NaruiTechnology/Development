@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { CustomPatternsCard } from "./CustomPatternsCard";
+import { useAppSelector } from "../store";
 import { HelpPopover } from "./HelpPopover";
 import { useTranslation, type TranslationKey } from "../i18n";
 
@@ -31,6 +32,7 @@ export function PatternTableTabs() {
   const { tr } = useTr();
   const { t } = useTranslation();
   const tab = usePatternTableTab();
+  const limit = useAppSelector(state => state.exposure.millingDriftLimitUm);
   const label = (name: PatternTableTab) => name === "default" ? tr("processing.table.default", "Default") : tr("processing.table.custom", "Advanced");
   return <div className="pattern-table__tabs" role="tablist" aria-label={tr("processing.table.aria", "Pattern table")}>
     {TABS.map((name, i) => <div key={name} className="pattern-table__tab" role="presentation">
@@ -48,17 +50,22 @@ export function PatternTableTabs() {
           event.currentTarget.closest('[role="tablist"]')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
         }}>{label(name)}</button>
       {name === "custom" && <HelpPopover title={t("processing.advanced.helpTitle")} ariaLabel={t("processing.advanced.helpTitle")}>
-        <ul>
-          <li>{t("processing.advanced.helpSize")}</li>
+        <ol>
+          <li>{t("processing.advanced.helpSize", {limit})}</li>
+          <li>{t("processing.advanced.helpResolution")}</li>
           <li>{t("processing.advanced.helpReference")}</li>
-          <li>{t("processing.advanced.helpCorrection")}</li>
+          <li>{t("processing.advanced.helpCapture")}</li>
           <li>{t("processing.advanced.helpRetry")}</li>
-        </ul>
+          <li>{t("processing.advanced.helpCorrection", {limit})}</li>
+        </ol>
       </HelpPopover>}
     </div>)}
   </div>;
 }
 
-export function PatternTableCustom({ imageAvailable = false, defaultWedges, onResetPatternCards }: { imageAvailable?: boolean; defaultWedges?: ReactNode; onResetPatternCards?: () => void }) {
-  return <CustomPatternsCard imageAvailable={imageAvailable} defaultWedges={defaultWedges} onResetPatternCards={onResetPatternCards} />;
+export function PatternTableCustom({ imageAvailable = false, defaultWedges, registrationPanel, onResetPatternCards }: {
+  imageAvailable?: boolean; defaultWedges?: ReactNode; registrationPanel?: ReactNode; onResetPatternCards?: () => void;
+}) {
+  return <CustomPatternsCard imageAvailable={imageAvailable} defaultWedges={defaultWedges}
+    registrationPanel={registrationPanel} onResetPatternCards={onResetPatternCards} />;
 }

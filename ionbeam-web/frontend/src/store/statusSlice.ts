@@ -57,7 +57,7 @@ export const fetchDefaults = createAsyncThunk<ServerDefaults>(
     let lastError = "";
     for (let attempt = 0; attempt < 8; attempt++) {
       try {
-        const r = await fetch(apiUrl("/api/defaults"));
+        const r = await fetch(apiUrl("/api/defaults"), { cache: "no-store" });
         if (r.ok) return await readJsonResponse<ServerDefaults>(r, "defaults");
         lastError = `defaults: HTTP ${r.status}`;
       } catch (err) {
@@ -70,7 +70,8 @@ export const fetchDefaults = createAsyncThunk<ServerDefaults>(
 );
 
 export const fetchDefaultsMetadata = createAsyncThunk<
-  Pick<ServerDefaults, "is_production" | "simulation" | "version">
+  Pick<ServerDefaults, "is_production" | "simulation" | "version" |
+    "milling_drift_registration" | "milling_registration_resolutions">
 >(
   "status/defaultsMetadata",
   async () => {
@@ -81,6 +82,8 @@ export const fetchDefaultsMetadata = createAsyncThunk<
       is_production: defaults.is_production,
       simulation: defaults.simulation,
       version: defaults.version,
+      milling_drift_registration: defaults.milling_drift_registration,
+      milling_registration_resolutions: defaults.milling_registration_resolutions,
     };
   }
 );
@@ -144,6 +147,8 @@ const slice = createSlice({
         simulation: a.payload.simulation ?? s.defaults?.simulation,
         is_production: a.payload.is_production ?? s.defaults?.is_production,
         version: a.payload.version ?? s.defaults?.version,
+        milling_drift_registration: a.payload.milling_drift_registration,
+        milling_registration_resolutions: a.payload.milling_registration_resolutions,
       };
       saveCachedDefaults(s.defaults);
       s.lastError = null;

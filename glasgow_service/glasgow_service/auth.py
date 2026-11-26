@@ -6,7 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 _bearer = HTTPBearer(auto_error=False)
 
 
-def require_token(cred: HTTPAuthorizationCredentials = Depends(_bearer)):
+async def require_token(cred: HTTPAuthorizationCredentials = Depends(_bearer)):
     expected = os.environ.get("GLASGOW_TOKEN")
     if not expected:
         # Token disabled = open localhost dev mode.

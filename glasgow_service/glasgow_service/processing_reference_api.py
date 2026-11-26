@@ -12,6 +12,8 @@ from .auth import require_token
 
 router = APIRouter(prefix="/processing", tags=["processing"], dependencies=[Depends(require_token)])
 logger = logging.getLogger("GlasgowService")
+# Bound the memory used by concurrent full-field FFTs.
+_milling_match_slot = asyncio.Semaphore(1)
 
 
 class CustomPatternMatchRequest(BaseModel):
@@ -37,12 +39,13 @@ async def match_custom_pattern(body: CustomPatternMatchRequest):
 @router.post("/milling-registration")
 async def milling_registration(body: MillingRegistrationRequest):
     try:
-        match = await run_in_threadpool(register_milling_frames, body)
+        async with _milling_match_slot:
+            match = await asyncio.to_thread(register_milling_frames, body)
     except ValueError as exc:
         logger.warning("[milling-registration] pass=%d status=invalid_request reason=%s", body.pass_index, exc)
         raise HTTPException(422, str(exc)) from exc
-    logger.info("[milling-registration] pass=%d status=%s reason=%s offset=%s correlation=%s threshold_percent=%s retries=%d",
-                body.pass_index, "success" if match.offset is not None else "failure", match.reason,
+    logger.info("[milling-registration] pass=%d resolution=%d status=%s reason=%s offset=%s correlation=%s threshold_percent=%s retries=%d",
+                body.pass_index, body.resolution, "success" if match.offset is not None else "failure", match.reason,
                 match.offset, match.correlation, match.threshold_percent, match.retries)
     return asdict(match)
 

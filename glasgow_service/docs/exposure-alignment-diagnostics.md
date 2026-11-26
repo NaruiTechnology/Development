@@ -89,6 +89,30 @@ the previous diagnostics-only archive for testing the new image-source behavior.
 
 ## Scan-tab resolution
 
+### Advanced Milling drift rasters
+
+The **Drift raster resolution** selector reads the Glasgow service's
+`/defaults` response. The first advertised resolution is the default. Current
+services advertise 512 × 512 and 1024 × 1024. An older service that advertises
+registration without a resolution list supports 512 × 512. If 1024 × 1024 is
+missing, update the Glasgow service and restart it when it is idle. The open
+console refreshes the list on its normal status poll.
+
+Advanced Milling checks the selected resolution with the service before acquiring
+the reference. That resolution is used for the reference, the padded ROI mask,
+and every subsequent drift raster in the run. With the same scan field,
+1024 × 1024 halves the sample spacing, from 32 to 16 DAC codes on each axis.
+It samples four times as many points at the same dwell. This can reveal finer
+detail outside the mask and increases acquisition time and imaging dose.
+
+The **Drift correction limit (µm)** defaults to 2 µm and can be changed before
+starting Advanced Milling. The selected limit sets the padding on each side
+of the pattern ROI and the maximum correction on either physical axis for
+the entire run. The padded ROI must fit inside the scan field and leave enough
+unmasked area to match the reference.
+
+### LiveView display
+
 The LiveView sample buffer uses the selected Scan resolution for the active scan
 type: Raster resolution for Raster, Vector resolution for Vector. It is fixed at
 the start of the milling run, while the exposure lattice still uses beam pitch and

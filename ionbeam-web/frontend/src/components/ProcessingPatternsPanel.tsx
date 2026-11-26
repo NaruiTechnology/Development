@@ -37,7 +37,8 @@ import { VectorScanPathPreview } from "./VectorScanPathPreview";
 import { unitLabel } from "./ROIEditor";
 import { prepareExposureSequence, maxLatticeSpotsPerRequest, MAX_LATTICE_SPOTS_PER_REQUEST } from "../lib/exposureSequence";
 
-import { ExposureControls } from "./ExposureControls";
+import { ExposureControls, MillingRegistrationPanel } from "./ExposureControls";
+import { millingRegistrationOptions, millingRegistrationSelection } from "../lib/millingRegistration";
 import { LoadingSpinner } from "./LoadingSpinner";
 
 const MATERIAL_WORKFLOW = "MaterialLinelCut";
@@ -64,7 +65,8 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
   const { status, error, entryErrors, specs, activeKey } = processing;
   const patternsLoading = visible && (status === "idle" || status === "loading");
   const field = useAppSelector(s => s.scan.roi);
-  const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
+  const defaults = useAppSelector(s => s.status.defaults);
+  const simulation = defaults?.is_production === false;
   const selectedSpotCount = useMemo(() => {
     if (!processing.lensLookup) return null;
     try {
@@ -79,6 +81,17 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
   const exposurePhase = useAppSelector(s => s.exposure.phase);
   const exposureActive = ["preparing", "running", "stopping"].includes(exposurePhase);
   const tableTab = usePatternTableTab();
+  const exposureMode = useAppSelector(s => s.exposure.mode);
+  const preferredResolution = useAppSelector(s => s.exposure.millingRegistrationResolution);
+  const advancedMilling = tableTab === "custom" && exposureMode === "milling";
+  const registrationResolutions = millingRegistrationOptions(defaults);
+  const registrationResolution = millingRegistrationSelection(registrationResolutions, preferredResolution);
+  const [invalidDriftLimit, setInvalidDriftLimit] = useState(false);
+  const driftLimitInvalid = advancedMilling && invalidDriftLimit;
+
+  useEffect(() => {
+    if (!advancedMilling) setInvalidDriftLimit(false);
+  }, [advancedMilling]);
 
   useEffect(() => {
     if (visible && status === "idle") void dispatch(fetchProcessingPatterns());
@@ -99,11 +112,17 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
               ariaLabel={t("processing.exposure.status.current")} />}
           </span>
         </div>
-        <ExposureControls advanced={tableTab === "custom"} disabled={patternsLoading || exposureDisabled || countValidationFailed} />
+        <ExposureControls advancedMilling={advancedMilling}
+          registrationUnavailable={advancedMilling && registrationResolution === undefined}
+          driftLimitInvalid={driftLimitInvalid}
+          disabled={patternsLoading || exposureDisabled || countValidationFailed} />
         {patternsLoading && <LoadingSpinner label={t("processing.loading")} />}
         <PatternTableTabs />
         {tableTab === "custom" && <PatternTableCustom imageAvailable={imageAvailable}
           onResetPatternCards={() => dispatch(selectPattern(null))}
+          registrationPanel={advancedMilling && <MillingRegistrationPanel resolutions={registrationResolutions}
+            resolution={registrationResolution} driftLimitInvalid={driftLimitInvalid}
+            onDriftLimitInvalidChange={setInvalidDriftLimit} />}
           defaultWedges={<DefaultPatternWedges specs={specs} instances={processing.instances} activeKey={activeKey}
             disabled={patternsLoading || disabled} imageAvailable={imageAvailable}
             onSelect={key => dispatch(selectPattern(key))} />} />}

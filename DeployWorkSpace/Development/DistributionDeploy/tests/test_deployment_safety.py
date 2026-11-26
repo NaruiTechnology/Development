@@ -336,6 +336,9 @@ class WorkflowContractTests(unittest.TestCase):
             output = root / "out"
             module.copy_source_trees(str(root), str(output), ["Scripts"])
             self.assertEqual((output / "Development/Scripts/manage-local-system.sh").read_text(), "fresh")
+            policy = output / "Development/glasgow_service/deploy/ionbeam-local-services.logrotate.in"
+            policy.parent.mkdir(parents=True)
+            policy.touch()
             module.validate_packaged_local_system_manager(str(output))
 
 

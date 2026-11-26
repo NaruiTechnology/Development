@@ -1,4 +1,5 @@
 import { createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { DEFAULT_MILLING_DRIFT_LIMIT_UM } from "../lib/millingRegistration";
 import { clampScanZoom } from "../lib/scanRegions";
 import type { WorkflowProgress } from "../lib/processingWorkflows";
 import { createPatternRoi, clearPatternRoi, setPatternEnabled, setPatternMaterial, setPatternParameter, setPatternRoi,
@@ -31,6 +32,8 @@ export interface ExposureState {
   parallel: boolean;
   viewPauseSeconds: number;
   millingChangeThresholdPercent: number;
+  millingRegistrationResolution: number | null;
+  millingDriftLimitUm: number;
   pauseAfterView: boolean;
   viewZoom: number;
   phase: ExposurePhase;
@@ -50,7 +53,7 @@ export interface ExposureState {
 }
 const initialState: ExposureState = {
   mode: "milling", millingChangeThresholdPercent: 10, parallel: false, viewPauseSeconds: 5, pauseAfterView: false, viewZoom: 2, phase: "idle", progress: [], retainedPreview: [], activeStepIds: [], error: null, pausedAfterId: null,
-  millingProgress: null, viewPhase: "idle", viewError: null, viewRequestId: 0,
+  millingRegistrationResolution: null, millingDriftLimitUm: DEFAULT_MILLING_DRIFT_LIMIT_UM, millingProgress: null, viewPhase: "idle", viewError: null, viewRequestId: 0,
   viewReceivedSamples: 0, viewReceivedChunks: 0, viewExpectedSamples: 0,
 };
 
@@ -63,6 +66,14 @@ export const selectExposurePreview = createSelector(
 const slice = createSlice({ name: "exposure", initialState, reducers: {
   setMillingChangeThresholdPercent(s, a: PayloadAction<number>) {
     if (Number.isFinite(a.payload)) s.millingChangeThresholdPercent = Math.max(0, Math.min(100, Math.round(a.payload)));
+  },
+  setMillingRegistrationResolution(s, a: PayloadAction<number>) {
+    if (!exposureBusy(s.phase) && Number.isSafeInteger(a.payload) && a.payload > 1)
+      s.millingRegistrationResolution = a.payload;
+  },
+  setMillingDriftLimitUm(s, a: PayloadAction<number>) {
+    if (!exposureBusy(s.phase) && Number.isFinite(a.payload) && a.payload >= 0)
+      s.millingDriftLimitUm = a.payload;
   },
   setExposureMode(s, a: PayloadAction<"auto" | "milling">) { if (!exposureBusy(s.phase)) s.mode = a.payload; },
   setExposureParallel(s, a: PayloadAction<boolean>) { if (!exposureBusy(s.phase)) s.parallel = a.payload; },
@@ -188,7 +199,7 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
     }
   });
 } });
-export const { setMillingChangeThresholdPercent, setExposureMode, setExposureViewZoom, setExposureParallel, setExposureViewPauseSeconds, setExposurePauseAfterView, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
+export const { setMillingChangeThresholdPercent, setMillingRegistrationResolution, setMillingDriftLimitUm, setExposureMode, setExposureViewZoom, setExposureParallel, setExposureViewPauseSeconds, setExposurePauseAfterView, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
   exposureStepCompleted, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
   exposureViewSamplesReceived, requestExposureView,
   exposurePaused, exposureResumed, millingProgressStarted, millingProgressUpdated, millingCorrectionApplied } = slice.actions;

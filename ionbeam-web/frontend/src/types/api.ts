@@ -343,6 +343,7 @@ export interface LastScanMeta {
  */
 export interface ServerDefaults {
   milling_drift_registration?: boolean;
+  milling_registration_resolutions?: number[];
   exposure_cell_ranges?: boolean;
   /** Node proxy keeps one authenticated channel for the whole exposure run. */
   exposure_session_stream?: boolean;

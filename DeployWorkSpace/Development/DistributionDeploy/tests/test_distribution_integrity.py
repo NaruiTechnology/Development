@@ -62,22 +62,43 @@ def make_workspace(base):
         "App.tsx",
         "components/ExposureControls.tsx",
         "components/ExposureLatticeOverlay.tsx",
+        "components/PatternTable.tsx",
         "components/ProcessingPatternsPanel.tsx",
-        "components/StairStepsTable.tsx",
+        "components/StepRecipe.tsx",
         "hooks/useExposureRun.ts",
+        "i18n/locales/en.ts",
+        "i18n/locales/zh-CN.ts",
+        "i18n/locales/zh-TW.ts",
         "lib/exposurePreview.ts",
         "lib/exposureSequence.ts",
         "lib/exposureStream.ts",
+        "lib/millingRegistration.ts",
         "lib/patternExposure.ts",
         "lib/stairRecipe.ts",
         "store/exposureSlice.ts",
+        "store/statusSlice.ts",
         "styles/theme.css",
+        "types/api.ts",
     ):
         source = frontend / rel
         real[str(source)] = DEVELOPMENT / source
     for rel in ("exposureSession.ts", "accountIdentity.ts"):
         source = Path("ionbeam-web/backend/src") / rel
         real[str(source)] = DEVELOPMENT / source
+    for rel in (
+        "GlasgowDataIO/Json/stepReceipes.json",
+        "glasgow_service/glasgow_service/auth.py",
+        "glasgow_service/glasgow_service/milling_registration.py",
+        "glasgow_service/glasgow_service/exposure_lattice_adapter.py",
+        "glasgow_service/glasgow_service/pattern_recipes.py",
+        "IobeamAdmin/Sql/007_pattern_recipes.sql",
+        "IobeamAdmin/Sql/008_pattern_recipe_editing.sql",
+        "IobeamAdmin/Sql/009_pattern_recipe_history.sql",
+        "IobeamAdmin/Sql/010_restore_technology_nodes.sql",
+        "IobeamAdmin/Sql/012_custom_patterns.sql",
+        "Scripts/manage-local-system.sh",
+    ):
+        real[rel] = DEVELOPMENT / rel
     for rel, src in real.items():
         (dev / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dev / rel)
@@ -111,7 +132,6 @@ def make_workspace(base):
         "GlasgowDataIO/IobeamControl/transfer/linkStats.py": "SCAN_PATH = 1\n",
         "glasgow_service/glasgow_service/api.py": "API = 1\n",
         "glasgow_service/glasgow_service/service.py": "SERVICE = 1\n",
-        "Scripts/manage-local-system.sh": "#!/bin/sh\n",
         "Scripts/program-fpga-ram.py": "# programmer\n",
         "ionbeam-web/backend/package.json": '{"name": "backend"}',
         "glasgow_service/glasgow_service/device_lock.py": "LOCK = 1\n",
