@@ -9,10 +9,14 @@ keeps it in memory for the run. Matching masks the ROI bounds expanded by
 calibration. This avoids repeatedly rastering narrow strips at the full frame
 resolution.
 
-For runs with further passes, the first cut requires a reference with
-distinguishable features. Before each subsequent pass, including a new Stair
-Cut step, image registration compares a fresh full-field frame with the initial
-frame. Each match starts at 98% correlation and retries in one percentage point
+Advanced Milling qualifies the initial snapshot against itself before sending
+exposure segments. With further passes, this snapshot is also used for drift
+registration. The unmasked area must contain texture, and its best correlation
+peak must beat every non-local competing shift by at least 0.035.
+This rejects flat or repeating surface patterns that cannot support reliable
+drift measurement. Before each subsequent pass, including a new Stair Cut step,
+image registration compares a fresh full-field frame with the initial frame.
+Each match starts at 98% correlation and retries in one percentage point
 steps down to the 75% milling minimum. Retries reuse the same pair of frames.
 The service logs the pass, match outcome, failure reason, offset, correlation,
 accepted threshold and number of threshold retries to `GlasgowService.log`.

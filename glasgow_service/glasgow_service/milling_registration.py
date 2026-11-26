@@ -15,6 +15,9 @@ ENCODED_LENGTH = 4 * ((FRAME_BYTES + 2) // 3)
 MASK_ENCODED_LENGTH = 4 * ((MASK_BYTES + 2) // 3)
 MATCH_UPPER_PERCENT = 98
 MATCH_LOWER_PERCENT = 75
+# Require a distinct correlation peak before the snapshot qualifies as a
+# reliable registration reference. Qualification compares the frame to itself.
+MIN_UNIQUE_PEAK_MARGIN = 0.035
 
 
 class MillingRegistrationRequest(BaseModel):
@@ -104,7 +107,7 @@ def register_milling_frames(request: MillingRegistrationRequest) -> MillingMatch
         return MillingMatch(None, peak, None, 0, "search_limit")
     competitors = scores.copy()
     competitors[max(0, row - 2):row + 3, max(0, col - 2):col + 3] = -1
-    if peak - float(competitors.max()) < 0.035:
+    if peak - float(competitors.max()) < MIN_UNIQUE_PEAK_MARGIN:
         return MillingMatch(None, peak, None, 0, "ambiguous_peak")
     threshold = next((value for value in range(MATCH_UPPER_PERCENT, MATCH_LOWER_PERCENT - 1, -1)
                       if peak >= value / 100), None)

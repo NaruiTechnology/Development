@@ -222,6 +222,8 @@ export const zhTW: Partial<TranslationTable> = {
   "processing.advanced.noReference": "擴展後的銑削 ROI 未留下可擷取參考影像的區域。",
   "processing.advanced.serviceError": "銑削影像對位服務無法使用。",
   "processing.advanced.matchError": "無法在 2 µm 校正範圍內可靠比對參考影像，銑削已停止。",
+  "processing.advanced.referenceAmbiguous": "參考快照在圖案 ROI 外有重複或難以區分的特徵，銑削尚未開始。請選擇表面細節較明顯的視野。",
+  "processing.advanced.referenceUnqualified": "參考快照在圖案 ROI 外缺少足夠獨特的表面細節，銑削尚未開始。",
   "processing.advanced.offsetError": "校正後的圖案將超出掃描視野，銑削已停止。",
   "processing.advanced.marginError": "量測到的漂移超出 2 µm 校正範圍。",
   "processing.advanced.progressTitle": "進階銑削",

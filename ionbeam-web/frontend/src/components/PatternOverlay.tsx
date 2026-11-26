@@ -26,7 +26,7 @@ import { useTranslation } from "../i18n";
 import { apiUrl } from "../lib/backendUrl";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { readJsonResponse } from "../lib/readJsonResponse";
-import { finishCustomPatternMatch, updateCustomPatternMatchThreshold, useCustomPatternMatchState } from "./CustomPatternsCard";
+import { finishCustomPatternMatch, resetCustomPatternMatch, updateCustomPatternMatchThreshold, useCustomPatternMatchState } from "./CustomPatternsCard";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { undoPatternRoi, createPatternRoi, commitPatternRoiEdit, clearPatternRoi, selectPattern, setPatternEnabled, setPatternRoi } from "../store/processingSlice";
 
@@ -185,7 +185,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         e.preventDefault();
         e.stopPropagation?.();
         if (edit.current || draft.current) cancel();
-        else { setMenu(null); dispatch(undoPatternRoi()); }
+        else { setMenu(null); resetCustomPatternMatch(); dispatch(undoPatternRoi()); }
       }
     }
     window.addEventListener("keydown", onKey);
@@ -236,6 +236,9 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       return;
     }
     if (!active) return;
+    // A previous custom-template recognition overlay must not linger while a
+    // fresh built-in pattern ROI is being drawn.
+    resetCustomPatternMatch();
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -505,7 +508,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       style={{ left: `clamp(0px, ${menu.x / ROI_CANVAS_EDGE * 100}%, calc(100% - 190px))`,
         top: `clamp(0px, ${menu.y / ROI_CANVAS_EDGE * 100}%, calc(100% - 60px))` }}>
       <button type="button" className="canvas-editor__menu-item scan-roi-layer__menu-item" onClick={(e) => {
-        e.stopPropagation(); dispatch(clearPatternRoi(menu.key)); setMenu(null);
+        e.stopPropagation(); resetCustomPatternMatch(); dispatch(clearPatternRoi(menu.key)); setMenu(null);
       }}>{t("scan.roi.remove")}</button>
     </div>}
     </>

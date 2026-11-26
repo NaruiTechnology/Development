@@ -231,6 +231,8 @@ export const en = {
   "processing.advanced.noReference": "The padded milling ROI leaves no area for a reference image.",
   "processing.advanced.serviceError": "The milling image registration service is unavailable.",
   "processing.advanced.matchError": "Milling stopped because the reference image did not provide a reliable match within the 2 µm correction limit.",
+  "processing.advanced.referenceAmbiguous": "Milling did not start because the reference snapshot has repeating or ambiguous features outside the pattern ROI. Choose a field with more distinctive surface detail.",
+  "processing.advanced.referenceUnqualified": "Milling did not start because the reference snapshot lacks enough unique surface detail outside the pattern ROI.",
   "processing.advanced.offsetError": "Milling stopped because the corrected pattern would extend outside the scan field.",
   "processing.advanced.marginError": "Measured drift exceeds the 2 µm correction limit.",
   "processing.advanced.progressTitle": "Advanced Milling",

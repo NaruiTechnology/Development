@@ -214,6 +214,8 @@ export const zhCN: Partial<TranslationTable> = {
   "processing.advanced.noReference": "扩展后的铣削 ROI 未留下可采集参考图像的区域。",
   "processing.advanced.serviceError": "铣削图像配准服务不可用。",
   "processing.advanced.matchError": "无法在 2 µm 校正范围内可靠匹配参考图像，铣削已停止。",
+  "processing.advanced.referenceAmbiguous": "参考快照在图案 ROI 外存在重复或难以区分的特征，铣削未开始。请选择表面细节更明显的视野。",
+  "processing.advanced.referenceUnqualified": "参考快照在图案 ROI 外缺少足够独特的表面细节，铣削未开始。",
   "processing.advanced.offsetError": "校正后的图案将超出扫描视野，铣削已停止。",
   "processing.advanced.marginError": "测得的漂移超出 2 µm 校正范围。",
   "processing.advanced.progressTitle": "高级铣削",
