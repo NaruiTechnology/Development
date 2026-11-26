@@ -1659,6 +1659,7 @@ export const en = {
   "processing.customPatterns.superUserRequired": "SuperUser or higher access is required to save.",
   "processing.customPatterns.saveConfirm": "Save {name} to the shared custom patterns catalogue?",
   "processing.customPatterns.title": "Custom patterns",
+  "processing.customPatterns.savedPatterns": "Saved patterns",
   "processing.actions": "Actions",
   "processing.hint.rect": "Drag on the image to draw the pattern area.",
   "processing.hint.circle": "Drag from the centre to set the radius; release to finish. Esc or right-click cancels.",

@@ -242,20 +242,11 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
               onChange={event => { setMatchRangeMax(Number(event.target.value)); setProgressUpper(null); }} />
           </div>
         </div>
-        <button type="button" className="btn btn--primary" disabled={!highlighted || !imageAvailable || match.status === "matching" || (match.status === "complete" && match.matches.length > 0 && tilesCollapsed)} onClick={select}
-          title={!imageAvailable ? tr("processing.customPatterns.loadImage", "Load an image on the canvas first.") : undefined}>
-          <Icon name={match.status === "complete" && match.matches.length > 0 ? "check" : match.status === "complete" ? "refresh" : "search"} />
-          {match.status === "complete" && match.matches.length > 0
-            ? tr("processing.customPatterns.selected", "Selected")
-            : match.status === "complete" && match.matches.length === 0
-              ? tr("processing.customPatterns.retry", "Retry")
-              : tr("processing.customPatterns.select", "Select")}
-        </button>
       </div>
-      {(rows.length > 0 || loading || !imageAvailable || (highlighted !== null && highlighted.id < 0)) && <section className="custom-pattern-tiles-section" aria-busy={loading}>
+      <section className="custom-pattern-tiles-section" aria-busy={loading}>
         <button type="button" className="custom-pattern-tiles-toggle" aria-expanded={!tilesCollapsed}
           onClick={() => setTilesCollapsed(value => !value)}>
-          <span>{tr("processing.customPatterns.title", "Custom patterns")}</span><Icon name="chevronDown" />
+          <span>{tr("processing.customPatterns.savedPatterns", "Saved patterns")}</span><Icon name="chevronDown" />
         </button>
         {loading && !tilesCollapsed && <div className="custom-pattern-tiles-loading"><LoadingSpinner label={tr("settings.admin.customPatterns.loading", "Loading custom patterns…")} /></div>}
         {!loading && rows.length > 0 && !tilesCollapsed && <div className="custom-pattern-tiles" role="group" aria-label={title}>
@@ -289,20 +280,30 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
         </button>)}
         {visibleRows.length === 0 && <p className="patterns-card__status">{tr("processing.customPatterns.noSearchResults", "No matching custom patterns.")}</p>}
         </div>}
-        {!tilesCollapsed && (!imageAvailable || (highlighted !== null && highlighted.id < 0)) && <div className="custom-pattern-local-actions">
+        {!tilesCollapsed && <div className="custom-pattern-local-actions">
           <input ref={localFileInputRef} className="custom-pattern-local-actions__input" type="file"
             accept="image/png,image/jpeg,image/webp,image/gif" aria-label={tr("processing.customPatterns.selectFile", "Select custom pattern image")}
             onChange={event => void addLocalPattern(event.target.files?.[0])} />
-          <button type="button" className="btn btn--cancel" onClick={() => localFileInputRef.current?.click()}>
+          <button type="button" className="btn btn--cancel custom-pattern-local-actions__select-image" onClick={() => localFileInputRef.current?.click()}>
             <Icon name="upload" /> {tr("processing.customPatterns.selectFile", "Select")}
           </button>
-          <button type="button" className="btn btn--primary" disabled={!highlighted || highlighted.id >= 0 || currentRole === null || currentRole < ROLE_SUPER_USER || savingPattern}
+          <button type="button" className="btn btn--primary custom-pattern-local-actions__save" disabled={!highlighted || highlighted.id >= 0 || currentRole === null || currentRole < ROLE_SUPER_USER || savingPattern}
             title={currentRole !== null && currentRole < ROLE_SUPER_USER ? tr("processing.customPatterns.superUserRequired", "SuperUser or higher access is required to save.") : undefined}
             onClick={() => void saveLocalPattern()}>
+            <Icon name="save" />
             {savingPattern ? tr("settings.admin.customPatterns.saving", "Saving…") : tr("settings.admin.customPatterns.save", "Save")}
           </button>
+          <button type="button" className="btn btn--primary custom-pattern-local-actions__match" disabled={!highlighted || !imageAvailable || match.status === "matching" || (match.status === "complete" && match.matches.length > 0 && tilesCollapsed)} onClick={select}
+            title={!imageAvailable ? tr("processing.customPatterns.loadImage", "Load an image on the canvas first.") : undefined}>
+            <Icon name={match.status === "complete" && match.matches.length > 0 ? "check" : match.status === "complete" ? "refresh" : "search"} />
+            {match.status === "complete" && match.matches.length > 0
+              ? tr("processing.customPatterns.selected", "Selected")
+              : match.status === "complete" && match.matches.length === 0
+                ? tr("processing.customPatterns.retry", "Retry")
+                : tr("processing.customPatterns.select", "Match")}
+          </button>
         </div>}
-      </section>}
+      </section>
       {match.status === "matching" && <LoadingSpinner label={tr("processing.customPatterns.matching", "Matching on the canvas image…")} />}
       {match.status === "complete" && match.matches.length > 0 && <p className="patterns-card__status" role="status">
         {t("processing.customPatterns.matchCount", { count: match.matches.length })}

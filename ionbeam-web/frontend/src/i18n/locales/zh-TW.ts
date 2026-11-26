@@ -1109,6 +1109,7 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.region.empty": "未配置區域",
   "settings.admin.group.configuration": "設定",
   "settings.admin.group.customPatterns": "自訂圖案",
+  "processing.customPatterns.savedPatterns": "已儲存的圖案",
   "settings.admin.group.equipment": "設備",
   "settings.admin.group.allowedHosts": "允許的主機",
   "settings.admin.subtabs.aria": "管理設定分頁",
