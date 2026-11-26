@@ -2095,6 +2095,13 @@ body {
   line-height: 1;
   white-space: nowrap;
 }
+.roi-calibration-card > .roi-calibration-card__confirm {
+  align-self: flex-end;
+  height: auto;
+  min-height: 0;
+  padding: 7px 14px;
+  line-height: normal;
+}
 
 /* Run validated + Clear, portalled from ScanControls to the bottom of the
    scan parameters card, directly under Validated run options. */

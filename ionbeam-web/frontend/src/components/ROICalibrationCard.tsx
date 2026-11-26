@@ -35,6 +35,7 @@ export function ROICalibrationCard({
   const currentSource = useAppSelector((s) => s.dimensionCalibration.values.source);
   const bounds = viewportBounds(roi, "draft");
 
+  const [confirmed, setConfirmed] = useState(false);
   const [xSpan, setXSpan] = useState((roi.x_end - roi.x_origin) * bounds.width / 640);
   const [ySpan, setYSpan] = useState((roi.y_end - roi.y_origin) * bounds.height / 640);
   useEffect(() => {
@@ -64,6 +65,7 @@ export function ROICalibrationCard({
     dispatch(saveDimensionCalibration(values));
     dispatch(setScanGeometry(null));
     dispatch(applyPersistedDimensionCalibration(values));
+    setConfirmed(true);
     dispatch(updateROI({ imageBounds: null }));
     const equipmentId = selectedEquipmentId();
     if (equipmentId !== null) void saveDimensionCalibrationRemote(equipmentId, values);
@@ -93,7 +95,7 @@ export function ROICalibrationCard({
           value={xSpan}
           disabled={disabled}
           validate={(next) => next > 0 ? null : "Enter a positive texture length."}
-          onCommit={setXSpan}
+          onCommit={(value) => { setXSpan(value); setConfirmed(false); }}
         />
       </div>
       <div className="field-row">
@@ -103,7 +105,7 @@ export function ROICalibrationCard({
           value={ySpan}
           disabled={disabled}
           validate={(next) => next > 0 ? null : "Enter a positive texture length."}
-          onCommit={setYSpan}
+          onCommit={(value) => { setYSpan(value); setConfirmed(false); }}
         />
       </div>
       <div className="roi-calibration-card__meta">
@@ -113,10 +115,12 @@ export function ROICalibrationCard({
       </div>
       {validation && <div className="field-warning">{validation}</div>}
       <button
-        className={`btn ${canConfirm ? "btn--gold" : "btn--primary"}`}
+        type="button"
+        className={`btn roi-calibration-card__confirm${confirmed ? "" : canConfirm ? " btn--gold" : " btn--primary"}`}
         disabled={disabled || !canConfirm}
         onClick={confirmCalibration}
       >
+        <Icon name="check" tone={confirmed ? "success" : "accent"} />
         {t("roi.confirmCalibration")}
       </button>
     </div>
