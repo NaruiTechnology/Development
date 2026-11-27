@@ -35,6 +35,10 @@ export interface WorkflowProgress {
     lineSpacingUM?: number;
     simulation: boolean;
     receivedSamples?: number;
+    latticeBeamOnS?: number;
+    completedPasses?: number;
+    completedPassExposureMs?: number;
+    currentPassExposureMs?: number;
   };
 }
 

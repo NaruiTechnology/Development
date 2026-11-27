@@ -413,7 +413,8 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
         e.stopPropagation?.();
         if (disabled) return;
         if (draft.current || edit.current) { cancel(); return; }
-        const key = (e.target as Element | undefined)?.closest("[data-pattern-key]")?.getAttribute("data-pattern-key");
+        const key = (e.target as Element | undefined)?.closest("[data-pattern-key]")?.getAttribute("data-pattern-key")
+          ?? (activeKey && instances[activeKey]?.roi ? activeKey : null);
         if (key) {
           dispatch(selectPattern(key));
           if (!instances[key]?.enabled) dispatch(setPatternEnabled({ key, enabled: true }));
@@ -508,7 +509,7 @@ export function PatternOverlay({ disabled, api }: { disabled: boolean; api: Canv
       style={{ left: `clamp(0px, ${menu.x / ROI_CANVAS_EDGE * 100}%, calc(100% - 190px))`,
         top: `clamp(0px, ${menu.y / ROI_CANVAS_EDGE * 100}%, calc(100% - 60px))` }}>
       <button type="button" className="canvas-editor__menu-item scan-roi-layer__menu-item" onClick={(e) => {
-        e.stopPropagation(); resetCustomPatternMatch(); dispatch(clearPatternRoi(menu.key)); setMenu(null);
+        e.stopPropagation(); resetCustomPatternMatch(); dispatch(clearPatternRoi(menu.key)); dispatch(selectPattern(null)); setMenu(null);
       }}>{t("scan.roi.remove")}</button>
     </div>}
     </>

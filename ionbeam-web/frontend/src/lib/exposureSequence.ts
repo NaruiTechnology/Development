@@ -1,4 +1,4 @@
-import { cleaningExposureSteps, preparePatternExposure, simulationExposureSteps, stairExposureSteps } from "./patternExposure.js";
+import { cleaningExposureSteps, latticeBeamOnSeconds, preparePatternExposure, simulationExposureSteps, stairExposureSteps } from "./patternExposure.js";
 import type { ProcessingState } from "../store/processingSlice";
 import type { ROIState } from "../store/scanSlice";
 import type { LatticeRequest, VectorRequest } from "../types/api";
@@ -15,7 +15,7 @@ export function maxLatticeSpotsPerRequest(entries: readonly ExposureEntry[]): nu
   return entries.reduce((max, entry) => Math.max(max, entry.node.total ?? entry.node.spot), 0);
 }
 
-export function prepareExposureSequence(patterns: ProcessingState, field: ROIState, simulation: boolean): ExposureEntry[] {
+export function prepareExposureSequence(patterns: ProcessingState, field: ROIState, simulation: boolean, adcHalfPeriod?: number): ExposureEntry[] {
   if (!patterns.lensLookup) throw new Error("Load the LensLookup reference before exposure.");
   const entries: ExposureEntry[] = [];
   const order = new Map((patterns.roiCreationOrder ?? []).map((key, index) => [key, index]));
@@ -57,7 +57,7 @@ export function prepareExposureSequence(patterns: ProcessingState, field: ROISta
       entries.push({ key: spec.key, node: {
         id: `${spec.key}:${stepId}:exposure`, pattern: `${spec.caption} ${instance.index ?? 1}`, caption: step.caption, action: "Exposure lattice",
         status: "upcoming", threshold: null, spot: p.plan.count, total: p.plan.count,
-        exposure: { shape: step.shape, model: spec.model, parameters: step.parameters, plan: p.plan, dwellUS: Number(step.parameters.dwell),
+        exposure: { shape: step.shape, model: spec.model, parameters: step.parameters, plan: p.plan, latticeBeamOnS: latticeBeamOnSeconds(p.lattice, adcHalfPeriod), dwellUS: Number(step.parameters.dwell),
           beamCurrentPA: p.beamCurrentPA, requestedDepthUM: step.requestedDepthUM, depthBand: step.depthBand,
           material: step.material ?? selectedMaterial, incrementUM: step.incrementUM,
           removalRate: step.removalRate ?? selectedRemovalRate, after: step.after, recipeStepIndex: step.recipeStepIndex,

@@ -12,6 +12,7 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
   const {progress: exposureProgress, phase: exposurePhase} = useAppSelector(s => s.exposure);
   const field = useAppSelector(s => s.scan.roi);
   const simulation = useAppSelector(s => s.status.defaults?.is_production === false);
+  const adcHalfPeriod = useAppSelector(s => Number(s.status.defaults?.adc?.adcHalfPeriod ?? 3));
   const instance = instances[patternKey];
   const stairPresets = (stairReceipes.SMProcess?.nodes.find(n => n.name === instance?.stairRecipeNode)
     ?? stairReceipes.SMProcess?.nodes[0])?.steps;
@@ -33,10 +34,9 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
     const timer = window.setInterval(() => setNow(Date.now()), 100);
     return () => window.clearInterval(timer);
   }, [running]);
-  const elapsed = nodes.reduce((total, node) => total + workflowElapsedMs(node, now), 0);
   const estimateSeconds = useMemo(() => {
     const preparedNodes = exposureProgress.filter(node => node.id.startsWith(`${patternKey}:`) && node.exposure);
-    if (preparedNodes.length) return preparedNodes.reduce((sum, node) => sum + (node.exposure?.plan.beamOnS ?? 0), 0);
+    if (preparedNodes.length && exposurePhase !== "idle" && exposurePhase !== "preparing") return preparedNodes.reduce((sum, node) => sum + (node.exposure?.latticeBeamOnS ?? node.exposure?.plan.beamOnS ?? 0), 0);
     const spec = specs.find(item => item.key === patternKey);
     if (!spec || !instance?.roi || !lensLookup) return 0;
     const materialRemovalRates = Object.fromEntries(materials
@@ -44,46 +44,35 @@ export function ProcessingWorkflowPanel({ patternKey }: { patternKey: string }) 
       .map(material => [material.name, material.removalRateUM3PerNC!]));
     try {
       return plannedPatternExposureMetrics(spec, instance.roi, instance.parameters, lensLookup, field,
-        {simulation, stairPresets, stairOverrides: instance.stairSteps, materialRemovalRates,
+        {simulation, adcHalfPeriod, stairPresets, stairOverrides: instance.stairSteps, materialRemovalRates,
           // Same material the run uses: the pattern's own for plain patterns, the first for Stair cut recipes.
           defaultMaterial: spec.model === "StairCutModel" ? materials[0]?.name : instance.material || materials[0]?.name}).beamOnS;
     } catch { return 0; }
-  }, [exposureProgress, patternKey, specs, instance, lensLookup, field, simulation, materials, stairPresets]);
-  const exposureInProgress = ["preparing", "running", "paused", "stopping"].includes(exposurePhase);
+  }, [exposureProgress, exposurePhase, patternKey, specs, instance, lensLookup, field, simulation, adcHalfPeriod, materials, stairPresets]);
   const timeLeftMs = useMemo(() => {
-    if (exposurePhase === "completed") return 0;
+    if (exposurePhase === "completed" || exposurePhase === "stopped" || exposurePhase === "error") return 0;
     const planned = exposureProgress.filter(node => node.id.startsWith(`${patternKey}:`) && node.exposure);
     if (!planned.length || exposurePhase === "idle" || exposurePhase === "preparing") return estimateSeconds * 1000;
-    const completedNodes = planned.filter(node => node.status === "completed");
-    const currentNode = planned.find(node => node.status === "current");
-    const futureNodes = planned.filter(node => node.status === "upcoming");
-    const completedActualMs = completedNodes.reduce((sum, node) => sum + workflowElapsedMs(node, now), 0);
-    const completedPlannedMs = completedNodes.reduce((sum, node) => sum + (node.exposure?.plan.beamOnS ?? 0) * 1000, 0);
-    let scale = completedPlannedMs > 0 ? completedActualMs / completedPlannedMs : 1;
-    let currentRemainingMs = 0;
-    if (currentNode?.exposure) {
-      const currentElapsedMs = workflowElapsedMs(currentNode, now);
-      const plan = currentNode.exposure.plan;
-      const expectedSamples = plan.count * plan.passes;
-      const fraction = expectedSamples > 0 && currentNode.exposure.receivedSamples
-        ? Math.min(0.98, currentNode.exposure.receivedSamples / expectedSamples) : 0;
-      const currentPlanMs = plan.beamOnS * 1000;
-      const observedCurrentTotalMs = fraction >= 0.1 ? currentElapsedMs / fraction : currentPlanMs * scale;
-      if (fraction >= 0.1 && currentPlanMs > 0) scale = Math.max(scale, observedCurrentTotalMs / currentPlanMs);
-      currentRemainingMs = Math.max(0, observedCurrentTotalMs - currentElapsedMs);
-      if (exposureInProgress) currentRemainingMs = Math.max(1000, currentRemainingMs);
-    }
-    const futureMs = futureNodes.reduce((sum, node) => sum + (node.exposure?.plan.beamOnS ?? 0) * 1000 * scale, 0);
-    return currentRemainingMs + futureMs;
-  }, [exposurePhase, exposureProgress, patternKey, estimateSeconds, now, exposureInProgress]);
+    return planned.reduce((remaining, node) => {
+      if (node.status !== "current" && node.status !== "upcoming") return remaining;
+      const exposure = node.exposure!;
+      const completedPasses = exposure.completedPasses ?? 0;
+      const plannedPassMs = (exposure.latticeBeamOnS ?? exposure.plan.beamOnS) * 1000 / exposure.plan.passes;
+      const passMs = completedPasses > 0
+        ? (exposure.completedPassExposureMs ?? 0) / completedPasses
+        : plannedPassMs;
+      const pendingPasses = Math.max(0, exposure.plan.passes - completedPasses);
+      const currentPassMs = Math.min(passMs, exposure.currentPassExposureMs ?? 0);
+      return remaining + Math.max(0, pendingPasses * passMs - currentPassMs);
+    }, 0);
+  }, [exposurePhase, exposureProgress, patternKey, estimateSeconds]);
   const completed = nodes.filter(n => n.status === "completed").length;
   const currentNode = nodes.find(node => node.status === "current");
   const passLabel = (node: WorkflowProgress) => {
     const plan = node.exposure?.plan;
     if (!plan || node.status === "upcoming") return null;
     const pass = node.status === "completed" ? plan.passes
-      : Math.min(plan.passes, Math.max(1,
-        Math.ceil((node.exposure?.receivedSamples ?? 0) / Math.max(1, plan.count))));
+      : Math.min(plan.passes, (node.exposure?.completedPasses ?? 0) + 1);
     return t("processing.workflow.pass", { current: pass, total: plan.passes });
   };
   const currentNodeRef = useRef<HTMLLIElement | null>(null);

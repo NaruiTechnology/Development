@@ -141,6 +141,17 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
     const n = s.progress.find(n => n.id === a.payload.id);
     if (n?.exposure) n.exposure.receivedSamples = (n.exposure.receivedSamples ?? 0) + a.payload.count;
   },
+  exposureSegmentTimed(s, a: PayloadAction<{ id: string; elapsedMs: number }>) {
+    const exposure = s.progress.find(node => node.id === a.payload.id)?.exposure;
+    if (exposure) exposure.currentPassExposureMs = (exposure.currentPassExposureMs ?? 0) + a.payload.elapsedMs;
+  },
+  exposurePassCompleted(s, a: PayloadAction<string>) {
+    const exposure = s.progress.find(node => node.id === a.payload)?.exposure;
+    if (!exposure) return;
+    exposure.completedPasses = (exposure.completedPasses ?? 0) + 1;
+    exposure.completedPassExposureMs = (exposure.completedPassExposureMs ?? 0) + (exposure.currentPassExposureMs ?? 0);
+    exposure.currentPassExposureMs = 0;
+  },
   exposureStepCompleted: {
     prepare(id: string) { return { payload: {id, at: Date.now()} }; },
     reducer(s, a: PayloadAction<{id: string; at: number}>) {
@@ -199,7 +210,7 @@ const slice = createSlice({ name: "exposure", initialState, reducers: {
     }
   });
 } });
-export const { setMillingChangeThresholdPercent, setMillingRegistrationResolution, setMillingDriftLimitUm, setExposureMode, setExposureViewZoom, setExposureParallel, setExposureViewPauseSeconds, setExposurePauseAfterView, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived,
+export const { setMillingChangeThresholdPercent, setMillingRegistrationResolution, setMillingDriftLimitUm, setExposureMode, setExposureViewZoom, setExposureParallel, setExposureViewPauseSeconds, setExposurePauseAfterView, exposurePreparing, exposurePrepared, exposureStepStarted, exposureSamplesReceived, exposureSegmentTimed, exposurePassCompleted,
   exposureStepCompleted, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
   exposureViewSamplesReceived, requestExposureView,
   exposurePaused, exposureResumed, millingProgressStarted, millingProgressUpdated, millingCorrectionApplied } = slice.actions;

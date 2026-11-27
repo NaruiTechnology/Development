@@ -8441,7 +8441,11 @@ body {
 
 .pattern-roi-chip { position: static; transform: none; text-align: center; font-size: 8px; padding: 2px 5px; opacity: 0.6; }
 
-.pattern-roi-menu { max-width: calc(100% - 12px); }
+.pattern-roi-menu {
+  /* Keep the menu clickable above the pattern overlay and milling live view. */
+  z-index: 26;
+  max-width: calc(100% - 12px);
+}
 
 .pattern-card[aria-disabled="true"] > .pattern-card__body { opacity: 0.5; }
 

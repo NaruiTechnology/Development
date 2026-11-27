@@ -120,6 +120,7 @@ export function ProcessingPatternsPanel({ disabled, exposureDisabled = disabled,
         <PatternTableTabs />
         {tableTab === "custom" && <PatternTableCustom imageAvailable={imageAvailable}
           onResetPatternCards={() => dispatch(selectPattern(null))}
+          hasCanvasRoi={Boolean(activeKey && processing.instances[activeKey]?.roi)}
           registrationPanel={advancedMilling && <MillingRegistrationPanel resolutions={registrationResolutions}
             resolution={registrationResolution} driftLimitInvalid={driftLimitInvalid}
             onDriftLimitInvalidChange={setInvalidDriftLimit} />}

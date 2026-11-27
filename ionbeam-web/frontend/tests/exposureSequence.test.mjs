@@ -1,6 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { exposureRounds, exposureRuns, exposureSegments } from "../.test-dist/lib/exposureSequence.js";
+import { latticeBeamOnSeconds } from "../.test-dist/lib/patternExposure.js";
+
+test("exposure timing follows DAC lattice pitch, passes, and encoded dwell", () => {
+  const lattice = {
+    shape: {kind: "ellipse", cx: 500, cy: 500, rx: 200, ry: 200},
+    pitch_x: 4, pitch_y: 1, dwell: 7, passes: 20,
+  };
+  const expectedCells = Math.round(Math.PI * 200 * 200 / 4);
+  assert.ok(Math.abs(latticeBeamOnSeconds(lattice) - expectedCells * 20e-6) < 1e-9);
+  assert.equal(latticeBeamOnSeconds(lattice, 6), 2 * latticeBeamOnSeconds(lattice));
+});
+
 const entry=(key,id,passes,model="StairCutModel")=>({key,node:{id,exposure:{model}},request:{pattern:"lattice",lattice:{passes}}});
 test("serial finishes every pass of a step before advancing",()=>{
  const a=entry("A","A0",2),b=entry("B","B0",3);

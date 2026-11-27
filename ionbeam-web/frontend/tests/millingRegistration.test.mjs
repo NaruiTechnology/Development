@@ -137,7 +137,7 @@ test("Advanced Milling qualifies one masked reference and gates each later pass 
     assert.deepEqual(selector.findAllByType("option").map(option => option.props.value), [512]);
     const start = renderer.root.findAllByType("button").find(button => button.children.includes("Start"));
     const driftLimit = renderer.root.findAllByType("input")
-      .find(input => input.props["aria-label"] === "Drift correction limit (µm)");
+      .find(input => input.props["aria-label"] === "Drift buffer limit (µm)");
     assert.equal(driftLimit.props.value, "2");
     await act(async () => driftLimit.props.onChange({target: {value: ""}}));
     assert.equal(start.props.disabled, true);
@@ -203,6 +203,10 @@ test("Advanced Milling qualifies one masked reference and gates each later pass 
     await act(async () => driftLimit.props.onChange({target: {value: "3.5"}}));
     await run();
     assert.equal(store.getState().exposure.phase, "completed", store.getState().exposure.error);
+    const [finishedStep] = store.getState().exposure.progress;
+    assert.equal(finishedStep.exposure.completedPasses, 4);
+    assert.ok(finishedStep.exposure.completedPassExposureMs > 0);
+    assert.equal(finishedStep.exposure.currentPassExposureMs, 0);
     assert.equal(events.filter(event => event.kind === "raster").length, 4, "no raster after the last pass");
     assert.ok(events.filter(event => event.kind === "raster").every(event => event.request.resolution === 1024));
     for (const {request} of events.filter(event => event.kind === "match")) {

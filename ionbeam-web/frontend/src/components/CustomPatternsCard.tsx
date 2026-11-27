@@ -60,14 +60,14 @@ export const resetCustomPatternMatch = () => {
 };
 export const useCustomPatternMatchState = () => useSyncExternalStore(subscribeMatch, () => matchState, () => matchState);
 
-export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailable = false, defaultWedges, registrationPanel }: {
+export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailable = false, defaultWedges, registrationPanel, hasCanvasRoi = false }: {
   onSelect?: (pattern: CustomPattern) => void; onResetPatternCards?: () => void;
-  imageAvailable?: boolean; defaultWedges?: ReactNode; registrationPanel?: ReactNode;
+  imageAvailable?: boolean; defaultWedges?: ReactNode; registrationPanel?: ReactNode; hasCanvasRoi?: boolean;
 }) {
   const { t } = useTranslation();
   const tr = (key: string, fallback: string) => { const text = t(key as TranslationKey); return text === key ? fallback : text; };
   const [collapsed, setCollapsed] = useState(false);
-  const [tilesCollapsed, setTilesCollapsed] = useState(false);
+  const [tilesCollapsed, setTilesCollapsed] = useState(hasCanvasRoi);
   const [rows, setRows] = useState<CustomPattern[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +81,9 @@ export function CustomPatternsCard({ onSelect, onResetPatternCards, imageAvailab
   const localFileInputRef = useRef<HTMLInputElement | null>(null);
   const confirmedPattern = useConfirmedCustomPattern();
   const match = useCustomPatternMatchState();
+  useEffect(() => {
+    if (hasCanvasRoi) setTilesCollapsed(true);
+  }, [hasCanvasRoi]);
   const title = tr("processing.customPatterns.title", "Custom patterns");
   const shownUpper = progressUpper ?? matchRangeMax;
   const rangeAccuracyClick = (event: MouseEvent<HTMLDivElement>) => {

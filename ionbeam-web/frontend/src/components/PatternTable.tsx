@@ -63,9 +63,10 @@ export function PatternTableTabs() {
   </div>;
 }
 
-export function PatternTableCustom({ imageAvailable = false, defaultWedges, registrationPanel, onResetPatternCards }: {
-  imageAvailable?: boolean; defaultWedges?: ReactNode; registrationPanel?: ReactNode; onResetPatternCards?: () => void;
+export function PatternTableCustom({ imageAvailable = false, defaultWedges, registrationPanel, onResetPatternCards, hasCanvasRoi }: {
+  imageAvailable?: boolean; defaultWedges?: ReactNode; registrationPanel?: ReactNode;
+  onResetPatternCards?: () => void; hasCanvasRoi: boolean;
 }) {
   return <CustomPatternsCard imageAvailable={imageAvailable} defaultWedges={defaultWedges}
-    registrationPanel={registrationPanel} onResetPatternCards={onResetPatternCards} />;
+    registrationPanel={registrationPanel} onResetPatternCards={onResetPatternCards} hasCanvasRoi={hasCanvasRoi} />;
 }

@@ -1,3 +1,5 @@
+import { millingDacBounds } from "./millingLiveView.js";
+import { estimateRevC3ScanTiming } from "./scanTiming.js";
 import type { StairRecipeDefaults } from "./stairRecipe.js";
 import { buildLatticeRequest, linearDacMap, type DacMap } from "./latticeRequest.js";
 import { lookupSpotSize, type LensLookup } from "./lensLookup.js";
@@ -59,6 +61,26 @@ export function preparePatternExposure(spec: PatternSpec, shape: PatternRoi, par
   const lattice = buildLatticeRequest(shape, plan, Math.max(0, Math.min(65535, Math.ceil(dwellUS / 0.125) - 1)), map,
     { widthUM, heightUM }, axis, spec.model === "OpenBoxModel" ? Number(parameters.lineWidth ?? 0) : undefined);
   return { plan, lattice, beamVoltageKV, beamCurrentPA, spotSizeNM: spot.spotSizeNM };
+}
+
+/** Estimate conversion time from the submitted DAC grid before dwell merging. */
+export function latticeBeamOnSeconds(lattice: LatticeRequest, adcHalfPeriod?: number): number {
+  const bounds = millingDacBounds(lattice);
+  const width = bounds.x_end - bounds.x_start;
+  const height = bounds.y_end - bounds.y_start;
+  if (width <= 0 || height <= 0) return 0;
+  const columns = Math.max(1, Math.round(width / lattice.pitch_x));
+  const rows = Math.max(1, Math.round(height / (lattice.pitch_y ?? lattice.pitch_x)));
+  const area = (points: [number, number][]) => Math.abs(points.reduce((sum, [x, y], index) => {
+    const [nextX, nextY] = points[(index + 1) % points.length];
+    return sum + x * nextY - y * nextX;
+  }, 0)) / 2;
+  const shape = lattice.shape;
+  const filledArea = shape.kind === "rect" ? width * height
+    : shape.kind === "ellipse" ? Math.PI * (shape.rx * shape.ry - (shape.inner_rx ?? 0) * (shape.inner_ry ?? 0))
+    : shape.kind === "frame" ? area(shape.outer) - area(shape.inner) : area(shape.points);
+  const cells = Math.round(columns * rows * Math.min(1, Math.max(0, filledArea / (width * height))));
+  return cells * lattice.passes * estimateRevC3ScanTiming(1, lattice.dwell, adcHalfPeriod).frameSeconds;
 }
 
 export interface PatternExposureStep {
@@ -147,7 +169,7 @@ export function simulationExposureSteps(spec: PatternSpec, shape: PatternRoi, pa
 export function plannedPatternExposureMetrics(spec: PatternSpec, shape: PatternRoi, parameters: PatternParameters,
   lookup: LensLookup, fov: Pick<ROIState, "x_origin" | "x_end" | "y_origin" | "y_end" | "scanGeometry">,
   options: {stairPresets?: ReadonlyArray<StairRecipeDefaults>; simulation?: boolean; stairOverrides?: ReadonlyArray<StairStepOverride | null | undefined>; defaultMaterial?: string;
-    materialRemovalRates?: Readonly<Record<string, number>>} = {}):
+    materialRemovalRates?: Readonly<Record<string, number>>; adcHalfPeriod?: number} = {}):
   {spotCount: number; spotCountExact: boolean; beamOnS: number; passes: number} {
   const stair = spec.model === "StairCutModel", cleaning = spec.model === "CleaningLineModel";
   const selectedSr = options.defaultMaterial ? options.materialRemovalRates?.[options.defaultMaterial] : undefined;
@@ -158,10 +180,10 @@ export function plannedPatternExposureMetrics(spec: PatternSpec, shape: PatternR
     : options.simulation ? simulationExposureSteps(spec, shape, plannedParameters, base!.plan.spacingUM)
     : [{shape, parameters: plannedParameters}];
   return steps.reduce<{spotCount: number; spotCountExact: boolean; beamOnS: number; passes: number}>((total, step) => {
-    const plan = stair || cleaning || options.simulation
-      ? preparePatternExposure(spec, step.shape, step.parameters, lookup, fov).plan
-      : base!.plan;
+    const {plan, lattice} = stair || cleaning || options.simulation
+      ? preparePatternExposure(spec, step.shape, step.parameters, lookup, fov)
+      : base!;
     return {spotCount: total.spotCount + plan.count, spotCountExact: total.spotCountExact && plan.countExact,
-      beamOnS: total.beamOnS + plan.beamOnS, passes: total.passes + plan.passes};
+      beamOnS: total.beamOnS + latticeBeamOnSeconds(lattice, options.adcHalfPeriod), passes: total.passes + plan.passes};
   }, {spotCount: 0, spotCountExact: true, beamOnS: 0, passes: 0});
 }

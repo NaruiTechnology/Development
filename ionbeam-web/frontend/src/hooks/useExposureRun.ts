@@ -11,7 +11,7 @@ import { ExposureStream, exposureJson } from "../lib/exposureStream";
 import { prepareExposureSequence, exposureRounds, exposureSegments, maxLatticeSpotsPerRequest, MAX_LATTICE_SPOTS_PER_REQUEST } from "../lib/exposureSequence";
 import { selectPattern } from "../store/processingSlice";
 import { exposurePreparing, exposurePrepared, exposureStepStarted, exposureStepCompleted,
-  exposureSamplesReceived, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
+  exposureSamplesReceived, exposureSegmentTimed, exposurePassCompleted, exposureStepSkipped, exposureStopping, exposureFinished, exposureViewChanged, exposureViewExpectedSamples,
   exposureViewSamplesReceived, exposurePaused, exposureResumed, millingProgressStarted, millingProgressUpdated, millingCorrectionApplied,
   type MillingProgress } from "../store/exposureSlice";
 import type { LatticeRequest, RasterRequest, VectorRequest } from "../types/api";
@@ -369,7 +369,8 @@ export function useExposureRun() {
         }
       }
       const patterns = {...snapshot.processing, instances: Object.fromEntries(Object.entries(snapshot.processing.instances).map(([key,instance]) => [key,{...instance,enabled:key===selected && instance.enabled && instance.roi!==null}]))};
-      const plannedEntries = prepareExposureSequence(patterns, snapshot.scan.roi, snapshot.status.defaults?.is_production === false);
+      const plannedEntries = prepareExposureSequence(patterns, snapshot.scan.roi, snapshot.status.defaults.is_production === false,
+        Number(snapshot.status.defaults.adc?.adcHalfPeriod ?? 3));
       const millingConfig = new Map<string, {geometry: ReturnType<typeof millingPreviewGeometry>; referenceKey:string; aggregate:boolean; lattices:LatticeRequest[]; resolution:number}>();
       if (milling) {
         const field={x:snapshot.scan.roi.x_origin,xEnd:snapshot.scan.roi.x_end,y:snapshot.scan.roi.y_origin,yEnd:snapshot.scan.roi.y_end,
@@ -535,7 +536,9 @@ export function useExposureRun() {
           }
           const correction = alignment?.correction;
           const lattice = correction ? {...next.value, dac_offset: correction.dac} : next.value;
+          const segmentStarted = performance.now();
           await runRequest({...sourceRequest, lattice, preview: true}, undefined, queue.run.entry.node.id);
+          dispatch(exposureSegmentTimed({id: queue.run.entry.node.id, elapsedMs: performance.now() - segmentStarted}));
           if (alignment && correction && !correction.applied) {
             alignment = {...alignment, correction: {...correction, applied: true}};
             dispatch(millingCorrectionApplied(alignment));
@@ -577,6 +580,9 @@ export function useExposureRun() {
           dispatch(completeMillingPass(run.entry.node.id));
           const history=store.getState().image.millingHistory;
           if(history)void millingHistoryStorage(workspace,history).then(saved=>dispatch(markMillingHistorySaved({referenceKey:history.referenceKey,saved:Boolean(saved)})));
+        }
+        for (const {run} of queues) {
+          if (!skipped.has(run.entry.node.id)) dispatch(exposurePassCompleted(run.entry.node.id));
         }
         const finished = queues.filter(({run}) => run.final && !skipped.has(run.entry.node.id)).map(({run}) => run.entry.node);
         for (const node of finished) dispatch(exposureStepCompleted(node.id));

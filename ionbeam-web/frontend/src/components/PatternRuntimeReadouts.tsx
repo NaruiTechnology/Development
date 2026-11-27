@@ -14,6 +14,7 @@ export function PatternRuntimeReadouts({spec, roi, parameters, stairSteps, defau
   spec: PatternSpec; roi: PatternRoi | null; parameters: PatternParameters;
   stairSteps?: ReadonlyArray<StairStepOverride | null | undefined>; defaultMaterial?: string; simulation: boolean;
 }) {
+  const adcHalfPeriod = useAppSelector(s => Number(s.status.defaults?.adc?.adcHalfPeriod ?? 3));
   const {t} = useTranslation();
   const field = useAppSelector(s => s.scan.roi);
   const lensLookup = useAppSelector(s => s.processing.lensLookup);
@@ -39,12 +40,12 @@ export function PatternRuntimeReadouts({spec, roi, parameters, stairSteps, defau
     if (!roi || !lensLookup) return null;
     try {
       return plannedPatternExposureMetrics(spec, roi, parameters, lensLookup, field as ROIState,
-        {simulation, stairPresets, stairOverrides: stairSteps, defaultMaterial,
+        {simulation, adcHalfPeriod, stairPresets, stairOverrides: stairSteps, defaultMaterial,
           materialRemovalRates: Object.fromEntries(materials
             .filter(material => material.removalRateUM3PerNC !== undefined)
             .map(material => [material.name, material.removalRateUM3PerNC!]))});
     } catch { return null; }
-  }, [spec, roi, parameters, lensLookup, field, simulation, stairSteps, defaultMaterial, materials, stairPresets]);
+  }, [spec, roi, parameters, lensLookup, field, simulation, adcHalfPeriod, stairSteps, defaultMaterial, materials, stairPresets]);
   // Keep a fresh recipe preview on the card as geometry or parameters change; the
   // prepared exposure nodes are a fallback while the recipe's lens data is unavailable.
   const spotCount = plannedExposure?.spotCount ?? (exposureCount
