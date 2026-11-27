@@ -4,6 +4,7 @@ import math
 from .glasgowLib.glasgow.abstract import GlasgowPin
 from .glasgowLib.glasgow.applet import PinArgument
 from .commands.structs import Transforms
+from .smhDeflection import validate_smh_config
 
 
 BEAM_PORTS = tuple(f"{beam}_{role}" for beam in ("ebeam", "ibeam")
@@ -58,6 +59,11 @@ def configure_scan_args(config, action, args):
             seen.add(key)
         setattr(args, name, [PinArgument(port_spec.index(str(p.port)) * 8 + p.number,
                                         invert=p.invert) for p in pins])
+    smh = action.get("smhDeflection")
+    args.allow_external_takeover = True
+    if "smhDeflection" in action:
+        validate_smh_config(smh, (f"{port}{number}" for port, number in seen))
+        args.allow_external_takeover = smh.get("allowExternalTakeover", False)
     if modern:
         args.port_spec = port_spec
     else:
@@ -78,7 +84,13 @@ def configure_scan_args(config, action, args):
     if not math.isfinite(delay) or not 0 <= delay * 48000 < 2**24:
         raise ValueError("external switch delay must fit the 24-bit 48 MHz counter")
     args.ext_switch_delay_cycles = round(delay * 48000)
-    args.beam_pull_high = [pin for name in BEAM_PORTS for pin in (getattr(args, name) or [])]
+    args.beam_pull_low = []
+    args.beam_pull_high = []
+    for name in BEAM_PORTS:
+        # SMH selector requests start deasserted. Blanking remains asserted.
+        pulls = args.beam_pull_low if smh is not None and name.endswith("_enable") \
+            else args.beam_pull_high
+        pulls.extend(getattr(args, name) or [])
     # Fail-safe blanking (glasgow_service/docs/blank-failsafe.md). Both on by default.
     safety = instrument.get("safety", {})
     if safety is None:

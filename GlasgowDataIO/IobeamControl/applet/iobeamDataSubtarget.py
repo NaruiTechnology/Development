@@ -79,6 +79,7 @@ class IobeamDataSubtarget(Elaboratable):
     def __init__(self, *, ports, out_fifo, in_fifo, led=None, control=None,
                  data=None,
                  ext_switch_delay=0, transforms: Transforms = None,
+                 allow_external_takeover=True,
                  benchmark_counters=None, loopback=False, out_only=False,
                  adc_half_period=3, adc_settle_cycles=1,
                  adc_latch_cycles=1,
@@ -100,6 +101,7 @@ class IobeamDataSubtarget(Elaboratable):
         self.control             = control
         self.data                = data
         self.ext_switch_delay    = ext_switch_delay
+        self.allow_external_takeover = allow_external_takeover
         # Fail-safe blanking (glasgow_service/docs/blank-failsafe.md):
         #   blank_when_released: drive "blanked" whenever we do not hold
         #     external control, instead of upstream OBI's "beam on".
@@ -370,10 +372,11 @@ class IobeamDataSubtarget(Elaboratable):
                     for pin in pins:
                         m.d.comb += pin.eq(Value.cast(signal)[0])
 
-        connect_pins("ebeam_scan_enable",  1)
-        connect_pins("ibeam_scan_enable",  executor.ext_ctrl_enable)
-        connect_pins("ebeam_blank_enable", executor.ext_ctrl_enable)
-        connect_pins("ibeam_blank_enable", executor.ext_ctrl_enable)
+        external_enable = executor.ext_ctrl_enable if self.allow_external_takeover else 0
+        connect_pins("ebeam_scan_enable",  int(self.allow_external_takeover))
+        connect_pins("ibeam_scan_enable",  external_enable)
+        connect_pins("ebeam_blank_enable", external_enable)
+        connect_pins("ibeam_blank_enable", external_enable)
 
         # Stall watchdog. While we hold external control the beam is only
         # safe while it moves: if no pixel is issued for stall_blank_cycles
@@ -397,7 +400,7 @@ class IobeamDataSubtarget(Elaboratable):
         # column the instrument's own blank. If that relay path is bypassed
         # (instrument BLANK unplugged, our blank wired straight in), "beam on"
         # parks an unblanked ion beam between scans, so drive "blanked".
-        released_blank = 1 if self.blank_when_released else 0
+        released_blank = int(self.blank_when_released or not self.allow_external_takeover)
 
         # Blank while the relays are moving, in both directions, and from the
         # moment the host commands the hand-back (ext_ctrl_enable low). The
@@ -412,7 +415,7 @@ class IobeamDataSubtarget(Elaboratable):
         else:
             m.d.comb += force_blank.eq(stall_blank)
 
-        with m.If(executor.ext_ctrl_enabled == 0):
+        with m.If((executor.ext_ctrl_enabled == 0) | Const(not self.allow_external_takeover)):
             connect_pins("ebeam_blank", released_blank)
             connect_pins("ibeam_blank", released_blank)
         with m.Elif(executor.beam_type == BeamType.NoBeam):

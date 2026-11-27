@@ -8,6 +8,7 @@ from amaranth.sim import Simulator
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.utils import GetStateConfigByName
 from GlasgowDataIO.IobeamControl.scanConfiguration import configure_scan_args
+from GlasgowDataIO.IobeamControl.smhDeflection import compare_electrodes, electrode_targets
 from GlasgowDataIO.IobeamControl.applet.DataStreamApplet import DataStreamApplet
 from GlasgowDataIO.IobeamControl.applet.busController import BusController
 from GlasgowDataIO.IobeamControl.applet.AdcDataStreamApplet import AdcDataStreamApplet
@@ -55,18 +56,19 @@ class ScanConfigurationTest(unittest.TestCase):
         config = AutomationConfig(str(DEVELOPMENT / "GlasgowDataIO/Json/streamData.json"))
         args = configure_scan_args(config, GetStateConfigByName(config, "streamData")["actionData"],
                                    SimpleNamespace())
-        self.assertEqual(args.port_spec, "AB")
+        self.assertEqual(args.port_spec, "AB" if config.IsProduction else "A")
         # Single ion column: the scan-select relay is the ion role, so it
         # follows external control instead of the constant electron enable.
-        self.assertEqual([pin.number for pin in args.ibeam_scan_enable], [0, 1])
+        self.assertEqual([pin.number for pin in args.ibeam_scan_enable], [0])
         self.assertIsNone(args.ebeam_scan_enable)
         self.assertIsNone(args.ebeam_blank_enable)
         self.assertIsNone(args.ebeam_blank)
-        self.assertEqual([pin.number for pin in args.ibeam_blank_enable], [4, 5])
+        self.assertEqual([pin.number for pin in args.ibeam_blank_enable], [4])
         self.assertEqual([(pin.number, pin.invert) for pin in args.ibeam_blank], [(2, True), (3, False)])
         self.assertEqual((args.xflip, args.yflip, args.rotate90), (False, False, False))
         self.assertEqual(args.ext_switch_delay_cycles, 960000)
         self.assertEqual(args.voltage, 3.3)
+        self.assertFalse(args.allow_external_takeover)
 
     def test_factory_default_matches_single_ion_harness_and_voltage(self):
         # streamData_default.json is the restore target for Settings; it must
@@ -75,9 +77,40 @@ class ScanConfigurationTest(unittest.TestCase):
         action = GetStateConfigByName(config, "streamData")["actionData"]
         args = configure_scan_args(config, action, SimpleNamespace())
         self.assertEqual(set(action["beam"]), {"ion"})
-        self.assertEqual([pin.number for pin in args.ibeam_scan_enable], [0, 1])
+        self.assertEqual([pin.number for pin in args.ibeam_scan_enable], [0])
+        self.assertEqual([pin.number for pin in args.ibeam_blank_enable], [4])
         self.assertEqual([(pin.number, pin.invert) for pin in args.ibeam_blank], [(2, True), (3, False)])
         self.assertEqual(action["voltage"], 3.3)
+
+    def test_smh_calibration_targets_and_pin_conflict(self):
+        targets = electrode_targets(20, -10, vox=3, voy=-4, va=2, vb=-1, slave_scale=-0.6)
+        master = (-26.796, -24.522, -6.478, 18.204, 30.796, 22.522, 2.478, -16.204)
+        for actual, expected in zip(targets["master_volts"], master):
+            self.assertAlmostEqual(actual, expected)
+        for actual, expected in zip(targets["slave_volts"], master):
+            self.assertAlmostEqual(actual, -0.6 * expected)
+        self.assertEqual(targets["pair_average_volts"], (2, -1, -2, 1))
+        measured = list(targets["master_volts"])
+        measured[0] += 1
+        measured[4] += 1
+        measured[1] += 2
+        measured[5] -= 2
+        comparison = compare_electrodes(targets["master_volts"], measured, 1)
+        self.assertFalse(comparison["within_tolerance"])
+        self.assertEqual(comparison["pair_average_error_volts"], [1, 0, 0, 0])
+        self.assertEqual(comparison["pair_half_difference_error_volts"], [0, 2, 0, 0])
+        self.assertTrue(compare_electrodes(targets["master_volts"], measured, 2)["within_tolerance"])
+        config = AutomationConfig(str(DEVELOPMENT / "GlasgowDataIO/Json/streamData.json"))
+        action = GetStateConfigByName(config, "streamData")["actionData"]
+        action["smhDeflection"]["allowExternalTakeover"] = True
+        self.assertTrue(configure_scan_args(config, action, SimpleNamespace()).allow_external_takeover)
+        action["smhDeflection"]["allowExternalTakeover"] = "true"
+        with self.assertRaisesRegex(ValueError, "allowExternalTakeover must be boolean"):
+            configure_scan_args(config, action, SimpleNamespace())
+        action["smhDeflection"]["allowExternalTakeover"] = False
+        action["smhDeflection"]["correctionDacPinPlan"]["clock"] = "A2"
+        with self.assertRaisesRegex(ValueError, "clock reuses pin A2"):
+            configure_scan_args(config, action, SimpleNamespace())
 
     def test_b_only_pins_use_indices_relative_to_claimed_port(self):
         args = configure_scan_args(None, {"beam": {"ion": {"pinout": {"blank": "B2#,B3"}}}},
@@ -136,14 +169,18 @@ class ScanConfigurationTest(unittest.TestCase):
                         self.assertNotIn("dac_clk", pcf)
                         self.assertNotIn("dac_x_le_clk", pcf)
                     else:
-                        for ball in ("A1", "A2", "B3", "A3", "B6", "A4"):
-                            self.assertIn(" " + ball + "\n", pcf)
+                        for pin, ball in ((0, "A1"), (2, "B3"), (3, "A3"), (4, "B6")):
+                            self.assertIn(f"set_io port_a_{pin}__io__io {ball}\n", pcf)
+                        for pin in (1, 5):
+                            self.assertNotIn(f"set_io port_a_{pin}__io__io ", pcf)
+                        self.assertNotIn("set_io port_b_0__io__io ", pcf)
             self.assertEqual(plans[0], plans[1])
 
 
 class RuntimePowerTest(unittest.IsolatedAsyncioTestCase):
     async def test_voltage_and_inverted_pulls_are_applied_before_activation(self):
         config = AutomationConfig(str(DEVELOPMENT / "GlasgowDataIO/Json/streamData.json"))
+        config.IsProduction = True
         args = configure_scan_args(config, GetStateConfigByName(config, "streamData")["actionData"],
                                    SimpleNamespace())
         events = []
@@ -161,9 +198,10 @@ class RuntimePowerTest(unittest.IsolatedAsyncioTestCase):
         with patch("GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.demultiplexer.DirectDemultiplexerInterface",
                    return_value=iface):
             await demux.claim_interface(applet, SimpleNamespace(_pipe_num=0), args,
+                                        pull_low=args.beam_pull_low,
                                         pull_high=args.beam_pull_high)
         self.assertEqual(events, [("voltage", "AB", 3.3),
-                                  ("pulls", "AB", {2}, {0, 1, 3, 4, 5}), ("activate",)])
+                                  ("pulls", "AB", {0, 2, 4}, {3}), ("activate",)])
 
 
 if __name__ == "__main__":

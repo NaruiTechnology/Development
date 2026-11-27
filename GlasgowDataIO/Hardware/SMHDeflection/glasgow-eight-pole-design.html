@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glasgow eight-pole deflection design</title>
+<style>
+:root{color-scheme:light;--ink:#132945;--muted:#45596e;--paper:#fff;--wash:#ecf2f6;--rule:#ccd9e2;--accent:#096b62;--navy:#142e48}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--wash);color:var(--ink);font:16px/1.6 system-ui,sans-serif}
+main{max-width:1060px;margin:auto;background:var(--paper);min-height:100vh}
+header{padding:clamp(28px,6vw,72px);background:var(--navy);color:#fff}
+h1{font-size:clamp(33px,6vw,62px);line-height:1.04;letter-spacing:-.035em;max-width:780px;margin:0 0 22px}
+header p{max-width:750px;color:#e7eff6;font-size:1.12rem;margin-bottom:0}
+nav{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:25px}
+nav a{color:#a9f0de;text-underline-offset:4px}
+article{padding:0 clamp(20px,5vw,62px) 48px}
+section{padding-top:34px}
+h2{font-size:clamp(23px,4vw,34px);line-height:1.2;margin:0 0 14px;letter-spacing:-.02em}
+h3{font-size:1.18rem;line-height:1.3;margin:26px 0 10px}
+p{max-width:78ch;margin:10px 0 14px}
+a{color:#075e56;text-underline-offset:3px}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;list-style:none;padding:0;margin:18px 0}
+.flow li{position:relative;padding:14px;background:#edf7f5;border-top:3px solid var(--accent);min-width:0}
+.flow li:not(:last-child)::after{content:"→";position:absolute;right:-20px;top:35%;color:var(--accent);font-weight:700}
+.flow strong,.flow span{display:block}.flow span{font-size:.88rem;color:var(--muted)}
+.note{background:#edf7f5;border-left:4px solid var(--accent);padding:13px 16px;margin:14px 0}
+.table-wrap{overflow-x:auto;margin:14px 0 18px}
+table{border-collapse:collapse;width:100%;font-size:.94rem}
+caption{text-align:left;font-weight:650;padding:0 0 8px}
+th,td{border-bottom:1px solid var(--rule);padding:8px 12px;text-align:left;vertical-align:top}
+thead th{background:var(--navy);color:#fff}
+tbody tr:nth-child(even){background:#f2f6f8}
+.math{font-family:ui-monospace,Consolas,monospace;font-size:.92em}
+.nowrap{white-space:nowrap}.num{text-align:right;font-variant-numeric:tabular-nums}
+li{padding-left:3px;margin:4px 0}
+section+section{border-top:1px solid var(--rule);margin-top:30px}
+small,.sources{color:var(--muted)}
+@media(max-width:620px){.flow{grid-template-columns:1fr;gap:14px}.flow li:not(:last-child)::after{content:"↓";right:12px;top:auto;bottom:-17px}th,td{padding:7px 8px}}
+@media print{body,main{background:#fff}header{padding:18pt 0;background:#fff;color:var(--ink)}header p{color:var(--ink)}nav{display:none}article{padding:0}section{padding-top:15pt}section+section{margin-top:15pt}thead th{background:#e7edf2;color:var(--ink)}thead{display:table-header-group}tr,.flow,.note{break-inside:avoid}h2,h3{break-after:avoid}a{color:inherit}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Glasgow eight-pole deflection design</h1>
+  <p>Reuse the upstream differential X/Y scan signals. Generate four opposite-pole drives with controlled pair averages to reproduce all eight electrode voltages for each deflector.</p>
+  <nav aria-label="Report sections"><a href="#architecture">Architecture</a><a href="#matrix">Voltage matrix</a><a href="#wiring">Wiring</a><a href="#validation">Verification</a></nav>
+</header>
+<article>
+<section id="architecture">
+  <h2>Signal path and channel count</h2>
+  <ol class="flow" aria-label="Proposed signal path">
+    <li><strong>Glasgow revC3</strong><span>Existing upstream scan gateware and spare digital control</span></li>
+    <li><strong>OBI X/Y</strong><span>Two fast DAC channels, four analog conductors</span></li>
+    <li><strong>Analog separator</strong><span>X/Y mixing, offsets, stigmation and slave scaling</span></li>
+    <li><strong>Deflector drive</strong><span>Eight electrode potentials per deflector</span></li>
+  </ol>
+  <p>The source assumption is <span class="math">X+, X−, Y+, Y−</span>, which forms two differential analog pairs. This matches the reference OBI revA4 M8 connector. If the installed upstream hardware exposes four complete differential pairs, identify each by stepping X, Y and the correction controls separately. Reuse extra pairs for <span class="math">Va</span> and <span class="math">Vb</span> only if their independent control, range and timing are verified.</p>
+  <p>Use the installed separator and SMH drive if they can reproduce the complete voltage matrix below. For a new low-voltage separator, recover X and Y with differential receivers, apply calibrated gains and offsets, then generate each pair’s half-difference and average. The approved deflector drive stage must reproduce both quantities at the electrodes. Deflector 2 is the master. Deflector 1 takes a signed factor <span class="math">k</span> on the complete master voltage vector and requires its own eight physical electrode drives when both deflectors are fitted.</p>
+  <p class="note"><strong>Design choice.</strong> Keep the pixel-rate matrix in analog hardware driven by the existing X/Y DACs. Spare Glasgow pins can control a separate low-speed DAC for offsets and stigmation. Pixel-dependent correction requires independently commanded, synchronous analog channels with bandwidth and settling verified at the required scan rate.</p>
+</section>
+
+<section id="matrix">
+  <h2>Eight electrode voltages</h2>
+  <p>Use the design documents’ coefficient <span class="math">a = 0.414</span> and inputs <span class="math">x = Vx + Vox</span> and <span class="math">y = Vy + Voy</span>. Calibrate the differential OBI output to the <span class="math">Vx</span> and <span class="math">Vy</span> units of the plate equations. Each row below pairs opposite electrodes in the source document’s numbering.</p>
+  <div class="table-wrap">
+  <table>
+    <caption>Master deflector, with four independently controlled pole pairs</caption>
+    <thead><tr><th scope="col">Rows</th><th scope="col">Half-difference h</th><th scope="col">Average m</th><th scope="col">First electrode m + h</th><th scope="col">Opposite electrode m − h</th></tr></thead>
+    <tbody class="math">
+      <tr><th scope="row">1 / 5</th><td>−x + ay</td><td>Va</td><td>−x + ay + Va</td><td>x − ay + Va</td></tr>
+      <tr><th scope="row">2 / 6</th><td>−ax + y</td><td>Vb</td><td>−ax + y + Vb</td><td>ax − y + Vb</td></tr>
+      <tr><th scope="row">3 / 7</th><td>ax + y</td><td>−Va</td><td>ax + y − Va</td><td>−ax − y − Va</td></tr>
+      <tr><th scope="row">4 / 8</th><td>x + ay</td><td>−Vb</td><td>x + ay − Vb</td><td>−x − ay − Vb</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The terminal-to-terminal voltage of each pair is <span class="math">2h</span>. The pair average is <span class="math">m</span>. Applying <span class="math">Va</span> or <span class="math">Vb</span> shifts both electrodes of each affected pair together, with equal and opposite shifts on the other affected pair. A conventional fixed-average differential driver can reproduce the X/Y differences. The stigmation terms additionally need controlled pair averages at the electrodes. For the slave, scale both <span class="math">h</span> and <span class="math">m</span> by <span class="math">k</span>. <a href="https://www.analog.com/en/resources/design-notes/easytouse-differential-amplifiers-simplify-balanced-signal-designs.html">Differential output and common-mode control</a></p>
+  <h3>Worked example</h3>
+  <p>For <span class="math">Vx = 20 V, Vy = −10 V, Vox = 3 V, Voy = −4 V, Va = 2 V, Vb = −1 V</span> and an illustrative <span class="math">k = 0.60</span>, the required plate potentials are shown below. These are electrode-domain values.</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th scope="col">Electrode</th><th scope="col" class="num">Master (V)</th><th scope="col" class="num">Slave (V)</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">1</th><td class="num">−26.796</td><td class="num">−16.078</td></tr>
+      <tr><th scope="row">2</th><td class="num">−24.522</td><td class="num">−14.713</td></tr>
+      <tr><th scope="row">3</th><td class="num">−6.478</td><td class="num">−3.887</td></tr>
+      <tr><th scope="row">4</th><td class="num">18.204</td><td class="num">10.922</td></tr>
+      <tr><th scope="row">5</th><td class="num">30.796</td><td class="num">18.478</td></tr>
+      <tr><th scope="row">6</th><td class="num">22.522</td><td class="num">13.513</td></tr>
+      <tr><th scope="row">7</th><td class="num">2.478</td><td class="num">1.487</td></tr>
+      <tr><th scope="row">8</th><td class="num">−16.204</td><td class="num">−9.722</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>For each pair, the largest absolute electrode voltage is <span class="math">|m| + |h|</span>. Use that value and its <span class="math">|k|</span>-scaled equivalent to check headroom on both deflectors. The supply documents’ 200 V generator figure and the SMH sheet’s ±150 V rails describe different points in the chain. Set command limits using the measured usable plate swing, gain, load, offset and common-mode range. If a scan exceeds that envelope, reduce its amplitude coherently to preserve the plate ratios.</p>
+</section>
+
+<section id="wiring">
+  <h2>Glasgow and SMH wiring</h2>
+  <div class="table-wrap">
+  <table>
+    <caption>Analog connector schedule</caption>
+    <thead><tr><th scope="col">Connection</th><th scope="col">Physical contacts</th><th scope="col">Destination or qualification</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">OBI revA4 X+/−</th><td>OBI M8 J7 pins 2/1</td><td>Separator X differential receiver</td></tr>
+      <tr><th scope="row">OBI revA4 Y+/−</th><td>OBI M8 J7 pins 3/4</td><td>Separator Y differential receiver</td></tr>
+      <tr><th scope="row">SMH AE+/−</th><td>J18 pins 1/9</td><td>SMH plate pair A/E appears at J7 pins 1/20</td></tr>
+      <tr><th scope="row">SMH BF+/−</th><td>J18 pins 2/10</td><td>SMH plate pair B/F appears at J7 pins 2/21</td></tr>
+      <tr><th scope="row">SMH CG+/−</th><td>J18 pins 14/7</td><td>SMH plate pair C/G appears at J7 pins 33/15</td></tr>
+      <tr><th scope="row">SMH OH+/−</th><td>J18 pins 25/8</td><td>Confirm correspondence to the D/H pair at J7 pins 34/16</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Use the J18 rows if the existing separator is bypassed. Start by tracing numbered electrodes to actual SMH plate letters and verifying signal polarity. The supplied SMH sheet labels a single A–H plate set. Its X1/Y1 and X2/Y2 outputs alone do not establish a second eight-electrode drive path. Keep the J7 plate harness and confirm the second deflector’s driver and harness on the instrument. Use shielded pairs and verify signal returns against the equipment grounding scheme.</p>
+  <p><strong>SMH compatibility test.</strong> At the intended filter and gain setting, measure the eight plate responses to independent X, Y, Va and Vb commands. Identify which installed steering/correction inputs, including J17 paths where applicable, control the pair averages. A differential-only J18 receiver may reject incoming common-mode changes. If the installed arrangement cannot produce all four independent voltage patterns, retain the original correction path or use a qualified drive stage with independently controllable pair averages. A J18 pin assignment by itself leaves this unresolved.</p>
+  <div class="table-wrap">
+  <table>
+    <caption>Digital control and optional correction-DAC allocation</caption>
+    <thead><tr><th scope="col">Function</th><th scope="col">Glasgow contacts</th><th scope="col">Configuration status</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Scan and blank takeover</th><td>A0 / A4, Port A contacts 3 / 11</td><td>Repository and commissioning JSON for the proposed buffered adapter</td></tr>
+      <tr><th scope="row">Logical blank</th><td>A2 inverted / A3, Port A contacts 7 / 9</td><td>Repository and commissioning JSON. Keep OEM SMH J5 blanking during initial tests.</td></tr>
+      <tr><th scope="row">Correction DAC serial clock and data</th><td>B0 / B1, Port B contacts 3 / 5</td><td>Proposed spare-pin assignment. Requires a DAC interface in gateware or a separate controller.</td></tr>
+      <tr><th scope="row">Correction DAC select and update</th><td>B2 / B3, Port B contacts 7 / 9</td><td>Proposed select and synchronous load lines. Verify the selected DAC’s interface.</td></tr>
+      <tr><th scope="row">Other unassigned scan GPIOs</th><td>A6 / A7 and B4–B7. Candidate also releases A1 / A5.</td><td>Check physical routing and other applet ownership before allocating.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Port B GPIO B2 is distinct from the FPGA package ball named B2, which already carries OBI bus bit 0. The upstream subtarget has two fast DAC latch outputs. The current JSON supports scan-enable, blank-enable and blank roles. Extra correction-DAC controls require logic and software support before a JSON assignment can drive hardware. A low-speed DAC can supply four setpoints for Vox, Voy, Va and Vb, with the analog separator providing their signs and routing. Use a hardware permit for takeover and a priority path for native blanking. <a href="https://glasgow-embedded.org/en/revisions/revC3.html#ports-a-b-pinout">Glasgow revC3 connector data</a> · <a href="https://nanographs.github.io/Open-Beam-Interface/config.html#pinout">OBI beam pin roles</a></p>
+</section>
+
+<section id="validation">
+  <h2>Bench acceptance</h2>
+  <ol>
+    <li>Record the installed board revisions and confirm whether the source has two differential pairs or four. Verify the column routing, electrode numbering, polarity, and master/slave connection.</li>
+    <li>At representative loads, step X alone, Y alone, Va alone and Vb alone. For each test measure all eight electrode responses. Use the expected half-differences and averages to distinguish a wiring or sign error from a missing correction path. Verify the signed slave scaling independently.</li>
+    <li>Compare requested and measured plate voltages at combined scan corners and maximum correction. Check clipping, settling, and cross-coupling under the intended gain and load. The upstream X and Y latches are separated by two 48 MHz FPGA clocks, about 41.7 ns. Include that skew in fast-transition measurements.</li>
+    <li>With the beam inhibited under the equipment service procedure, verify blanking, transfer to the new source, recovery to OEM, and response to power or control loss. Release the harness after the measured voltage matrix, grounding, blanking and interlocks are approved.</li>
+  </ol>
+  <h3>Commissioning profiles and FPGA lock</h3>
+  <p>The active repository profile runs in coordinate loopback. The commissioning profile selects physical ADC/DAC I/O. Both build with the FPGA takeover lock engaged. Even if a host requests external control or unblanking, the FPGA holds the selector outputs low and asserts blank. On port startup A0, A2 and A4 pull low and A3 pulls high. Release this lock in the intended physical profile only after qualifying the wiring, amplifier transfer and independent hardware permit.</p>
+  <h3>Comparing measured plate voltages</h3>
+  <p>The repository voltage calculator accepts eight measured plate voltages per deflector and an explicit tolerance. Compare individual plate errors, pair-average errors and half-difference errors after each X, Y and stigmation test. The calculator returns a failing exit status when any measured plate exceeds tolerance. The optional correction-DAC pin plan is checked for conflicts. Physical correction outputs require a selected DAC and control interface.</p>
+  <p><a href="streamData.smh-commissioning.json">Commissioning JSON</a> · <a href="README.md">Detailed mapping and prior build results</a> · <a href="https://github.com/nanographs/Open-Beam-Interface/tree/0f6e62c829dadbde17a8f9b8d27e1ab839c5ba2f/Hardware/PCBs">Reference OBI hardware files</a></p>
+  <p class="sources"><small>Equipment references: 偏转器供电设计.pptx, 八极偏转器.供电.docx, and SMH偏转放大器原理图与引脚说明.html (EM20810 signals redraw). The attachments provide engineering evidence for the equations and connector labels.</small></p>
+</section>
+</article>
+</main>
+</body>
+</html>

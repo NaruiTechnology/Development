@@ -1,0 +1,223 @@
+{
+    "Version": "1.1.0",
+    "Glasgow": {
+        "Device0": {
+            "Id": ""
+        }
+    },
+    "Actions": [
+        {
+            "streamData": {
+                "actionData": {
+                    "ev": 1000,
+                    "beam": {
+                        "ion": {
+                            "pinout": {
+                                "scan_enable": "A0",
+                                "blank_enable": "A4",
+                                "blank": "A2#,A3"
+                            }
+                        }
+                    },
+                    "smhDeflection": {
+                        "allowExternalTakeover": false,
+                        "mixCoefficient": 0.414,
+                        "correctionDacPinPlan": {
+                            "clock": "B0",
+                            "data": "B1",
+                            "select": "B2",
+                            "update": "B3"
+                        }
+                    },
+                    "transforms": {
+                        "xflip": false,
+                        "yflip": false,
+                        "rotate90": false
+                    },
+                    "timings": {
+                        "ext_switch_delay_ms": 20
+                    },
+                    "voltage": 3.3,
+                    "bufferSize": "1024*1024",
+                    "forceBitstreamReload": false,
+                    "adcHalfPeriod": 3,
+                    "adcSettleCycles": 1,
+                    "adcLatchCycles": 1,
+                    "busTurnaroundCycles": 0,
+                    "dacDataSetupCycles": 1,
+                    "dacLatchCycles": 1,
+                    "enableEbeam": false,
+                    "enableIbeam": true,
+                    "rasterScan": {
+                        "max_pipeline": 8,
+                        "minChunkBeamTimeMs": 100,
+                        "pixels": 8192,
+                        "frameBlank": true,
+                        "beamType": "Ion",
+                        "externalControl": false,
+                        "resolution": 1024,
+                        "adcLatency": 8,
+                        "dwell": 8
+                    },
+                    "vectorScan": {
+                        "max_pipeline": 8,
+                        "vectorResolution": 1024,
+                        "minChunkBeamTimeMs": 100,
+                        "sawtoothOnRasterGenerator": true,
+                        "latency": 8196,
+                        "adcLatency": 8,
+                        "beamType": "Ion",
+                        "externalControl": false,
+                        "dwell": 8,
+                        "PixelFallbackBlank": true,
+                        "adaptiveFeedbackWindowPoints": 1,
+                        "adaptiveFeedbackPipelineDelayPoints": 0,
+                        "lineShiftPerXRow": 5.5,
+                        "drainFloorPixels": 21000
+                    },
+                    "pins": {
+                        "_comment": [
+                            "Wiring between the Glasgow Interface Explorer C3 pads and",
+                            "the IobeamTech analog board. When this section is missing",
+                            "or empty, no Resource constraints are emitted - the FPGA",
+                            "still synthesises and FakeAdcSimulator drives the data path",
+                            "in loopback. As soon as the analog board exists, fill in",
+                            "the real pin names and set simulation.enabled = false."
+                        ],
+                        "control": {
+                            "_comment": [
+                                "Six bus strobes the BusController FSM generates. Each is",
+                                "an active-high digital output unless 'invert': true is set."
+                            ],
+                            "subsignals": [
+                                {
+                                    "name": "power_good",
+                                    "pin": "K1",
+                                    "direction": "i"
+                                },
+                                {
+                                    "name": "adc_clk",
+                                    "pin": "G1",
+                                    "direction": "o",
+                                    "invert": true
+                                },
+                                {
+                                    "name": "adc_le_clk",
+                                    "pin": "H2",
+                                    "direction": "o"
+                                },
+                                {
+                                    "name": "adc_oe",
+                                    "pin": "G3",
+                                    "direction": "o",
+                                    "invert": true
+                                },
+                                {
+                                    "name": "dac_clk",
+                                    "pin": "F3",
+                                    "direction": "o",
+                                    "invert": true
+                                },
+                                {
+                                    "name": "dac_x_le_clk",
+                                    "pin": "H3",
+                                    "direction": "o"
+                                },
+                                {
+                                    "name": "dac_y_le_clk",
+                                    "pin": "H1",
+                                    "direction": "o"
+                                }
+                            ],
+                            "attrs": {
+                                "IO_STANDARD": "SB_LVCMOS33"
+                            }
+                        },
+                        "data": {
+                            "_comment": [
+                                "Shared 14-bit bidirectional bus carrying DAC writes and",
+                                "ADC reads. Pin string is space-separated, LSB-first.",
+                                "Empty string ('' or omitted) -> no Resource emitted; the",
+                                "internal data_o / data_i still drive FakeAdcSimulator."
+                            ],
+                            "pins": "B2 C4 B1 C3 C2 C1 D3 D1 F4 G2 E3 F1 E2 F2",
+                            "direction": "io",
+                            "attrs": {
+                                "IO_STANDARD": "SB_LVCMOS33"
+                            }
+                        }
+                    },
+                    "simulation": {
+                        "_comment": [
+                            "Consolidated simulation schema (replaces the previous",
+                            "_alt_file / _alt_random / split between source/mode).",
+                            "",
+                            "Two orthogonal axes:",
+                            "  mode   = what fills the ADC data line when no real PCB",
+                            "           is attached.",
+                            "             'image'    -> FakeAdcSimulator drives bus.data_i",
+                            "                          from a pre-baked grayscale image",
+                            "                          held in BRAM. Pixel bytes come from",
+                            "                          source/patternKind/filePath/seed.",
+                            "             'zeros'   -> tie data_i = 0 (no BRAM, no image).",
+                            "             'loopback'-> coord-loopback diagnostic (data_i",
+                            "                          echoes the latched DAC code).",
+                            "  source = where the image bytes come from when mode=='image'.",
+                            "             'pattern' -> built-in: ramp/checker/bars/bullseye.",
+                            "             'file'    -> load filePath as PNG/BMP/JPG.",
+                            "             'random'  -> RNG-fill, seeded by 'seed'.",
+                            "",
+                            "Paths are interpreted relative to IOBEAM_ROOT when not",
+                            "absolute. IOBEAM_ROOT defaults to the systemd unit's",
+                            "WorkingDirectory (/home/vboxuser/Project/IobeamTech) but",
+                            "can be overridden by environment.",
+                            "",
+                            "Note: if IsProduction=false AND simulation.enabled=true AND",
+                            "mode!='zeros', the FPGA bakes a fake image into the bitstream.",
+                            "IsProduction=true forces real hardware regardless."
+                        ],
+                        "enabled": false,
+                        "mode": "image",
+                        "imageResolution": 64,
+                        "source": "pattern",
+                        "patternKind": "bars",
+                        "filePath": "Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
+                        "invert": false,
+                        "seed": 42
+                    },
+                    "ftp": {
+                        "enabled": false,
+                        "host": "${IOBEAM_FTP_HOST}",
+                        "username": "${IOBEAM_FTP_USER}",
+                        "password": "${IOBEAM_FTP_PASSWORD}",
+                        "folder": "/upload"
+                    },
+                    "magCalibration": {
+                        "selected_beam": "ion",
+                        "beams": {
+                            "ion": {
+                                "path": "",
+                                "m_per_fov": {}
+                            }
+                        }
+                    },
+                    "safety": {
+                        "blank_when_released": true,
+                        "stall_blank_ms": 100
+                    }
+                },
+                "timeout": 60
+            }
+        }
+    ],
+    "LogName": "PatternScan",
+    "Verbose": true,
+    "IsProduction": true,
+    "DumpData": false,
+    "AdcTest": false,
+    "transforms": {
+        "xflip": false,
+        "yflip": false,
+        "rotate90": false
+    }
+}

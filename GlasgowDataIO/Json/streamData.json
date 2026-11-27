@@ -13,10 +13,20 @@
                     "beam": {
                         "ion": {
                             "pinout": {
-                                "scan_enable": "A0:1",
-                                "blank_enable": "A4:5",
+                                "scan_enable": "A0",
+                                "blank_enable": "A4",
                                 "blank": "A2#,A3"
                             }
+                        }
+                    },
+                    "smhDeflection": {
+                        "allowExternalTakeover": false,
+                        "mixCoefficient": 0.414,
+                        "correctionDacPinPlan": {
+                            "clock": "B0",
+                            "data": "B1",
+                            "select": "B2",
+                            "update": "B3"
                         }
                     },
                     "transforms": {
@@ -44,7 +54,7 @@
                         "pixels": 8192,
                         "frameBlank": true,
                         "beamType": "Ion",
-                        "externalControl": true,
+                        "externalControl": false,
                         "resolution": 1024,
                         "adcLatency": 8,
                         "dwell": 8
@@ -57,7 +67,7 @@
                         "latency": 8196,
                         "adcLatency": 8,
                         "beamType": "Ion",
-                        "externalControl": true,
+                        "externalControl": false,
                         "dwell": 8,
                         "PixelFallbackBlank": true,
                         "adaptiveFeedbackWindowPoints": 1,
@@ -166,7 +176,7 @@
                             "mode!='zeros', the FPGA bakes a fake image into the bitstream.",
                             "IsProduction=true forces real hardware regardless."
                         ],
-                        "enabled": true,
+                        "enabled": false,
                         "mode": "image",
                         "imageResolution": 64,
                         "source": "pattern",
@@ -176,7 +186,7 @@
                         "seed": 42
                     },
                     "ftp": {
-                        "enabled": true,
+                        "enabled": false,
                         "host": "${IOBEAM_FTP_HOST}",
                         "username": "${IOBEAM_FTP_USER}",
                         "password": "${IOBEAM_FTP_PASSWORD}",
@@ -190,6 +200,10 @@
                                 "m_per_fov": {}
                             }
                         }
+                    },
+                    "safety": {
+                        "blank_when_released": true,
+                        "stall_blank_ms": 100
                     }
                 },
                 "timeout": 60
@@ -200,7 +214,7 @@
     "Verbose": true,
     "IsProduction": false,
     "DumpData": true,
-    "AdcTest": true,
+    "AdcTest": false,
     "transforms": {
         "xflip": false,
         "yflip": false,

@@ -12,8 +12,22 @@
                     "ev": 1000.0,
                     "beam": {
                         "ion": {
-                            "pinout": {"scan_enable": "A0:1", "blank_enable": "A4:5", "blank": "A2#,A3"}
+                            "pinout": {"scan_enable": "A0", "blank_enable": "A4", "blank": "A2#,A3"}
                         }
+                    },
+                    "smhDeflection": {
+                        "allowExternalTakeover": false,
+                        "mixCoefficient": 0.414,
+                        "correctionDacPinPlan": {
+                            "clock": "B0",
+                            "data": "B1",
+                            "select": "B2",
+                            "update": "B3"
+                        }
+                    },
+                    "safety": {
+                        "blank_when_released": true,
+                        "stall_blank_ms": 100
                     },
                     "transforms": {"xflip": false, "yflip": false, "rotate90": false},
                     "timings": {"ext_switch_delay_ms": 20},
@@ -33,7 +47,7 @@
                         "pixels": 8192,
                         "frameBlank": true,
                         "beamType": "Ion",
-                        "externalControl": true,
+                        "externalControl": false,
                         "resolution": 1024,
                         "adcLatency": 8,
                         "dwell": 16
@@ -45,7 +59,7 @@
                         "latency": 8196,
                         "adcLatency": 8,
                         "beamType": "Ion",
-                        "externalControl": true,
+                        "externalControl": false,
                         "dwell": 7,
                         "PixelFallbackBlank": true,
                         "adaptiveFeedbackWindowPoints": 1,

@@ -1022,7 +1022,7 @@ function VectorTab({ draft }: { draft: unknown }) {
   );
 }
 
-/* -------- Pins tab - Actions[0].streamData.actionData.pins ------------ *
+/* -------- Pins tab - board GPIO and OBI expansion bus ------------ *
  *
  * Two sub-sections in the JSON:
  *
@@ -1042,9 +1042,20 @@ function VectorTab({ draft }: { draft: unknown }) {
  * any UI benefit. Operators who need an extra strobe edit the file
  * directly.
  * --------------------------------------------------------------------- */
-function PinsTab({ draft, disabled = false }: { draft: unknown; disabled?: boolean }) {
+export function PinsTab({ draft, disabled = false }: { draft: unknown; disabled?: boolean }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
+
+  const beamRoles = ["scan_enable", "blank_enable", "blank"] as const;
+  const beams = (["ion", "electron"] as const).filter((beam) =>
+    readPath(draft, [...ACTION_DATA_PATH, "beam", beam, "pinout"])
+  );
+  const smhPath = [...ACTION_DATA_PATH, "smhDeflection"];
+  const smhConfigured = readPath(draft, smhPath) != null;
+  const correctionPins = (["clock", "data", "select", "update"] as const).map((role) => ({
+    role,
+    pin: stringField(draft, [...smhPath, "correctionDacPinPlan", role], ""),
+  }));
 
   // The control list: read the array, render rows, write back through
   // writePath at the per-cell granularity. Defaulting to [] keeps the
@@ -1080,6 +1091,44 @@ function PinsTab({ draft, disabled = false }: { draft: unknown; disabled?: boole
 
   return (
     <div className="settings-form">
+      {beams.length > 0 && (
+        <>
+          <h4 className="settings-form__group">{t("settings.pins.beam.group")}</h4>
+          <p className="settings-form__hint">{t("settings.pins.beam.hint")}</p>
+          {beams.map((beam) => (
+            <dl key={beam} className="settings-pin-map" aria-label={t(`settings.pins.beam.${beam}`)}>
+              {beamRoles.map((role) => (
+                <div key={role}>
+                  <dt>{t(`settings.pins.beam.${beam}`)} · {t(`settings.pins.beam.${role}`)}</dt>
+                  <dd><code>{stringField(draft, [...ACTION_DATA_PATH, "beam", beam, "pinout", role], "") || "—"}</code></dd>
+                </div>
+              ))}
+            </dl>
+          ))}
+        </>
+      )}
+      {smhConfigured && (
+        <>
+          <h4 className="settings-form__group">{t("settings.pins.smh.group")}</h4>
+          <p className="settings-form__hint">
+            {t(boolField(draft, [...smhPath, "allowExternalTakeover"], false)
+              ? "settings.pins.smh.takeoverAllowed" : "settings.pins.smh.takeoverLocked")}
+          </p>
+          {correctionPins.some(({ pin }) => pin) && (
+            <>
+              <p className="settings-form__hint">{t("settings.pins.smh.planHint")}</p>
+              <dl className="settings-pin-map" aria-label={t("settings.pins.smh.plan")}>
+                {correctionPins.map(({ role, pin }) => (
+                  <div key={role}>
+                    <dt>{t(`settings.pins.smh.${role}`)}</dt>
+                    <dd><code>{pin || "—"}</code></dd>
+                  </div>
+                ))}
+              </dl>
+            </>
+          )}
+        </>
+      )}
       <h4 className="settings-form__group">{t("settings.pins.group.control")}</h4>
       <p className="settings-form__hint">{t("settings.pins.group.controlHint")}</p>
 

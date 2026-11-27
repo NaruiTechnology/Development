@@ -6887,6 +6887,30 @@ body {
   color: var(--c-text-dim);
 }
 
+.settings-pin-map {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  margin: 0 0 12px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 6px;
+  background: var(--c-bg-elev-1);
+}
+
+.settings-pin-map > div {
+  padding: 8px 10px;
+}
+
+.settings-pin-map dt {
+  color: var(--c-text-dim);
+  font-size: 11px;
+}
+
+.settings-pin-map dd {
+  margin: 3px 0 0;
+  color: var(--c-text);
+  overflow-wrap: anywhere;
+}
+
 .settings-pins-table {
   display: grid;
   gap: 4px 0;

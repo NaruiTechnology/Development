@@ -251,6 +251,7 @@ class DataStreamApplet(GlasgowApplet):
             dac_latch_cycles      = timing.dac_latch_cycles,
             transforms           = args.transforms,
             ext_switch_delay     = args.ext_switch_delay_cycles,
+            allow_external_takeover = args.allow_external_takeover,
             blank_when_released  = getattr(args, "blank_when_released", True),
             stall_blank_cycles   = getattr(args, "stall_blank_cycles", 0),
             out_only             = getattr(args, "out_only", False),
@@ -263,7 +264,8 @@ class DataStreamApplet(GlasgowApplet):
     async def run(self, device, args):
         await device.write_register(self.addr_reset, 0x01)
         return await device.demultiplexer.claim_interface(
-            self, self.mux_interface, args, pull_high=args.beam_pull_high)
+            self, self.mux_interface, args,
+            pull_low=args.beam_pull_low, pull_high=args.beam_pull_high)
 
     async def run_handshake(self, iface):
         if self.logger:

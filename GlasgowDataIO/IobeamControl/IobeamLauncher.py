@@ -165,6 +165,7 @@ class IobeamLauncher:
             applet, applet.mux_interface, applet_args,
             read_buffer_size=applet_args.buffer_size,
             write_buffer_size=applet_args.buffer_size,
+            pull_low=getattr(applet_args, "beam_pull_low", []),
             pull_high=getattr(applet_args, "beam_pull_high", []),
         )
         return iface, image_programmed

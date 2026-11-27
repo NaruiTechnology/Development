@@ -89,6 +89,7 @@ PACKAGE_DATA_TREES = [
     os.path.join('Development', 'ionbeam-native', 'ionbeam_native', 'resources'),
     os.path.join('Development', 'ionbeam-native', 'ionbeam_native', 'i18n'),
     os.path.join('Development', 'ionbeam-native', 'docs'),
+    os.path.join('Development', 'GlasgowDataIO', 'Hardware', 'SMHDeflection'),
 ]
 PACKAGE_DATA_IGNORE = ('*.py', '*.pyc', '__pycache__', '*.log')
 
@@ -118,6 +119,7 @@ REQUIRED_DIST_MODULES = (
     'Development/secretstore/__init__',
     'Development/secretstore/__main__',
     'Development/GlasgowDataIO/IobeamControl/IobeamLauncher',
+    'Development/GlasgowDataIO/IobeamControl/smhDeflection',
     'Development/GlasgowDataIO/IobeamControl/applet/busController',
     'Development/GlasgowDataIO/IobeamControl/applet/upstreamBusController',
     'Development/GlasgowDataIO/IobeamControl/applet/adcTiming',
@@ -150,6 +152,9 @@ REQUIRED_DIST_MODULES = (
 )
 REQUIRED_DIST_FILES = (
     'Development/GlasgowDataIO/Json/streamData.json',
+    'Development/GlasgowDataIO/Json/streamData_default.json',
+    'Development/GlasgowDataIO/Hardware/SMHDeflection/streamData.smh-commissioning.json',
+    'Development/GlasgowDataIO/Hardware/SMHDeflection/glasgow-eight-pole-design.html',
     # Shared Processing catalogue and the solid Circle tool's native artwork.
     'Development/GlasgowDataIO/Json/processingPatterns.json',
     'Development/GlasgowDataIO/Json/stepReceipes.json',

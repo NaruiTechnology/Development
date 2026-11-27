@@ -57,7 +57,10 @@ class BeamPinControlTest(unittest.TestCase):
         # safety.blank_when_released = false restores upstream OBI's "beam on".
         self._beam_selection(blank_when_released=False)
 
-    def _beam_selection(self, *, blank_when_released):
+    def test_smh_takeover_lock_overrides_host_enable_and_unblank(self):
+        self._beam_selection(blank_when_released=False, allow_external_takeover=False)
+
+    def _beam_selection(self, *, blank_when_released, allow_external_takeover=True):
         released = blank_when_released
         pads = {name: io.SimulationPort("o", 2, invert=(True, False)
                                        if name == "ibeam_blank" else False)
@@ -66,7 +69,8 @@ class BeamPinControlTest(unittest.TestCase):
         rx = SimpleNamespace(w_data=Signal(8), w_rdy=Signal(init=1), w_en=Signal())
         dut = IobeamDataSubtarget(ports=PortGroup(**pads), out_fifo=tx,
                                  in_fifo=rx, loopback=True, ext_switch_delay=8,
-                                 blank_when_released=blank_when_released)
+                                 blank_when_released=blank_when_released,
+                                 allow_external_takeover=allow_external_takeover)
         sim = Simulator(dut)
         sim.add_clock(1/48e6)
 
@@ -95,6 +99,15 @@ class BeamPinControlTest(unittest.TestCase):
                     await ctx.tick()
 
             await ctx.tick()
+            if not allow_external_takeover:
+                for command in (ExternalCtrlCommand(True), BeamSelectCommand(BeamType.Ion),
+                                BlankCommand(False)):
+                    await send(command)
+                    for name in BEAM_PORTS:
+                        if name.endswith("_enable"):
+                            self.assertEqual(value(name), 0)
+                    check_blank(True, True)
+                return
             self.assertEqual(value("ebeam_scan_enable"), 3)
             self.assertEqual(value("ibeam_scan_enable"), 0)
             check_blank(released, released)
