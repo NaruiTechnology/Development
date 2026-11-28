@@ -13,8 +13,6 @@ CORRECTION_ROLES = {"clock", "data", "select", "update"}
 def validate_smh_config(settings, beam_pins=()):
     if not isinstance(settings, dict):
         raise ValueError("smhDeflection must be an object")
-    if not isinstance(settings.get("allowExternalTakeover", False), bool):
-        raise ValueError("smhDeflection.allowExternalTakeover must be boolean")
     coefficient = settings.get("mixCoefficient")
     if (isinstance(coefficient, bool) or not isinstance(coefficient, (int, float))
             or not 0 < coefficient < 1):

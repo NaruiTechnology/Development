@@ -16,7 +16,6 @@
                         }
                     },
                     "smhDeflection": {
-                        "allowExternalTakeover": false,
                         "mixCoefficient": 0.414,
                         "correctionDacPinPlan": {
                             "clock": "B0",
@@ -47,7 +46,6 @@
                         "pixels": 8192,
                         "frameBlank": true,
                         "beamType": "Ion",
-                        "externalControl": false,
                         "resolution": 1024,
                         "adcLatency": 8,
                         "dwell": 16
@@ -59,7 +57,6 @@
                         "latency": 8196,
                         "adcLatency": 8,
                         "beamType": "Ion",
-                        "externalControl": false,
                         "dwell": 7,
                         "PixelFallbackBlank": true,
                         "adaptiveFeedbackWindowPoints": 1,
@@ -187,6 +184,7 @@
     ],
     "LogName": "PatternScan",
     "Verbose": true,
-    "IsProduction": false,
+    "IsProduction": true,
+    "allowExternalTakeover": false,
     "DumpData": true
 }

@@ -650,7 +650,8 @@ function GeneralTab({
   const version = stringField(draft, ["Version"], "");
   const logName = stringField(draft, ["LogName"], "");
   const verbose = boolField(draft, ["Verbose"], false);
-  const isProduction = boolField(draft, ["IsProduction"], false);
+  const isProduction = boolField(draft, ["IsProduction"], true);
+  const allowExternalTakeover = boolField(draft, ["allowExternalTakeover"], false);
   const vacuumEnabled = useAppSelector((s) => s.settings.draftVacuumEnabled);
   const dumpData = boolField(draft, ["DumpData"], false);
   const frameBlank = boolField(draft, [...RASTER_PATH, "frameBlank"], true);
@@ -710,6 +711,13 @@ function GeneralTab({
           label={t("settings.general.isProduction")}
           value={isProduction}
           onChange={(v) => set(["IsProduction"], v)}
+          role="switch"
+        />
+        <CheckboxField
+          label={t("settings.general.allowExternalTakeover")}
+          value={allowExternalTakeover}
+          onChange={(v) => set(["allowExternalTakeover"], v)}
+          role="switch"
         />
         <CheckboxField
           label={t("settings.raster.frameBlank")}
@@ -1052,6 +1060,7 @@ export function PinsTab({ draft, disabled = false }: { draft: unknown; disabled?
   );
   const smhPath = [...ACTION_DATA_PATH, "smhDeflection"];
   const smhConfigured = readPath(draft, smhPath) != null;
+  const isProduction = boolField(draft, ["IsProduction"], true);
   const correctionPins = (["clock", "data", "select", "update"] as const).map((role) => ({
     role,
     pin: stringField(draft, [...smhPath, "correctionDacPinPlan", role], ""),
@@ -1111,8 +1120,8 @@ export function PinsTab({ draft, disabled = false }: { draft: unknown; disabled?
         <>
           <h4 className="settings-form__group">{t("settings.pins.smh.group")}</h4>
           <p className="settings-form__hint">
-            {t(boolField(draft, [...smhPath, "allowExternalTakeover"], false)
-              ? "settings.pins.smh.takeoverAllowed" : "settings.pins.smh.takeoverLocked")}
+            {t(isProduction
+              ? "settings.pins.smh.takeoverLocked" : "settings.pins.smh.takeoverAllowed")}
           </p>
           {correctionPins.some(({ pin }) => pin) && (
             <>
@@ -3834,17 +3843,20 @@ function CheckboxField({
   value,
   onChange,
   disabled = false,
+  role,
 }: {
   label: string;
   help?: JSX.Element;
   value: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
+  role?: "switch";
 }) {
   return (
     <label className="settings-checkbox vacuum-switch settings-switch">
       <input
         type="checkbox"
+        role={role}
         checked={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}

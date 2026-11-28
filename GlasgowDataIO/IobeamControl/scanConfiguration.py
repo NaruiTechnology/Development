@@ -17,6 +17,12 @@ BEAM_PORTS = tuple(f"{beam}_{role}" for beam in ("ebeam", "ibeam")
 DEFAULT_STALL_BLANK_MS = 100
 
 
+def is_production_config(config):
+    """Read root IsProduction from either config objects or raw JSON mappings."""
+    root_values = getattr(config, "__dict__", {})
+    return bool(getattr(config, "IsProduction", root_values.get("IsProduction", True)))
+
+
 def configure_scan_args(config, action, args):
     """Resolve pin roles, transforms and timing once, before building hardware.
 
@@ -45,7 +51,8 @@ def configure_scan_args(config, action, args):
     # Upstream OBI consequently claims and powers A+B explicitly. Do the same
     # for a physical scan; otherwise port B is only alive when some previous
     # process happened to leave it powered.
-    if bool(getattr(config, "IsProduction", False)) and action.get("pins"):
+    is_production = is_production_config(config)
+    if is_production and action.get("pins"):
         claimed_ports.update(("A", "B"))
     port_spec = "".join(sorted(claimed_ports))
     seen = set()
@@ -60,10 +67,9 @@ def configure_scan_args(config, action, args):
         setattr(args, name, [PinArgument(port_spec.index(str(p.port)) * 8 + p.number,
                                         invert=p.invert) for p in pins])
     smh = action.get("smhDeflection")
-    args.allow_external_takeover = True
+    args.allow_external_takeover = not is_production
     if "smhDeflection" in action:
         validate_smh_config(smh, (f"{port}{number}" for port, number in seen))
-        args.allow_external_takeover = smh.get("allowExternalTakeover", False)
     if modern:
         args.port_spec = port_spec
     else:

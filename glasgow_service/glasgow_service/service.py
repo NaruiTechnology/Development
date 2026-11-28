@@ -1141,6 +1141,8 @@ class DeviceService:
         # conditionals or alter the IobeamTech scan algorithm.
         if not hasattr(self._config, "IsProduction"):
             self._config.IsProduction = self._config.__dict__.get("IsProduction", True)
+        self._allow_external_takeover = bool(
+            self._config.__dict__.get("allowExternalTakeover", False))
 
         action = util.GetStateConfigByName(self._config, "streamData")[Consts.ACTION_DATA]
         # Raw JSON blocks kept for backward compat with existing
@@ -1157,6 +1159,11 @@ class DeviceService:
         # doesn't need to be migrated in lockstep.
         self._raster_params_defaults = RasterParams.from_json(self._raster_defaults)
         self._vector_params_defaults = VectorParams.from_json(self._vector_defaults)
+        scan_external_control = self._allow_external_takeover
+        self._raster_params_defaults = self._raster_params_defaults.override(
+            external_control=scan_external_control)
+        self._vector_params_defaults = self._vector_params_defaults.override(
+            external_control=scan_external_control)
         try:
             self._conversion_hz = FPGA_CLOCK_HZ / AdcTiming.from_action(action).period
         except Exception as exc:  # malformed timing block: keep the requested latency
@@ -1469,9 +1476,14 @@ class DeviceService:
 
         That is the case for IsProduction=false when the simulation is enabled
         (``simulation.enabled``, on unless switched off) or the browser supplied
-        a ``simulation_bitmap``. IsProduction=true always uses the hardware.
+        a ``simulation_bitmap``. An SMH profile with IsProduction=false must
+        reach the FPGA so the scan can switch to Glasgow deflection control.
+        IsProduction=true always uses the hardware.
         """
         if not _simulation_enabled(self._config):
+            return False
+        if (self._action_defaults.get("smhDeflection") is not None
+                and not bool(getattr(self._config, "IsProduction", True))):
             return False
         if (
             getattr(req, "simulation_bitmap", None) is not None
@@ -1819,7 +1831,6 @@ class DeviceService:
             adc_valid     = req.adc_valid,
             output_mode   = req.output_mode,
             beam_type     = req.beam_type,
-            external_control = req.external_control,
         )
 
     def _effective_vector_params(self, req: "VectorRequest") -> VectorParams:
@@ -1833,7 +1844,6 @@ class DeviceService:
             output_mode       = req.output_mode,
             adc_valid         = req.adc_valid,
             beam_type         = req.beam_type,
-            external_control  = req.external_control,
             cookie            = req.cookie,
             pre_process       = req.pre_process,
             do_validate       = req.do_validate,
@@ -2661,7 +2671,7 @@ class DeviceService:
                 cookie=params.cookie,
                 output_mode=self._parse_output_mode(params.output_mode),
                 beam_type=self._parse_beam_type(params.beam_type),
-                external_control=params.external_control,
+                external_control=params.external_control and self._allow_external_takeover,
                 iter_points=points_factory(),
                 frame_blank=params.frame_blank,
                 drain_floor_pixels=vector.effective_drain_floor_pixels,
@@ -2706,7 +2716,7 @@ class DeviceService:
             dwell_time=params.dwell,
             output_mode=output_mode,
             beam_type=beam_type,
-            external_control=params.external_control,
+            external_control=params.external_control and self._allow_external_takeover,
             frame_blank=params.frame_blank,
             max_pipeline=params.max_pipeline,
             padding_min_pixels=params.padding_min_pixels,
@@ -2789,7 +2799,7 @@ class DeviceService:
                 dwell_time=params.dwell,
                 output_mode=self._parse_output_mode(params.output_mode),
                 beam_type=self._parse_beam_type(params.beam_type),
-                external_control=params.external_control,
+                external_control=params.external_control and self._allow_external_takeover,
                 frame_blank=raster.frame_blank,
                 max_pipeline=raster.max_pipeline,
                 padding_min_pixels=raster.padding_min_pixels,
@@ -2859,7 +2869,7 @@ class DeviceService:
             cookie=params.cookie,
             output_mode=OutputMode.SixteenBit if adaptive_feedback is not None else output_mode,
             beam_type=beam_type,
-            external_control=params.external_control,
+            external_control=params.external_control and self._allow_external_takeover,
             iter_points=iter_points,
             frame_blank=self._raster_params_defaults.frame_blank,
             drain_floor_pixels=params.effective_drain_floor_pixels,

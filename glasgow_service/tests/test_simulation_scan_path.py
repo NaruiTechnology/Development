@@ -1,5 +1,8 @@
 """A simulated scan needs no device, but it must still behave like a scan.
 
+These tests remove the SMH configuration because an SMH profile with
+IsProduction=false intentionally reaches Glasgow to exercise selector control.
+
 With ``IsProduction=false`` and the simulation enabled:
 
 * the service must never open a Glasgow connection (there may be none);
@@ -54,10 +57,18 @@ class FakeConnection:
         yield array.array("H", [7] * 16)
 
 
-def make_service(*, simulation=None, production=False, connection=None):
+def make_service(*, simulation=None, production=False, connection=None,
+                 smh_enabled=False):
     svc = DeviceService(CONFIG_PATH)
     svc._config.IsProduction = production
     svc._config.DumpData = False
+    takeover = not production
+    svc._raster_params_defaults = svc._raster_params_defaults.override(
+        external_control=takeover)
+    svc._vector_params_defaults = svc._vector_params_defaults.override(
+        external_control=takeover)
+    if not smh_enabled:
+        svc._action_defaults.pop("smhDeflection", None)
     svc._simulation_defaults.clear()
     svc._simulation_defaults.update(simulation or RANDOM_SOURCE)
 
@@ -70,6 +81,15 @@ def make_service(*, simulation=None, production=False, connection=None):
 
     svc._ensure_conn = ensure_conn
     return svc
+
+
+def test_nonproduction_smh_profile_reaches_hardware_for_selector_control():
+    svc = make_service(smh_enabled=True)
+    req = RasterRequest(resolution=128, dwell=2, latency_bytes=4096)
+
+    assert svc._hardware_free(req) is False
+    assert svc._raster_params_defaults.external_control is True
+    assert svc._vector_params_defaults.external_control is True
 
 
 def collect(svc, kind, req):

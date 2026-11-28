@@ -102,12 +102,9 @@ class ScanConfigurationTest(unittest.TestCase):
         self.assertTrue(compare_electrodes(targets["master_volts"], measured, 2)["within_tolerance"])
         config = AutomationConfig(str(DEVELOPMENT / "GlasgowDataIO/Json/streamData.json"))
         action = GetStateConfigByName(config, "streamData")["actionData"]
-        action["smhDeflection"]["allowExternalTakeover"] = True
+        config.IsProduction = False
         self.assertTrue(configure_scan_args(config, action, SimpleNamespace()).allow_external_takeover)
-        action["smhDeflection"]["allowExternalTakeover"] = "true"
-        with self.assertRaisesRegex(ValueError, "allowExternalTakeover must be boolean"):
-            configure_scan_args(config, action, SimpleNamespace())
-        action["smhDeflection"]["allowExternalTakeover"] = False
+        config.IsProduction = True
         action["smhDeflection"]["correctionDacPinPlan"]["clock"] = "A2"
         with self.assertRaisesRegex(ValueError, "clock reuses pin A2"):
             configure_scan_args(config, action, SimpleNamespace())

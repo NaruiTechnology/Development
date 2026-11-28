@@ -11,6 +11,7 @@ from .glasgowLib.glasgow.hardware.device import GlasgowDevice, ST_FPGA_RDY
 from .glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
 from .glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
 from .glasgowLib.glasgow.hardware.demultiplexer import DirectDemultiplexer
+from .scanConfiguration import is_production_config
 
 import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.definitions import Consts
@@ -56,7 +57,7 @@ class IobeamLauncher:
             "Scan acquisition: production=%s adc_half_period=%s adc_settle_cycles=%s "
             "adc_latch_cycles=%s bus_turnaround_cycles=%s dac_data_setup_cycles=%s "
             "dac_latch_cycles=%s nominal_adc_hz=%.1f adc_clock_inverted=%s dac_clock_inverted=%s",
-            getattr(self._config, "IsProduction", None),
+            is_production_config(self._config),
             timing.half_period, timing.settle_cycles,
             actionConfig.get("adcLatchCycles", 1),
             timing.bus_turnaround_cycles,

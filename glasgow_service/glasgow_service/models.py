@@ -123,7 +123,6 @@ class RasterRequest(BaseModel):
     output_mode:   str  = Field("SixteenBit", description="SixteenBit or EightBit.")
     adc_valid:     bool = Field(True, description="Run the production ADC presence/saturation check.")
     beam_type:     str  = Field("Ion", description="NoBeam, Electron, or Ion.")
-    external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
     continuous: bool = Field(
         False,
         description=(
@@ -174,11 +173,11 @@ class RasterRequest(BaseModel):
             "examples": [
                 {"resolution": 512,  "dwell": 2, "latency_bytes": 16384,
                  "frame_blank": False, "output_mode": "SixteenBit",
-                 "beam_type": "Ion", "external_control": True,
+                 "beam_type": "Ion",
                  "do_validate": True},
                 {"resolution": 1024, "dwell": 3, "latency_bytes": 16384,
                  "frame_blank": False, "output_mode": "SixteenBit",
-                 "beam_type": "Ion", "external_control": True,
+                 "beam_type": "Ion",
                  "do_validate": True},
             ]
         }
@@ -489,7 +488,6 @@ class VectorRequest(BaseModel):
         description="Simulation-only ROI target: lower brighter source pixels toward this level after each pass.",
     )
     beam_type:      str  = Field("Ion", description="NoBeam, Electron, or Ion.")
-    external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
     cookie:         int  = Field(123, ge=0, le=0xFFFF)
     continuous:     bool = Field(
         False,

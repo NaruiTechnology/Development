@@ -36,7 +36,9 @@ from GlasgowDataIO.IobeamControl.applet.iobeamDataSubtarget import IobeamDataSub
 from GlasgowDataIO.IobeamControl.applet.imageSource import get_image_data
 from AutomationPy.buildingblocks.automation_log import AutomationLog
 from AutomationPy.buildingblocks.definitions import Consts
-from GlasgowDataIO.IobeamControl.scanConfiguration import BEAM_PORTS, configure_scan_args
+from GlasgowDataIO.IobeamControl.scanConfiguration import (
+    BEAM_PORTS, configure_scan_args, is_production_config,
+)
 
 
 # Sentinel object used by _resolve_simulation() to tell the subtarget
@@ -148,9 +150,7 @@ class DataStreamApplet(GlasgowApplet):
         pin_config = action_data.get("pins", {}) or {}
         sim_config = action_data.get("simulation", {}) or {}
 
-        is_production = bool(self._config.IsProduction) \
-            if self._config is not None and hasattr(self._config, "IsProduction") \
-            else False
+        is_production = is_production_config(self._config)
 
         # Production: real PCB. No simulation, no loopback.
         if is_production:
