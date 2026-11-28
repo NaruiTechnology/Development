@@ -206,6 +206,23 @@ class DataStreamApplet(GlasgowApplet):
             self._config, Consts.STREAM_DATA).get(Consts.ACTION_DATA, {}) or {}
         configure_scan_args(self._config, action_data, args)
 
+        smh = action_data.get("smhDeflection")
+        if smh is not None and self.logger is not None:
+            beam_pinout = {
+                beam: settings.get("pinout", {})
+                for beam, settings in action_data.get("beam", {}).items()
+                if settings.get("pinout")
+            }
+            self.logger.info(
+                "SMH deflection replacement configured: "
+                "external takeover allowed=%s, mix coefficient=%s, "
+                "correction DAC pin plan=%s, beam pinout=%s",
+                args.allow_external_takeover,
+                smh.get("mixCoefficient"),
+                smh.get("correctionDacPinPlan", {}),
+                beam_pinout,
+            )
+
         self.magic_reg, self.addr_magic = target.registers.add_ro(8, init=0xa5)
         self.reset_reg, addr_reset = target.registers.add_rw(8, init=0)
         self.addr_reset = addr_reset
@@ -262,6 +279,16 @@ class DataStreamApplet(GlasgowApplet):
         return iface.add_subtarget(subtarget)
 
     async def run(self, device, args):
+        if self.logger is not None and self._config is not None:
+            action_data = util.GetStateConfigByName(
+                self._config, Consts.STREAM_DATA).get(Consts.ACTION_DATA, {}) or {}
+            if "smhDeflection" in action_data:
+                self.logger.info(
+                    "SMH deflection replacement: resetting FPGA and claiming "
+                    "beam control with pull_low=%s pull_high=%s",
+                    args.beam_pull_low,
+                    args.beam_pull_high,
+                )
         await device.write_register(self.addr_reset, 0x01)
         return await device.demultiplexer.claim_interface(
             self, self.mux_interface, args,
